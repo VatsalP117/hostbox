@@ -37,17 +37,20 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 	return nil
 }
 
+const userColumns = `id, email, password_hash, display_name, is_admin, email_verified,
+	reset_token_hash, reset_token_expires_at,
+	email_verification_token_hash, email_verification_token_expires_at,
+	created_at, updated_at`
+
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, email, password_hash, display_name, is_admin, email_verified, created_at, updated_at
-		 FROM users WHERE id = ?`, id)
+		`SELECT `+userColumns+` FROM users WHERE id = ?`, id)
 	return scanUser(row)
 }
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, email, password_hash, display_name, is_admin, email_verified, created_at, updated_at
-		 FROM users WHERE email = ?`, email)
+		`SELECT `+userColumns+` FROM users WHERE email = ?`, email)
 	return scanUser(row)
 }
 
@@ -90,8 +93,7 @@ func (r *UserRepository) List(ctx context.Context, page, perPage int) ([]models.
 
 	offset := (page - 1) * perPage
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, email, password_hash, display_name, is_admin, email_verified, created_at, updated_at
-		 FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`, perPage, offset)
+		`SELECT `+userColumns+` FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`, perPage, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
@@ -137,16 +139,76 @@ type scanner interface {
 func scanUser(s scanner) (*models.User, error) {
 	var u models.User
 	var createdAt, updatedAt string
+	var resetExpiresAt, verifyExpiresAt sql.NullString
 	err := s.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName,
-		&u.IsAdmin, &u.EmailVerified, &createdAt, &updatedAt)
+		&u.IsAdmin, &u.EmailVerified,
+		&u.ResetTokenHash, &resetExpiresAt,
+		&u.EmailVerificationTokenHash, &verifyExpiresAt,
+		&createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
 	u.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	u.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	if resetExpiresAt.Valid {
+		t, _ := time.Parse(time.RFC3339, resetExpiresAt.String)
+		u.ResetTokenExpiresAt = &t
+	}
+	if verifyExpiresAt.Valid {
+		t, _ := time.Parse(time.RFC3339, verifyExpiresAt.String)
+		u.EmailVerificationTokenExpiresAt = &t
+	}
 	return &u, nil
 }
 
 func scanUserRows(rows *sql.Rows) (*models.User, error) {
 	return scanUser(rows)
+}
+
+func (r *UserRepository) SetResetToken(ctx context.Context, id, tokenHash string, expiresAt time.Time) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET reset_token_hash = ?, reset_token_expires_at = ?, updated_at = ? WHERE id = ?`,
+		tokenHash, expiresAt.UTC().Format(time.RFC3339), now, id,
+	)
+	return err
+}
+
+func (r *UserRepository) ClearResetToken(ctx context.Context, id string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET reset_token_hash = NULL, reset_token_expires_at = NULL, updated_at = ? WHERE id = ?`,
+		now, id,
+	)
+	return err
+}
+
+func (r *UserRepository) GetByResetTokenHash(ctx context.Context, tokenHash string) (*models.User, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+userColumns+` FROM users WHERE reset_token_hash = ?`, tokenHash)
+	return scanUser(row)
+}
+
+func (r *UserRepository) SetEmailVerificationToken(ctx context.Context, id, tokenHash string, expiresAt time.Time) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET email_verification_token_hash = ?, email_verification_token_expires_at = ?, updated_at = ? WHERE id = ?`,
+		tokenHash, expiresAt.UTC().Format(time.RFC3339), now, id,
+	)
+	return err
+}
+
+func (r *UserRepository) ClearEmailVerificationToken(ctx context.Context, id string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET email_verification_token_hash = NULL, email_verification_token_expires_at = NULL, email_verified = 1, updated_at = ? WHERE id = ?`,
+		now, id,
+	)
+	return err
+}
+
+func (r *UserRepository) GetByEmailVerificationTokenHash(ctx context.Context, tokenHash string) (*models.User, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+userColumns+` FROM users WHERE email_verification_token_hash = ?`, tokenHash)
+	return scanUser(row)
 }

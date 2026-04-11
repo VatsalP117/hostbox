@@ -5,14 +5,18 @@ import "time"
 // --- User ---
 
 type User struct {
-	ID            string    `db:"id"`
-	Email         string    `db:"email"`
-	PasswordHash  string    `db:"password_hash"`
-	DisplayName   *string   `db:"display_name"`
-	IsAdmin       bool      `db:"is_admin"`
-	EmailVerified bool      `db:"email_verified"`
-	CreatedAt     time.Time `db:"created_at"`
-	UpdatedAt     time.Time `db:"updated_at"`
+	ID                              string     `db:"id"`
+	Email                           string     `db:"email"`
+	PasswordHash                    string     `db:"password_hash"`
+	DisplayName                     *string    `db:"display_name"`
+	IsAdmin                         bool       `db:"is_admin"`
+	EmailVerified                   bool       `db:"email_verified"`
+	ResetTokenHash                  *string    `db:"reset_token_hash"`
+	ResetTokenExpiresAt             *time.Time `db:"reset_token_expires_at"`
+	EmailVerificationTokenHash      *string    `db:"email_verification_token_hash"`
+	EmailVerificationTokenExpiresAt *time.Time `db:"email_verification_token_expires_at"`
+	CreatedAt                       time.Time  `db:"created_at"`
+	UpdatedAt                       time.Time  `db:"updated_at"`
 }
 
 // --- Session ---

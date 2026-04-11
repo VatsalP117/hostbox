@@ -52,6 +52,33 @@ func (r *SessionRepository) GetByID(ctx context.Context, id string) (*models.Ses
 	return &s, nil
 }
 
+func (r *SessionRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*models.Session, error) {
+	var s models.Session
+	var expiresAt, createdAt string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, user_id, refresh_token_hash, user_agent, ip_address, expires_at, created_at
+		 FROM sessions WHERE refresh_token_hash = ?`, tokenHash,
+	).Scan(&s.ID, &s.UserID, &s.RefreshTokenHash, &s.UserAgent, &s.IPAddress, &expiresAt, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	s.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+	s.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	return &s, nil
+}
+
+func (r *SessionRepository) DeleteByTokenHash(ctx context.Context, tokenHash string) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE refresh_token_hash = ?`, tokenHash)
+	if err != nil {
+		return fmt.Errorf("delete session by token: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *SessionRepository) DeleteByID(ctx context.Context, id string) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, id)
 	if err != nil {
