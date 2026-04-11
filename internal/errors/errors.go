@@ -119,6 +119,15 @@ func NewInternal(err error) *AppError {
 	}
 }
 
+// NewBadRequest creates a 400 error with a custom message.
+func NewBadRequest(message string) *AppError {
+	return &AppError{
+		Code:    CodeValidation,
+		Message: message,
+		Status:  http.StatusBadRequest,
+	}
+}
+
 // ErrorResponse is the JSON envelope sent to clients.
 type ErrorResponse struct {
 	Error *AppError `json:"error"`

@@ -41,8 +41,8 @@ func TestValidateRegisterRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := ValidateStruct(v, tt.req)
-			if (len(errs) > 0) != tt.wantErr {
+			errs := ValidateStructWith(v, tt.req)
+			if (errs != nil) != tt.wantErr {
 				t.Errorf("ValidateStruct() errors = %v, wantErr %v", errs, tt.wantErr)
 			}
 		})
@@ -87,8 +87,8 @@ func TestValidateCreateProjectRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := ValidateStruct(v, tt.req)
-			if (len(errs) > 0) != tt.wantErr {
+			errs := ValidateStructWith(v, tt.req)
+			if (errs != nil) != tt.wantErr {
 				t.Errorf("ValidateStruct() errors = %v, wantErr %v", errs, tt.wantErr)
 			}
 		})
@@ -142,12 +142,12 @@ func TestValidateEnvVarScope(t *testing.T) {
 	v := NewValidator()
 
 	valid := CreateEnvVarRequest{Key: "API_KEY", Value: "test", Scope: strPtr("production")}
-	if errs := ValidateStruct(v, valid); len(errs) > 0 {
+	if errs := ValidateStructWith(v, valid); errs != nil {
 		t.Errorf("valid scope rejected: %v", errs)
 	}
 
 	invalid := CreateEnvVarRequest{Key: "API_KEY", Value: "test", Scope: strPtr("staging")}
-	if errs := ValidateStruct(v, invalid); len(errs) == 0 {
+	if errs := ValidateStructWith(v, invalid); errs == nil {
 		t.Error("invalid scope 'staging' should be rejected")
 	}
 }
@@ -156,12 +156,12 @@ func TestValidateNotification(t *testing.T) {
 	v := NewValidator()
 
 	valid := CreateNotificationRequest{Channel: "discord", WebhookURL: "https://discord.com/api/webhooks/123"}
-	if errs := ValidateStruct(v, valid); len(errs) > 0 {
+	if errs := ValidateStructWith(v, valid); errs != nil {
 		t.Errorf("valid notification rejected: %v", errs)
 	}
 
 	invalid := CreateNotificationRequest{Channel: "telegram", WebhookURL: "https://example.com"}
-	if errs := ValidateStruct(v, invalid); len(errs) == 0 {
+	if errs := ValidateStructWith(v, invalid); errs == nil {
 		t.Error("invalid channel 'telegram' should be rejected")
 	}
 }

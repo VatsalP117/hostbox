@@ -1,0 +1,226 @@
+package handlers
+
+import (
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"github.com/vatsalpatel/hostbox/internal/config"
+	"github.com/vatsalpatel/hostbox/internal/dto"
+	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
+	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/vatsalpatel/hostbox/internal/repository"
+)
+
+type AdminHandler struct {
+	userRepo       *repository.UserRepository
+	projectRepo    *repository.ProjectRepository
+	deploymentRepo *repository.DeploymentRepository
+	activityRepo   *repository.ActivityRepository
+	settingsRepo   *repository.SettingsRepository
+	config         *config.Config
+	startTime      time.Time
+	logger         *slog.Logger
+}
+
+func NewAdminHandler(
+	userRepo *repository.UserRepository,
+	projectRepo *repository.ProjectRepository,
+	deploymentRepo *repository.DeploymentRepository,
+	activityRepo *repository.ActivityRepository,
+	settingsRepo *repository.SettingsRepository,
+	cfg *config.Config,
+	logger *slog.Logger,
+) *AdminHandler {
+	return &AdminHandler{
+		userRepo:       userRepo,
+		projectRepo:    projectRepo,
+		deploymentRepo: deploymentRepo,
+		activityRepo:   activityRepo,
+		settingsRepo:   settingsRepo,
+		config:         cfg,
+		startTime:      time.Now(),
+		logger:         logger,
+	}
+}
+
+func (h *AdminHandler) Stats(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	projectCount, err := h.projectRepo.Count(ctx)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	userCount, err := h.userRepo.Count(ctx)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	diskUsage := h.getDiskUsage()
+
+	return c.JSON(http.StatusOK, dto.AdminStatsResponse{
+		ProjectCount:    int64(projectCount),
+		UserCount:       int64(userCount),
+		DiskUsage:       diskUsage,
+		UptimeSeconds:   int64(time.Since(h.startTime).Seconds()),
+	})
+}
+
+func (h *AdminHandler) Activity(c echo.Context) error {
+	var pq dto.PaginationQuery
+	if err := c.Bind(&pq); err != nil {
+		return apperrors.NewBadRequest("Invalid query parameters")
+	}
+
+	var action, resourceType *string
+	if a := c.QueryParam("action"); a != "" {
+		action = &a
+	}
+	if rt := c.QueryParam("resource_type"); rt != "" {
+		resourceType = &rt
+	}
+
+	page := pq.PageOrDefault()
+	perPage := pq.PerPageOrDefault()
+	entries, total, err := h.activityRepo.List(c.Request().Context(), page, perPage, action, resourceType)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	data := make([]dto.ActivityLogResponse, len(entries))
+	for i, e := range entries {
+		data[i] = toActivityResponse(&e)
+	}
+
+	return c.JSON(http.StatusOK, dto.ActivityListResponse{
+		Activities: data,
+		Pagination: dto.NewPaginationResponse(total, page, perPage),
+	})
+}
+
+func (h *AdminHandler) Users(c echo.Context) error {
+	var pq dto.PaginationQuery
+	if err := c.Bind(&pq); err != nil {
+		return apperrors.NewBadRequest("Invalid query parameters")
+	}
+
+	page := pq.PageOrDefault()
+	perPage := pq.PerPageOrDefault()
+	users, total, err := h.userRepo.List(c.Request().Context(), page, perPage)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	data := make([]dto.UserResponse, len(users))
+	for i, u := range users {
+		data[i] = toUserResponse(&u)
+	}
+
+	return c.JSON(http.StatusOK, dto.UserListResponse{
+		Users:      data,
+		Pagination: dto.NewPaginationResponse(total, page, perPage),
+	})
+}
+
+func (h *AdminHandler) GetSettings(c echo.Context) error {
+	settings, err := h.settingsRepo.GetAll(c.Request().Context())
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"settings": settings,
+	})
+}
+
+func (h *AdminHandler) UpdateSettings(c echo.Context) error {
+	var req dto.UpdateSettingsRequest
+	if err := c.Bind(&req); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	if err := dto.ValidateStruct(&req); err != nil {
+		return err
+	}
+
+	ctx := c.Request().Context()
+
+	if req.RegistrationEnabled != nil {
+		val := "false"
+		if *req.RegistrationEnabled {
+			val = "true"
+		}
+		if err := h.settingsRepo.Set(ctx, "registration_enabled", val); err != nil {
+			return apperrors.NewInternal(err)
+		}
+	}
+	if req.MaxProjects != nil {
+		if err := h.settingsRepo.Set(ctx, "max_projects", fmt.Sprintf("%d", *req.MaxProjects)); err != nil {
+			return apperrors.NewInternal(err)
+		}
+	}
+	if req.MaxConcurrentBuilds != nil {
+		if err := h.settingsRepo.Set(ctx, "max_concurrent_builds", fmt.Sprintf("%d", *req.MaxConcurrentBuilds)); err != nil {
+			return apperrors.NewInternal(err)
+		}
+	}
+	if req.ArtifactRetentionDays != nil {
+		if err := h.settingsRepo.Set(ctx, "artifact_retention_days", fmt.Sprintf("%d", *req.ArtifactRetentionDays)); err != nil {
+			return apperrors.NewInternal(err)
+		}
+	}
+
+	// Return updated settings
+	return h.GetSettings(c)
+}
+
+func (h *AdminHandler) getDiskUsage() dto.DiskUsageResponse {
+	deploymentsSize := dirSize(h.config.DeploymentsDir)
+	logsSize := dirSize(h.config.LogsDir)
+	dbSize := fileSize(h.config.DatabasePath)
+
+	return dto.DiskUsageResponse{
+		DeploymentsBytes: deploymentsSize,
+		LogsBytes:        logsSize,
+		DatabaseBytes:    dbSize,
+		TotalBytes:       deploymentsSize + logsSize + dbSize,
+	}
+}
+
+func toActivityResponse(a *models.ActivityLog) dto.ActivityLogResponse {
+	resp := dto.ActivityLogResponse{
+		ID:           a.ID,
+		UserID:       a.UserID,
+		Action:       a.Action,
+		ResourceType: a.ResourceType,
+		ResourceID:   a.ResourceID,
+		Metadata:     a.Metadata,
+		CreatedAt:    a.CreatedAt.Format(time.RFC3339),
+	}
+	return resp
+}
+
+func dirSize(path string) int64 {
+	var size int64
+	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		size += info.Size()
+		return nil
+	})
+	return size
+}
+
+func fileSize(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}

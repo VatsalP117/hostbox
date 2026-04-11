@@ -165,7 +165,8 @@ type UpdateSettingsRequest struct {
 // --- Response DTOs ---
 
 type SuccessResponse struct {
-	Success bool `json:"success"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
 }
 
 type UserResponse struct {
@@ -291,4 +292,75 @@ type SettingsResponse struct {
 	MaxDeploymentsPerProject string `json:"max_deployments_per_project"`
 	ArtifactRetentionDays    string `json:"artifact_retention_days"`
 	MaxConcurrentBuilds      string `json:"max_concurrent_builds"`
+}
+
+// --- Additional Auth DTOs ---
+
+type VerifyEmailRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
+type TokenResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
+type LogoutAllResponse struct {
+	Success         bool `json:"success"`
+	SessionsRevoked int  `json:"sessions_revoked"`
+}
+
+// --- Setup DTOs ---
+
+type SetupRequest struct {
+	Email       string `json:"email" validate:"required,email,max=255"`
+	Password    string `json:"password" validate:"required,min=8,max=128"`
+	DisplayName string `json:"display_name" validate:"omitempty,max=100"`
+}
+
+type SetupStatusResponse struct {
+	SetupRequired bool `json:"setup_required"`
+}
+
+// --- Admin DTOs ---
+
+type AdminStatsResponse struct {
+	ProjectCount    int64             `json:"project_count"`
+	DeploymentCount int64             `json:"deployment_count"`
+	ActiveBuilds    int64             `json:"active_builds"`
+	UserCount       int64             `json:"user_count"`
+	DiskUsage       DiskUsageResponse `json:"disk_usage"`
+	UptimeSeconds   int64             `json:"uptime_seconds"`
+}
+
+type DiskUsageResponse struct {
+	DeploymentsBytes int64 `json:"deployments_bytes"`
+	LogsBytes        int64 `json:"logs_bytes"`
+	DatabaseBytes    int64 `json:"database_bytes"`
+	TotalBytes       int64 `json:"total_bytes"`
+}
+
+type UserListResponse struct {
+	Users      []UserResponse     `json:"users"`
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// --- Domain Extras ---
+
+type DNSInstructions struct {
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type CreateDomainResponse struct {
+	Domain          DomainResponse  `json:"domain"`
+	DNSInstructions DNSInstructions `json:"dns_instructions"`
+}
+
+// --- Env Var Extras ---
+
+type BulkCreateEnvVarResponse struct {
+	EnvVars []EnvVarResponse `json:"env_vars"`
+	Created int              `json:"created"`
+	Updated int              `json:"updated"`
 }

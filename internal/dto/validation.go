@@ -24,8 +24,17 @@ func NewValidator() *validator.Validate {
 	return v
 }
 
-// ValidateStruct validates a struct and returns []FieldError if invalid.
-func ValidateStruct(v *validator.Validate, s interface{}) []apperrors.FieldError {
+// defaultValidator is used by ValidateStruct for convenience.
+var defaultValidator = NewValidator()
+
+// ValidateStruct validates a struct using the default validator.
+// Returns *AppError if validation fails, nil otherwise.
+func ValidateStruct(s interface{}) *apperrors.AppError {
+	return ValidateStructWith(defaultValidator, s)
+}
+
+// ValidateStructWith validates a struct using the provided validator.
+func ValidateStructWith(v *validator.Validate, s interface{}) *apperrors.AppError {
 	err := v.Struct(s)
 	if err == nil {
 		return nil
@@ -39,7 +48,7 @@ func ValidateStruct(v *validator.Validate, s interface{}) []apperrors.FieldError
 			Message: formatValidationMessage(e),
 		})
 	}
-	return fieldErrors
+	return apperrors.NewValidationError("Validation failed", fieldErrors)
 }
 
 func formatValidationMessage(e validator.FieldError) string {
