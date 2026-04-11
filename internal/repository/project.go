@@ -149,7 +149,8 @@ func (r *ProjectRepository) CountByOwner(ctx context.Context, ownerID string) (i
 
 const projectSelectSQL = `SELECT p.id, p.owner_id, p.name, p.slug, p.github_repo, p.github_installation_id,
 	p.production_branch, p.framework, p.build_command, p.install_command, p.output_directory,
-	p.root_directory, p.node_version, p.auto_deploy, p.preview_deployments, p.created_at, p.updated_at
+	p.root_directory, p.node_version, p.auto_deploy, p.preview_deployments,
+	p.lock_file_hash, p.detected_package_manager, p.created_at, p.updated_at
 	FROM projects p`
 
 func scanProject(s scanner) (*models.Project, error) {
@@ -157,7 +158,8 @@ func scanProject(s scanner) (*models.Project, error) {
 	var createdAt, updatedAt string
 	err := s.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Slug, &p.GitHubRepo, &p.GitHubInstallationID,
 		&p.ProductionBranch, &p.Framework, &p.BuildCommand, &p.InstallCommand, &p.OutputDirectory,
-		&p.RootDirectory, &p.NodeVersion, &p.AutoDeploy, &p.PreviewDeployments, &createdAt, &updatedAt)
+		&p.RootDirectory, &p.NodeVersion, &p.AutoDeploy, &p.PreviewDeployments,
+		&p.LockFileHash, &p.DetectedPackageManager, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}

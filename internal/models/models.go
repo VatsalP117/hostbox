@@ -47,10 +47,12 @@ type Project struct {
 	OutputDirectory      *string   `db:"output_directory"`
 	RootDirectory        string    `db:"root_directory"`
 	NodeVersion          string    `db:"node_version"`
-	AutoDeploy           bool      `db:"auto_deploy"`
-	PreviewDeployments   bool      `db:"preview_deployments"`
-	CreatedAt            time.Time `db:"created_at"`
-	UpdatedAt            time.Time `db:"updated_at"`
+	AutoDeploy              bool      `db:"auto_deploy"`
+	PreviewDeployments      bool      `db:"preview_deployments"`
+	LockFileHash            string    `db:"lock_file_hash"`
+	DetectedPackageManager  string    `db:"detected_package_manager"`
+	CreatedAt               time.Time `db:"created_at"`
+	UpdatedAt               time.Time `db:"updated_at"`
 }
 
 // --- Deployment ---

@@ -58,6 +58,28 @@ type Config struct {
 	// Limits
 	MaxConcurrentBuilds int
 	MaxProjects         int
+
+	// Build pipeline
+	Build BuildConfig
+}
+
+// BuildConfig holds build pipeline configuration.
+type BuildConfig struct {
+	MaxConcurrentBuilds int
+	BuildTimeoutMinutes int
+	CloneTimeoutSeconds int
+	CloneMaxRetries     int
+	CloneRetryDelaySec  int
+	DefaultNodeVersion  string
+	DefaultMemoryMB     int64
+	DefaultCPUs         float64
+	PIDLimit            int64
+	MaxLogFileSizeBytes int64
+	ShutdownTimeoutSec  int
+	JobChannelBuffer    int
+	CloneBaseDir        string
+	DeploymentBaseDir   string
+	LogBaseDir          string
 }
 
 // Load reads configuration from environment variables and applies defaults.
@@ -90,6 +112,23 @@ func Load() (*Config, error) {
 		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
 		MaxConcurrentBuilds: getEnvInt("MAX_CONCURRENT_BUILDS", 1),
 		MaxProjects:         getEnvInt("MAX_PROJECTS", 50),
+		Build: BuildConfig{
+			MaxConcurrentBuilds: getEnvInt("MAX_CONCURRENT_BUILDS", 1),
+			BuildTimeoutMinutes: getEnvInt("BUILD_TIMEOUT_MINUTES", 15),
+			CloneTimeoutSeconds: getEnvInt("CLONE_TIMEOUT_SECONDS", 120),
+			CloneMaxRetries:     getEnvInt("CLONE_MAX_RETRIES", 3),
+			CloneRetryDelaySec:  getEnvInt("CLONE_RETRY_DELAY_SEC", 5),
+			DefaultNodeVersion:  getEnv("DEFAULT_NODE_VERSION", "20"),
+			DefaultMemoryMB:     int64(getEnvInt("BUILD_MEMORY_MB", 512)),
+			DefaultCPUs:         getEnvFloat("BUILD_CPUS", 1.0),
+			PIDLimit:            int64(getEnvInt("BUILD_PID_LIMIT", 256)),
+			MaxLogFileSizeBytes: int64(getEnvInt("MAX_LOG_FILE_SIZE", 5242880)),
+			ShutdownTimeoutSec:  getEnvInt("SHUTDOWN_TIMEOUT_SEC", 60),
+			JobChannelBuffer:    getEnvInt("JOB_CHANNEL_BUFFER", 100),
+			CloneBaseDir:        getEnv("CLONE_BASE_DIR", "/app/tmp"),
+			DeploymentBaseDir:   getEnv("DEPLOYMENT_BASE_DIR", "/app/deployments"),
+			LogBaseDir:          getEnv("LOG_BASE_DIR", "/app/logs"),
+		},
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -179,6 +218,18 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return fallback
+	}
+	return f
 }
 
 func getEnvDuration(key string, fallback time.Duration) time.Duration {
