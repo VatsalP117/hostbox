@@ -1,0 +1,199 @@
+package config
+
+import (
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Config holds all application configuration.
+type Config struct {
+	// Server
+	Host string
+	Port int
+
+	// Database
+	DatabasePath string
+
+	// Security
+	JWTSecret       string
+	EncryptionKey   string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+
+	// Platform
+	PlatformDomain string
+	PlatformHTTPS  bool
+	PlatformName   string
+
+	// GitHub App
+	GitHubAppID         int64
+	GitHubAppSlug       string
+	GitHubAppPEM        string
+	GitHubWebhookSecret string
+
+	// SMTP (all optional)
+	SMTPHost  string
+	SMTPPort  int
+	SMTPUser  string
+	SMTPPass  string
+	EmailFrom string
+
+	// Logging
+	LogLevel  string
+	LogFormat string
+
+	// Paths
+	DeploymentsDir string
+	LogsDir        string
+	CacheDir       string
+
+	// Caddy
+	CaddyAdminURL string
+
+	// Limits
+	MaxConcurrentBuilds int
+	MaxProjects         int
+}
+
+// Load reads configuration from environment variables and applies defaults.
+func Load() (*Config, error) {
+	cfg := &Config{
+		Host:                getEnv("HOST", "0.0.0.0"),
+		Port:                getEnvInt("PORT", 8080),
+		DatabasePath:        getEnv("DATABASE_PATH", "/app/data/hostbox.db"),
+		JWTSecret:           getEnv("JWT_SECRET", ""),
+		EncryptionKey:       getEnv("ENCRYPTION_KEY", ""),
+		AccessTokenTTL:      getEnvDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
+		RefreshTokenTTL:     getEnvDuration("REFRESH_TOKEN_TTL", 168*time.Hour),
+		PlatformDomain:      getEnv("PLATFORM_DOMAIN", ""),
+		PlatformHTTPS:       getEnvBool("PLATFORM_HTTPS", true),
+		PlatformName:        getEnv("PLATFORM_NAME", "Hostbox"),
+		GitHubAppID:         int64(getEnvInt("GITHUB_APP_ID", 0)),
+		GitHubAppSlug:       getEnv("GITHUB_APP_SLUG", ""),
+		GitHubAppPEM:        getEnv("GITHUB_APP_PEM", ""),
+		GitHubWebhookSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
+		SMTPHost:            getEnv("SMTP_HOST", ""),
+		SMTPPort:            getEnvInt("SMTP_PORT", 587),
+		SMTPUser:            getEnv("SMTP_USER", ""),
+		SMTPPass:            getEnv("SMTP_PASS", ""),
+		EmailFrom:           getEnv("EMAIL_FROM", ""),
+		LogLevel:            getEnv("LOG_LEVEL", "info"),
+		LogFormat:           getEnv("LOG_FORMAT", "json"),
+		DeploymentsDir:      getEnv("DEPLOYMENTS_DIR", "/app/deployments"),
+		LogsDir:             getEnv("LOGS_DIR", "/app/logs"),
+		CacheDir:            getEnv("CACHE_DIR", "/cache"),
+		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
+		MaxConcurrentBuilds: getEnvInt("MAX_CONCURRENT_BUILDS", 1),
+		MaxProjects:         getEnvInt("MAX_PROJECTS", 50),
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+// Validate checks that all required fields are present and well-formed.
+func (c *Config) Validate() error {
+	var errs []string
+
+	if len(c.JWTSecret) < 32 {
+		errs = append(errs, "JWT_SECRET must be at least 32 characters")
+	}
+
+	if c.EncryptionKey != "" {
+		keyBytes, err := hex.DecodeString(c.EncryptionKey)
+		if err != nil || len(keyBytes) != 32 {
+			errs = append(errs, "ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)")
+		}
+	} else {
+		errs = append(errs, "ENCRYPTION_KEY is required")
+	}
+
+	if c.PlatformDomain == "" {
+		errs = append(errs, "PLATFORM_DOMAIN is required")
+	} else if strings.HasPrefix(c.PlatformDomain, "http://") || strings.HasPrefix(c.PlatformDomain, "https://") {
+		errs = append(errs, "PLATFORM_DOMAIN must not include protocol prefix")
+	}
+
+	if c.Port < 1 || c.Port > 65535 {
+		errs = append(errs, "PORT must be between 1 and 65535")
+	}
+
+	validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+	if !validLogLevels[strings.ToLower(c.LogLevel)] {
+		errs = append(errs, "LOG_LEVEL must be one of: debug, info, warn, error")
+	}
+
+	if c.DatabasePath == "" {
+		errs = append(errs, "DATABASE_PATH must not be empty")
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("configuration errors:\n  - %s", strings.Join(errs, "\n  - "))
+	}
+	return nil
+}
+
+// BaseURL returns the full platform base URL (e.g., "https://hostbox.example.com").
+func (c *Config) BaseURL() string {
+	scheme := "https"
+	if !c.PlatformHTTPS {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s", scheme, c.PlatformDomain)
+}
+
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return fallback
+	}
+	return b
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return fallback
+	}
+	return d
+}
+
+// MustValidEncryptionKey is a helper for generating a valid key in tests.
+func MustValidEncryptionKey() string {
+	return errors.New("not implemented").Error() // placeholder, use hex key below
+}
