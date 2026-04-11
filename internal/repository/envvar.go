@@ -157,3 +157,28 @@ func scanEnvVar(s scanner) (*models.EnvVar, error) {
 func scanEnvVarRows(rows *sql.Rows) (*models.EnvVar, error) {
 	return scanEnvVar(rows)
 }
+
+// DecryptedEnvVar is a key-value pair with the decrypted value.
+type DecryptedEnvVar struct {
+	Key   string
+	Value string
+}
+
+// GetDecryptedForBuild returns decrypted env vars for a project, filtered by scope.
+// Matches env vars with the given scope OR scope="all".
+func (r *EnvVarRepository) GetDecryptedForBuild(ctx context.Context, projectID, scope, encryptionKey string) ([]DecryptedEnvVar, error) {
+	envVars, err := r.ListByProjectAndScope(ctx, projectID, scope)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]DecryptedEnvVar, 0, len(envVars))
+	for _, ev := range envVars {
+		val, err := util.Decrypt(ev.EncryptedValue, encryptionKey)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt env var %s: %w", ev.Key, err)
+		}
+		result = append(result, DecryptedEnvVar{Key: ev.Key, Value: val})
+	}
+	return result, nil
+}

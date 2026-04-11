@@ -163,6 +163,46 @@ func (r *DeploymentRepository) CancelQueuedByProjectAndBranch(ctx context.Contex
 	return result.RowsAffected()
 }
 
+// FindByStatus returns all deployments with the given status.
+func (r *DeploymentRepository) FindByStatus(ctx context.Context, status string) ([]models.Deployment, error) {
+	rows, err := r.db.QueryContext(ctx, deploymentSelectSQL+` WHERE d.status = ? ORDER BY d.created_at ASC`, status)
+	if err != nil {
+		return nil, fmt.Errorf("find by status: %w", err)
+	}
+	defer rows.Close()
+
+	var deployments []models.Deployment
+	for rows.Next() {
+		d, err := scanDeploymentRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, *d)
+	}
+	return deployments, rows.Err()
+}
+
+// FindQueuedOrBuilding returns the first queued or building deployment for a project+branch.
+func (r *DeploymentRepository) FindQueuedOrBuilding(ctx context.Context, projectID, branch string) (*models.Deployment, error) {
+	row := r.db.QueryRowContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status IN ('queued', 'building') ORDER BY d.created_at ASC LIMIT 1`,
+		projectID, branch)
+	return scanDeployment(row)
+}
+
+// FindLatestReady returns the latest ready deployment for a project,
+// optionally filtered to production-only.
+func (r *DeploymentRepository) FindLatestReady(ctx context.Context, projectID string, production bool) (*models.Deployment, error) {
+	query := deploymentSelectSQL + ` WHERE d.project_id = ? AND d.status = 'ready'`
+	args := []interface{}{projectID}
+	if production {
+		query += ` AND d.is_production = TRUE`
+	}
+	query += ` ORDER BY d.created_at DESC, d.rowid DESC LIMIT 1`
+	row := r.db.QueryRowContext(ctx, query, args...)
+	return scanDeployment(row)
+}
+
 const deploymentSelectSQL = `SELECT d.id, d.project_id, d.commit_sha, d.commit_message, d.commit_author,
 	d.branch, d.status, d.is_production, d.deployment_url, d.artifact_path, d.artifact_size_bytes,
 	d.log_path, d.error_message, d.is_rollback, d.rollback_source_id, d.github_pr_number,

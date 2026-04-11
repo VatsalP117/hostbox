@@ -1,0 +1,262 @@
+package docker
+
+import (
+	"archive/tar"
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/docker/go-units"
+)
+
+// Client wraps the Docker Engine SDK for build operations.
+type Client struct {
+	cli *client.Client
+}
+
+// NewClient creates a Docker client from the default environment.
+func NewClient() (*Client, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("docker client init: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("docker ping failed: %w", err)
+	}
+	return &Client{cli: cli}, nil
+}
+
+// Close releases the Docker client resources.
+func (c *Client) Close() error {
+	return c.cli.Close()
+}
+
+// BuildContainerOpts configures a build container.
+type BuildContainerOpts struct {
+	DeploymentID string
+	NodeVersion  string
+	SourceDir    string
+	OutputDir    string
+	CacheVolume  string
+	BuildCache   string
+	EnvVars      []string // KEY=VALUE format
+	MemoryBytes  int64
+	NanoCPUs     int64
+	PIDLimit     int64
+	WorkDir      string
+}
+
+// CreateBuildContainer creates and starts a container configured for builds.
+func (c *Client) CreateBuildContainer(ctx context.Context, opts BuildContainerOpts) (string, error) {
+	img := "node:" + opts.NodeVersion + "-slim"
+
+	if err := c.ensureImage(ctx, img); err != nil {
+		return "", fmt.Errorf("ensure image %s: %w", img, err)
+	}
+
+	workDir := opts.WorkDir
+	if workDir == "" {
+		workDir = "/app/src"
+	}
+
+	pidLimit := opts.PIDLimit
+	config := &container.Config{
+		Image:      img,
+		Env:        opts.EnvVars,
+		WorkingDir: workDir,
+		Labels: map[string]string{
+			"hostbox.deployment": opts.DeploymentID,
+			"hostbox.managed":    "true",
+		},
+		Cmd:       []string{"sleep", "infinity"},
+		Tty:       false,
+		OpenStdin: false,
+	}
+
+	hostConfig := &container.HostConfig{
+		Resources: container.Resources{
+			Memory:    opts.MemoryBytes,
+			NanoCPUs:  opts.NanoCPUs,
+			PidsLimit: &pidLimit,
+			Ulimits: []*units.Ulimit{
+				{Name: "nofile", Soft: 1024, Hard: 1024},
+			},
+		},
+		SecurityOpt:    []string{"no-new-privileges"},
+		CapDrop:        []string{"ALL"},
+		ReadonlyRootfs: true,
+		Tmpfs: map[string]string{
+			"/tmp": "rw,noexec,nosuid,size=512m",
+		},
+		Mounts: []mount.Mount{
+			{Type: mount.TypeBind, Source: opts.SourceDir, Target: "/app/src", ReadOnly: true},
+			{Type: mount.TypeVolume, Source: opts.CacheVolume, Target: "/app/node_modules"},
+			{Type: mount.TypeVolume, Source: opts.BuildCache, Target: "/app/.build-cache"},
+			{Type: mount.TypeBind, Source: opts.OutputDir, Target: "/app/output", ReadOnly: false},
+		},
+	}
+
+	resp, err := c.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, "build-"+opts.DeploymentID)
+	if err != nil {
+		return "", fmt.Errorf("container create: %w", err)
+	}
+
+	if err := c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		_ = c.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		return "", fmt.Errorf("container start: %w", err)
+	}
+
+	return resp.ID, nil
+}
+
+// ExecCommand runs a shell command inside a running container.
+func (c *Client) ExecCommand(ctx context.Context, containerID string, cmd string, stdout, stderr io.Writer) error {
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"sh", "-c", cmd},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execResp, err := c.cli.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		return fmt.Errorf("exec create: %w", err)
+	}
+
+	attachResp, err := c.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return fmt.Errorf("exec attach: %w", err)
+	}
+	defer attachResp.Close()
+
+	if _, err := stdcopy.StdCopy(stdout, stderr, attachResp.Reader); err != nil {
+		return fmt.Errorf("exec stream: %w", err)
+	}
+
+	inspectResp, err := c.cli.ContainerExecInspect(ctx, execResp.ID)
+	if err != nil {
+		return fmt.Errorf("exec inspect: %w", err)
+	}
+	if inspectResp.ExitCode != 0 {
+		return fmt.Errorf("command exited with code %d", inspectResp.ExitCode)
+	}
+
+	return nil
+}
+
+// StopContainer stops a container with the given grace period.
+func (c *Client) StopContainer(ctx context.Context, containerID string, gracePeriod time.Duration) error {
+	timeout := int(gracePeriod.Seconds())
+	return c.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+}
+
+// RemoveContainer force-removes a container.
+func (c *Client) RemoveContainer(ctx context.Context, nameOrID string) error {
+	return c.cli.ContainerRemove(ctx, nameOrID, container.RemoveOptions{
+		Force:         true,
+		RemoveVolumes: false,
+	})
+}
+
+// RemoveContainerByName removes a container by name, ignoring errors.
+func (c *Client) RemoveContainerByName(ctx context.Context, name string) {
+	_ = c.cli.ContainerRemove(ctx, name, container.RemoveOptions{Force: true})
+}
+
+// CopyFromContainer copies a directory from the container to the host.
+func (c *Client) CopyFromContainer(ctx context.Context, containerID, srcPath, destPath string) (int64, error) {
+	reader, stat, err := c.cli.CopyFromContainer(ctx, containerID, srcPath)
+	if err != nil {
+		return 0, fmt.Errorf("copy from container %s:%s: %w", containerID, srcPath, err)
+	}
+	defer reader.Close()
+
+	if err := extractTar(reader, destPath); err != nil {
+		return 0, fmt.Errorf("extract tar to %s: %w", destPath, err)
+	}
+
+	return stat.Size, nil
+}
+
+// RemoveVolume removes a named Docker volume.
+func (c *Client) RemoveVolume(ctx context.Context, name string) error {
+	return c.cli.VolumeRemove(ctx, name, true)
+}
+
+// ListManagedContainers returns all containers with the "hostbox.managed=true" label.
+func (c *Client) ListManagedContainers(ctx context.Context) ([]types.Container, error) {
+	return c.cli.ContainerList(ctx, container.ListOptions{
+		All: true,
+		Filters: filters.NewArgs(
+			filters.Arg("label", "hostbox.managed=true"),
+		),
+	})
+}
+
+func (c *Client) ensureImage(ctx context.Context, img string) error {
+	_, _, err := c.cli.ImageInspectWithRaw(ctx, img)
+	if err == nil {
+		return nil
+	}
+
+	reader, err := c.cli.ImagePull(ctx, "docker.io/library/"+img, image.PullOptions{})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	_, _ = io.Copy(io.Discard, reader)
+	return nil
+}
+
+func extractTar(reader io.Reader, destDir string) error {
+	tr := tar.NewReader(reader)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(destDir, header.Name)
+
+		// Prevent path traversal
+		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)) {
+			return fmt.Errorf("invalid tar entry: %s", header.Name)
+		}
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(f, tr); err != nil {
+				f.Close()
+				return err
+			}
+			f.Close()
+		}
+	}
+	return nil
+}

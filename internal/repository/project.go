@@ -171,3 +171,15 @@ func scanProject(s scanner) (*models.Project, error) {
 func scanProjectRows(rows *sql.Rows) (*models.Project, error) {
 	return scanProject(rows)
 }
+
+// UpdateBuildMeta updates the detected package manager and lock file hash for a project.
+func (r *ProjectRepository) UpdateBuildMeta(ctx context.Context, projectID, pkgManager, lockHash string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE projects SET detected_package_manager = ?, lock_file_hash = ?, updated_at = ? WHERE id = ?`,
+		pkgManager, lockHash, time.Now().UTC().Format(time.RFC3339), projectID,
+	)
+	if err != nil {
+		return fmt.Errorf("update build meta: %w", err)
+	}
+	return nil
+}
