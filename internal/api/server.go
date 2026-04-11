@@ -12,11 +12,10 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	echomiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/go-playground/validator/v10"
 
 	appmiddleware "github.com/vatsalpatel/hostbox/internal/api/middleware"
 	"github.com/vatsalpatel/hostbox/internal/config"
+	"github.com/vatsalpatel/hostbox/internal/dto"
 	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
 	"github.com/vatsalpatel/hostbox/internal/repository"
 )
@@ -27,18 +26,15 @@ type Server struct {
 	Config    *config.Config
 	DB        *sql.DB
 	Repos     *repository.Repositories
-	Validator *validator.Validate
 	Logger    *slog.Logger
 	startTime time.Time
 }
 
 // echoValidator wraps go-playground/validator to satisfy echo.Validator interface.
-type echoValidator struct {
-	validator *validator.Validate
-}
+type echoValidator struct{}
 
 func (ev *echoValidator) Validate(i interface{}) error {
-	return ev.validator.Struct(i)
+	return dto.ValidateStruct(i)
 }
 
 // NewServer creates and configures the Echo HTTP server.
@@ -47,34 +43,23 @@ func NewServer(cfg *config.Config, db *sql.DB, repos *repository.Repositories, l
 	e.HideBanner = true
 	e.HidePort = true
 
-	v := validator.New()
-	e.Validator = &echoValidator{validator: v}
+	e.Validator = &echoValidator{}
 
 	s := &Server{
 		Echo:      e,
 		Config:    cfg,
 		DB:        db,
 		Repos:     repos,
-		Validator: v,
 		Logger:    logger,
 		startTime: time.Now(),
 	}
 
-	// Middleware stack
+	// Middleware stack (order matters)
 	e.Use(appmiddleware.RequestID())
 	e.Use(appmiddleware.Logger(logger))
 	e.Use(appmiddleware.Recovery(logger))
-	e.Use(echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
-		AllowOrigins: []string{cfg.BaseURL()},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
-	}))
-	e.Use(echomiddleware.SecureWithConfig(echomiddleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
-		ContentSecurityPolicy: "default-src 'self'",
-	}))
+	e.Use(appmiddleware.CORS(cfg.PlatformDomain, cfg.PlatformHTTPS))
+	e.Use(appmiddleware.SecurityHeaders())
 
 	// Custom error handler
 	e.HTTPErrorHandler = s.customErrorHandler
@@ -93,7 +78,6 @@ func (s *Server) Start() error {
 	s.Logger.Info("server starting",
 		"host", s.Config.Host,
 		"port", s.Config.Port,
-		"version", "dev",
 	)
 
 	// Graceful shutdown
