@@ -184,6 +184,32 @@ func (r *ProjectRepository) UpdateBuildMeta(ctx context.Context, projectID, pkgM
 	return nil
 }
 
+// ListAll returns all projects (used by garbage collection).
+func (r *ProjectRepository) ListAll(ctx context.Context) ([]models.Project, error) {
+	rows, err := r.db.QueryContext(ctx, projectSelectSQL+` ORDER BY p.created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list all projects: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []models.Project
+	for rows.Next() {
+		p, err := scanProjectRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, *p)
+	}
+	return projects, rows.Err()
+}
+
+// Exists checks if a project with the given ID exists.
+func (r *ProjectRepository) Exists(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)`, id).Scan(&exists)
+	return exists, err
+}
+
 // ClearInstallation clears the GitHub installation ID for all projects with the given installation.
 func (r *ProjectRepository) ClearInstallation(ctx context.Context, installationID int64) error {
 	_, err := r.db.ExecContext(ctx,
