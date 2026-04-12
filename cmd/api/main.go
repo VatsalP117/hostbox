@@ -20,6 +20,7 @@ import (
 	"github.com/vatsalpatel/hostbox/internal/services"
 	caddysvc "github.com/vatsalpatel/hostbox/internal/services/caddy"
 	deploysvc "github.com/vatsalpatel/hostbox/internal/services/deployment"
+	ghsvc "github.com/vatsalpatel/hostbox/internal/services/github"
 	"github.com/vatsalpatel/hostbox/internal/worker"
 	"github.com/vatsalpatel/hostbox/migrations"
 )
@@ -110,6 +111,30 @@ func main() {
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	caddySyncSvc.StartPeriodicSync(syncCtx, 5*time.Minute)
 
+	// 9b. Initialize GitHub services (optional, only if configured)
+	var ghClient *ghsvc.Client
+	var ghEventRouter *ghsvc.GitHubEventRouter
+	var ghWebhookHandler *handlers.GitHubWebhookHandler
+	var ghHandler *handlers.GitHubHandler
+
+	if cfg.GitHubAppID > 0 && len(cfg.GitHubAppPEM) > 0 {
+		tokenProvider, err := ghsvc.NewTokenProvider(ghsvc.AppConfig{
+			AppID:         cfg.GitHubAppID,
+			AppSlug:       cfg.GitHubAppSlug,
+			PrivateKeyPEM: []byte(cfg.GitHubAppPEM),
+			WebhookSecret: cfg.GitHubWebhookSecret,
+		}, l)
+		if err != nil {
+			l.Error("failed to initialize GitHub token provider", "error", err)
+			os.Exit(1)
+		}
+
+		ghClient = ghsvc.NewClient(tokenProvider, l)
+		ghHandler = handlers.NewGitHubHandler(ghClient, l)
+
+		l.Info("github app integration initialized", "app_id", cfg.GitHubAppID)
+	}
+
 	// 10. Create server
 	srv := api.NewServer(cfg, db, repos, l)
 
@@ -158,6 +183,15 @@ func main() {
 
 		deploymentHandler.SetBuildDeps(deploymentService, sseHub, cfg.Build.LogBaseDir)
 
+		// Wire GitHub event handlers if GitHub integration is configured
+		if ghClient != nil {
+			pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, l)
+			prHandler := ghsvc.NewPullRequestHandler(repos.Project, deploymentService, routeManager, l)
+			installHandler := ghsvc.NewInstallationHandler(repos.Project, l)
+			ghEventRouter = ghsvc.NewGitHubEventRouter(pushHandler, prHandler, installHandler, l)
+			ghWebhookHandler = handlers.NewGitHubWebhookHandler(cfg.GitHubWebhookSecret, ghEventRouter, l)
+		}
+
 		if err := pool.Start(); err != nil {
 			l.Error("failed to start worker pool", "error", err)
 			os.Exit(1)
@@ -182,16 +216,18 @@ func main() {
 
 	// 13. Register routes
 	routes.Register(srv.Echo, routes.Deps{
-		AuthService:       authService,
-		SettingsRepo:      repos.Settings,
-		HealthHandler:     healthHandler,
-		SetupHandler:      setupHandler,
-		AuthHandler:       authHandler,
-		ProjectHandler:    projectHandler,
-		DeploymentHandler: deploymentHandler,
-		DomainHandler:     domainHandler,
-		EnvVarHandler:     envVarHandler,
-		AdminHandler:      adminHandler,
+		AuthService:          authService,
+		SettingsRepo:         repos.Settings,
+		HealthHandler:        healthHandler,
+		SetupHandler:         setupHandler,
+		AuthHandler:          authHandler,
+		ProjectHandler:       projectHandler,
+		DeploymentHandler:    deploymentHandler,
+		DomainHandler:        domainHandler,
+		EnvVarHandler:        envVarHandler,
+		AdminHandler:         adminHandler,
+		GitHubWebhookHandler: ghWebhookHandler,
+		GitHubHandler:        ghHandler,
 	})
 
 	// 14. Start server (blocks until shutdown signal)

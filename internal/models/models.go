@@ -85,6 +85,7 @@ type Deployment struct {
 	IsRollback        bool             `db:"is_rollback"`
 	RollbackSourceID  *string          `db:"rollback_source_id"`
 	GitHubPRNumber    *int             `db:"github_pr_number"`
+	GitHubDeployID    *int64           `db:"github_deploy_id"`
 	BuildDurationMs   *int64           `db:"build_duration_ms"`
 	StartedAt         *time.Time       `db:"started_at"`
 	CompletedAt       *time.Time       `db:"completed_at"`

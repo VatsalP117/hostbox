@@ -27,8 +27,8 @@ func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.De
 		`INSERT INTO deployments (id, project_id, commit_sha, commit_message, commit_author,
 		  branch, status, is_production, deployment_url, artifact_path, artifact_size_bytes,
 		  log_path, error_message, is_rollback, rollback_source_id, github_pr_number,
-		  build_duration_ms, started_at, completed_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		  github_deploy_id, build_duration_ms, started_at, completed_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		deployment.ID, deployment.ProjectID, deployment.CommitSHA,
 		deployment.CommitMessage, deployment.CommitAuthor,
 		deployment.Branch, deployment.Status, deployment.IsProduction,
@@ -36,7 +36,7 @@ func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.De
 		deployment.ArtifactSizeBytes, deployment.LogPath,
 		deployment.ErrorMessage, deployment.IsRollback,
 		deployment.RollbackSourceID, deployment.GitHubPRNumber,
-		deployment.BuildDurationMs,
+		deployment.GitHubDeployID, deployment.BuildDurationMs,
 		formatNullableTime(deployment.StartedAt),
 		formatNullableTime(deployment.CompletedAt),
 		now,
@@ -57,11 +57,11 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *models.De
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
 		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
-		  build_duration_ms = ?, started_at = ?, completed_at = ?
+		  github_deploy_id = ?, build_duration_ms = ?, started_at = ?, completed_at = ?
 		 WHERE id = ?`,
 		deployment.Status, deployment.DeploymentURL, deployment.ArtifactPath,
 		deployment.ArtifactSizeBytes, deployment.LogPath, deployment.ErrorMessage,
-		deployment.BuildDurationMs,
+		deployment.GitHubDeployID, deployment.BuildDurationMs,
 		formatNullableTime(deployment.StartedAt),
 		formatNullableTime(deployment.CompletedAt),
 		deployment.ID,
@@ -206,7 +206,7 @@ func (r *DeploymentRepository) FindLatestReady(ctx context.Context, projectID st
 const deploymentSelectSQL = `SELECT d.id, d.project_id, d.commit_sha, d.commit_message, d.commit_author,
 	d.branch, d.status, d.is_production, d.deployment_url, d.artifact_path, d.artifact_size_bytes,
 	d.log_path, d.error_message, d.is_rollback, d.rollback_source_id, d.github_pr_number,
-	d.build_duration_ms, d.started_at, d.completed_at, d.created_at
+	d.github_deploy_id, d.build_duration_ms, d.started_at, d.completed_at, d.created_at
 	FROM deployments d`
 
 func scanDeployment(s scanner) (*models.Deployment, error) {
@@ -215,7 +215,7 @@ func scanDeployment(s scanner) (*models.Deployment, error) {
 	err := s.Scan(&d.ID, &d.ProjectID, &d.CommitSHA, &d.CommitMessage, &d.CommitAuthor,
 		&d.Branch, &d.Status, &d.IsProduction, &d.DeploymentURL, &d.ArtifactPath,
 		&d.ArtifactSizeBytes, &d.LogPath, &d.ErrorMessage, &d.IsRollback,
-		&d.RollbackSourceID, &d.GitHubPRNumber, &d.BuildDurationMs,
+		&d.RollbackSourceID, &d.GitHubPRNumber, &d.GitHubDeployID, &d.BuildDurationMs,
 		&startedAt, &completedAt, &createdAt)
 	if err != nil {
 		return nil, err
@@ -280,6 +280,44 @@ func (r *DeploymentRepository) FindByCommitSHA(ctx context.Context, projectID, c
 		return nil, err
 	}
 	return d, nil
+}
+
+// DeactivateBranchDeployments cancels all ready deployments for a branch, returning the affected deployments.
+func (r *DeploymentRepository) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
+	// Find affected deployments first
+	rows, err := r.db.QueryContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status = 'ready' AND d.is_production = FALSE`,
+		projectID, branch)
+	if err != nil {
+		return nil, fmt.Errorf("find branch deployments: %w", err)
+	}
+	defer rows.Close()
+
+	var deployments []models.Deployment
+	for rows.Next() {
+		d, err := scanDeploymentRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, *d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(deployments) == 0 {
+		return nil, nil
+	}
+
+	// Cancel them
+	_, err = r.db.ExecContext(ctx,
+		`UPDATE deployments SET status = 'cancelled' WHERE project_id = ? AND branch = ? AND status = 'ready' AND is_production = FALSE`,
+		projectID, branch)
+	if err != nil {
+		return nil, fmt.Errorf("deactivate branch deployments: %w", err)
+	}
+
+	return deployments, nil
 }
 
 // ActiveDeploymentRow is a denormalized row from the deployment+project join.

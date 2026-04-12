@@ -8,6 +8,7 @@ import (
 
 	"github.com/vatsalpatel/hostbox/internal/models"
 	"github.com/vatsalpatel/hostbox/internal/repository"
+	ghsvc "github.com/vatsalpatel/hostbox/internal/services/github"
 	"github.com/vatsalpatel/hostbox/internal/util"
 	"github.com/vatsalpatel/hostbox/internal/worker"
 )
@@ -221,4 +222,39 @@ func (s *Service) Redeploy(ctx context.Context, projectID string) (*models.Deplo
 		CommitMessage: latest.CommitMessage,
 		CommitAuthor:  latest.CommitAuthor,
 	})
+}
+
+// FindByCommitSHA finds a deployment by project and commit SHA.
+func (s *Service) FindByCommitSHA(ctx context.Context, projectID, commitSHA string) (*models.Deployment, error) {
+	return s.deployRepo.FindByCommitSHA(ctx, projectID, commitSHA)
+}
+
+// CreateFromWebhook creates a deployment triggered by a GitHub webhook.
+func (s *Service) CreateFromWebhook(ctx context.Context, params ghsvc.WebhookTriggerParams) (*models.Deployment, error) {
+	var prNumber *int
+	if params.GitHubPRNumber > 0 {
+		prNumber = &params.GitHubPRNumber
+	}
+	var commitMsg *string
+	if params.CommitMessage != "" {
+		commitMsg = &params.CommitMessage
+	}
+	var commitAuthor *string
+	if params.CommitAuthor != "" {
+		commitAuthor = &params.CommitAuthor
+	}
+
+	return s.TriggerDeployment(ctx, TriggerRequest{
+		ProjectID:     params.ProjectID,
+		Branch:        params.Branch,
+		CommitSHA:     params.CommitSHA,
+		CommitMessage: commitMsg,
+		CommitAuthor:  commitAuthor,
+		PRNumber:      prNumber,
+	})
+}
+
+// DeactivateBranchDeployments marks all ready deployments for a branch as cancelled.
+func (s *Service) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
+	return s.deployRepo.DeactivateBranchDeployments(ctx, projectID, branch)
 }

@@ -14,14 +14,16 @@ type Deps struct {
 	AuthService  *services.AuthService
 	SettingsRepo *repository.SettingsRepository
 
-	HealthHandler     *handlers.HealthHandler
-	SetupHandler      *handlers.SetupHandler
-	AuthHandler       *handlers.AuthHandler
-	ProjectHandler    *handlers.ProjectHandler
-	DeploymentHandler *handlers.DeploymentHandler
-	DomainHandler     *handlers.DomainHandler
-	EnvVarHandler     *handlers.EnvVarHandler
-	AdminHandler      *handlers.AdminHandler
+	HealthHandler        *handlers.HealthHandler
+	SetupHandler         *handlers.SetupHandler
+	AuthHandler          *handlers.AuthHandler
+	ProjectHandler       *handlers.ProjectHandler
+	DeploymentHandler    *handlers.DeploymentHandler
+	DomainHandler        *handlers.DomainHandler
+	EnvVarHandler        *handlers.EnvVarHandler
+	AdminHandler         *handlers.AdminHandler
+	GitHubWebhookHandler *handlers.GitHubWebhookHandler
+	GitHubHandler        *handlers.GitHubHandler
 }
 
 // Register sets up all API routes on the Echo instance.
@@ -103,4 +105,16 @@ func Register(e *echo.Echo, deps Deps) {
 	admin.GET("/users", deps.AdminHandler.Users)
 	admin.GET("/settings", deps.AdminHandler.GetSettings)
 	admin.PUT("/settings", deps.AdminHandler.UpdateSettings)
+
+	// --- GitHub webhook (public, signature-verified) ---
+	if deps.GitHubWebhookHandler != nil {
+		api.POST("/github/webhook", deps.GitHubWebhookHandler.HandleWebhook)
+	}
+
+	// --- GitHub authenticated endpoints ---
+	if deps.GitHubHandler != nil {
+		gh := authed.Group("/github")
+		gh.GET("/installations", deps.GitHubHandler.ListInstallations)
+		gh.GET("/repos", deps.GitHubHandler.ListRepos)
+	}
 }
