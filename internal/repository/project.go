@@ -183,3 +183,15 @@ func (r *ProjectRepository) UpdateBuildMeta(ctx context.Context, projectID, pkgM
 	}
 	return nil
 }
+
+// ClearInstallation clears the GitHub installation ID for all projects with the given installation.
+func (r *ProjectRepository) ClearInstallation(ctx context.Context, installationID int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE projects SET github_installation_id = NULL, updated_at = ? WHERE github_installation_id = ?`,
+		time.Now().UTC().Format(time.RFC3339), installationID,
+	)
+	if err != nil {
+		return fmt.Errorf("clear installation: %w", err)
+	}
+	return nil
+}

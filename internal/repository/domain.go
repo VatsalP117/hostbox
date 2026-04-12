@@ -152,3 +152,40 @@ func scanDomain(s scanner) (*models.Domain, error) {
 func scanDomainRows(rows *sql.Rows) (*models.Domain, error) {
 	return scanDomain(rows)
 }
+
+// ListVerifiedWithProject returns verified domains joined with project info for Caddy sync.
+func (r *DomainRepository) ListVerifiedWithProject(ctx context.Context) ([]VerifiedDomainRow, error) {
+	query := `SELECT dom.id, dom.domain, dom.project_id, p.slug, p.framework,
+		(SELECT d.artifact_path FROM deployments d
+		 WHERE d.project_id = p.id AND d.status = 'ready' AND d.is_production = 1
+		 ORDER BY d.created_at DESC LIMIT 1) AS production_artifact
+		FROM domains dom
+		JOIN projects p ON dom.project_id = p.id
+		WHERE dom.verified = 1`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list verified domains: %w", err)
+	}
+	defer rows.Close()
+
+	var result []VerifiedDomainRow
+	for rows.Next() {
+		var row VerifiedDomainRow
+		if err := rows.Scan(&row.DomainID, &row.Domain, &row.ProjectID, &row.ProjectSlug,
+			&row.Framework, &row.ProductionArtifact); err != nil {
+			return nil, fmt.Errorf("scan verified domain: %w", err)
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+// VerifiedDomainRow is a denormalized row for Caddy config building.
+type VerifiedDomainRow struct {
+	DomainID           string
+	Domain             string
+	ProjectID          string
+	ProjectSlug        string
+	Framework          *string
+	ProductionArtifact *string
+}

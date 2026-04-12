@@ -244,3 +244,52 @@ func formatNullableTime(t *time.Time) interface{} {
 	}
 	return t.UTC().Format(time.RFC3339)
 }
+
+// ListActiveWithProject returns all ready deployments joined with project info for Caddy sync.
+func (r *DeploymentRepository) ListActiveWithProject(ctx context.Context) ([]ActiveDeploymentRow, error) {
+	query := `SELECT d.id, d.project_id, p.slug, d.branch, d.commit_sha,
+		d.is_production, d.artifact_path, p.framework
+		FROM deployments d
+		JOIN projects p ON d.project_id = p.id
+		WHERE d.status = 'ready' AND d.artifact_path IS NOT NULL`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list active deployments: %w", err)
+	}
+	defer rows.Close()
+
+	var result []ActiveDeploymentRow
+	for rows.Next() {
+		var row ActiveDeploymentRow
+		if err := rows.Scan(&row.DeploymentID, &row.ProjectID, &row.ProjectSlug,
+			&row.Branch, &row.CommitSHA, &row.IsProduction, &row.ArtifactPath, &row.Framework); err != nil {
+			return nil, fmt.Errorf("scan active deployment: %w", err)
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+// FindByCommitSHA finds a deployment by project and commit SHA.
+func (r *DeploymentRepository) FindByCommitSHA(ctx context.Context, projectID, commitSHA string) (*models.Deployment, error) {
+	row := r.db.QueryRowContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.commit_sha = ? ORDER BY d.created_at DESC LIMIT 1`,
+		projectID, commitSHA)
+	d, err := scanDeployment(row)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// ActiveDeploymentRow is a denormalized row from the deployment+project join.
+type ActiveDeploymentRow struct {
+	DeploymentID string
+	ProjectID    string
+	ProjectSlug  string
+	Branch       string
+	CommitSHA    string
+	IsProduction bool
+	ArtifactPath *string
+	Framework    *string
+}

@@ -53,7 +53,10 @@ type Config struct {
 	CacheDir       string
 
 	// Caddy
-	CaddyAdminURL string
+	CaddyAdminURL    string
+	ACMEEmail        string
+	DNSProvider      string
+	DNSProviderConfig string
 
 	// Limits
 	MaxConcurrentBuilds int
@@ -110,6 +113,9 @@ func Load() (*Config, error) {
 		LogsDir:             getEnv("LOGS_DIR", "/app/logs"),
 		CacheDir:            getEnv("CACHE_DIR", "/cache"),
 		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
+		ACMEEmail:           getEnv("ACME_EMAIL", ""),
+		DNSProvider:         getEnv("DNS_PROVIDER", ""),
+		DNSProviderConfig:   getEnv("DNS_PROVIDER_CONFIG", ""),
 		MaxConcurrentBuilds: getEnvInt("MAX_CONCURRENT_BUILDS", 1),
 		MaxProjects:         getEnvInt("MAX_PROJECTS", 50),
 		Build: BuildConfig{

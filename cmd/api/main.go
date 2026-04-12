@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -16,6 +18,7 @@ import (
 	dockerpkg "github.com/vatsalpatel/hostbox/internal/platform/docker"
 	"github.com/vatsalpatel/hostbox/internal/repository"
 	"github.com/vatsalpatel/hostbox/internal/services"
+	caddysvc "github.com/vatsalpatel/hostbox/internal/services/caddy"
 	deploysvc "github.com/vatsalpatel/hostbox/internal/services/deployment"
 	"github.com/vatsalpatel/hostbox/internal/worker"
 	"github.com/vatsalpatel/hostbox/migrations"
@@ -69,6 +72,44 @@ func main() {
 	// 9. Initialize SSE hub
 	sseHub := worker.NewSSEHub()
 
+	// 9a. Initialize Caddy services
+	caddyClient := caddysvc.NewCaddyClient(cfg.CaddyAdminURL, l)
+
+	var dnsProviderConf json.RawMessage
+	if cfg.DNSProvider != "" && cfg.DNSProviderConfig != "" {
+		dnsProviderConf = json.RawMessage(cfg.DNSProviderConfig)
+	}
+
+	configBuilder := caddysvc.NewConfigBuilder(caddysvc.BuilderConfig{
+		PlatformDomain:  cfg.PlatformDomain,
+		PlatformHTTPS:   cfg.PlatformHTTPS,
+		ACMEEmail:       cfg.ACMEEmail,
+		APIUpstream:     fmt.Sprintf("localhost:%d", cfg.Port),
+		DeploymentRoot:  cfg.DeploymentsDir,
+		DNSProvider:     cfg.DNSProvider,
+		DNSProviderConf: dnsProviderConf,
+	})
+
+	routeManager := caddysvc.NewRouteManager(caddyClient, configBuilder, l)
+
+	deployAdapter := &caddysvc.DeploymentRepoAdapter{Repo: repos.Deployment}
+	domainAdapter := &caddysvc.DomainRepoAdapter{Repo: repos.Domain}
+	caddySyncSvc := caddysvc.NewSyncService(caddyClient, configBuilder, deployAdapter, domainAdapter, l)
+
+	// Try to sync Caddy on startup (non-fatal if Caddy not available)
+	ctx := context.Background()
+	if err := caddySyncSvc.WaitForCaddy(ctx, 5*time.Second); err != nil {
+		l.Warn("caddy not reachable on startup, routes will sync later", "error", err)
+	} else {
+		if err := caddySyncSvc.SyncAll(ctx); err != nil {
+			l.Error("initial caddy sync failed", "error", err)
+		}
+	}
+
+	// Start periodic re-sync every 5 minutes
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+	caddySyncSvc.StartPeriodicSync(syncCtx, 5*time.Minute)
+
 	// 10. Create server
 	srv := api.NewServer(cfg, db, repos, l)
 
@@ -94,6 +135,9 @@ func main() {
 			sseHub,
 			cfg.PlatformDomain,
 		)
+
+		// Wire Caddy route updates into the build pipeline
+		executor.SetPostBuildHook(caddysvc.NewPostBuildRouteHook(routeManager, l))
 
 		pool := worker.NewPool(
 			cfg.MaxConcurrentBuilds,
@@ -130,6 +174,11 @@ func main() {
 
 		l.Info("build pipeline initialized", "workers", cfg.MaxConcurrentBuilds)
 	}
+
+	srv.OnShutdown(func() {
+		l.Info("stopping caddy periodic sync")
+		syncCancel()
+	})
 
 	// 13. Register routes
 	routes.Register(srv.Echo, routes.Deps{
