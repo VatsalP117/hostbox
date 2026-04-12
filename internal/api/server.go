@@ -22,12 +22,13 @@ import (
 
 // Server holds the Echo instance and dependencies.
 type Server struct {
-	Echo      *echo.Echo
-	Config    *config.Config
-	DB        *sql.DB
-	Repos     *repository.Repositories
-	Logger    *slog.Logger
-	startTime time.Time
+	Echo          *echo.Echo
+	Config        *config.Config
+	DB            *sql.DB
+	Repos         *repository.Repositories
+	Logger        *slog.Logger
+	startTime     time.Time
+	shutdownHooks []func()
 }
 
 // echoValidator wraps go-playground/validator to satisfy echo.Validator interface.
@@ -73,6 +74,11 @@ func (s *Server) StartTime() time.Time {
 }
 
 // Start begins listening for HTTP requests. Blocks until shutdown signal.
+// OnShutdown registers a function to be called during graceful shutdown.
+func (s *Server) OnShutdown(fn func()) {
+	s.shutdownHooks = append(s.shutdownHooks, fn)
+}
+
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.Config.Host, s.Config.Port)
 	s.Logger.Info("server starting",
@@ -95,7 +101,18 @@ func (s *Server) Start() error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return s.Echo.Shutdown(ctx)
+
+	// Stop accepting new connections
+	if err := s.Echo.Shutdown(ctx); err != nil {
+		s.Logger.Error("echo shutdown error", "error", err)
+	}
+
+	// Run registered shutdown hooks (worker pool, docker, etc.)
+	for _, hook := range s.shutdownHooks {
+		hook()
+	}
+
+	return nil
 }
 
 // Shutdown gracefully stops the server with a timeout.

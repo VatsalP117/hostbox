@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -75,7 +76,21 @@ func (p *Pool) worker(id int) {
 				return
 			}
 			slog.Info("worker picked up job", "worker_id", id, "deployment_id", deploymentID)
-			p.executor.Execute(p.ctx, deploymentID)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("worker panic recovered",
+							"worker_id", id,
+							"deployment_id", deploymentID,
+							"panic", r,
+							"stack", string(debug.Stack()),
+						)
+						errMsg := "Internal error: build worker panic"
+						_ = p.deployRepo.UpdateStatus(context.Background(), deploymentID, "failed", &errMsg)
+					}
+				}()
+				p.executor.Execute(p.ctx, deploymentID)
+			}()
 		}
 	}
 }
