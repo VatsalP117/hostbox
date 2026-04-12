@@ -70,7 +70,14 @@ func Register(e *echo.Echo, deps Deps) {
 	// Deployments
 	authed.GET("/projects/:projectId/deployments", deps.DeploymentHandler.ListByProject)
 	authed.POST("/projects/:projectId/deployments", deps.DeploymentHandler.Create)
+	authed.POST("/projects/:projectId/deployments/trigger", deps.DeploymentHandler.TriggerDeploy)
+	authed.POST("/projects/:projectId/redeploy", deps.DeploymentHandler.Redeploy)
+	authed.POST("/projects/:projectId/rollback", deps.DeploymentHandler.Rollback)
+	authed.POST("/projects/:projectId/promote/:deploymentId", deps.DeploymentHandler.Promote)
 	authed.GET("/deployments/:id", deps.DeploymentHandler.Get)
+	authed.GET("/deployments/:id/logs", deps.DeploymentHandler.GetLogs)
+	authed.GET("/deployments/:id/logs/stream", deps.DeploymentHandler.StreamLogs)
+	authed.POST("/deployments/:id/cancel", deps.DeploymentHandler.CancelDeploy)
 
 	// Domains
 	authed.POST("/projects/:projectId/domains", deps.DomainHandler.Create)
