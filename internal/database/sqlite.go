@@ -39,8 +39,36 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
+	// Run PRAGMA optimize on startup to update statistics
+	if _, err := db.Exec("PRAGMA optimize"); err != nil {
+		slog.Warn("pragma optimize failed", "error", err)
+	}
+
 	slog.Info("database connected", "path", path)
 	return db, nil
+}
+
+// RunOptimize runs PRAGMA optimize to update query planner statistics.
+// Call periodically (e.g., every 6 hours) for long-running processes.
+func RunOptimize(db *sql.DB) {
+	if _, err := db.Exec("PRAGMA optimize"); err != nil {
+		slog.Warn("pragma optimize failed", "error", err)
+	}
+}
+
+// WALSize returns the size of the WAL file in bytes, or 0 if it doesn't exist.
+func WALSize(dbPath string) int64 {
+	info, err := os.Stat(dbPath + "-wal")
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// CheckpointWAL forces a WAL checkpoint to reclaim space.
+func CheckpointWAL(db *sql.DB) error {
+	_, err := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
 }
 
 // applyPragmas sets WAL mode and performance/safety pragmas.

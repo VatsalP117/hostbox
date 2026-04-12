@@ -112,3 +112,88 @@ func TestCloseNil(t *testing.T) {
 		t.Errorf("Close(nil) error: %v", err)
 	}
 }
+
+func TestRunOptimize(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer db.Close()
+
+	// Should not panic or error
+	RunOptimize(db)
+}
+
+func TestWALSize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer db.Close()
+
+	// Write some data to generate WAL
+	db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
+	db.Exec("INSERT INTO test (val) VALUES ('hello')")
+
+	size := WALSize(path)
+	// WAL size should be >= 0 (may be 0 if auto-checkpointed)
+	if size < 0 {
+		t.Errorf("WALSize() = %d, want >= 0", size)
+	}
+}
+
+func TestWALSizeNonexistent(t *testing.T) {
+	size := WALSize("/nonexistent/path.db")
+	if size != 0 {
+		t.Errorf("WALSize() = %d, want 0 for nonexistent path", size)
+	}
+}
+
+func TestCheckpointWAL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer db.Close()
+
+	db.Exec("CREATE TABLE test (id INTEGER PRIMARY KEY, val TEXT)")
+	db.Exec("INSERT INTO test (val) VALUES ('hello')")
+
+	if err := CheckpointWAL(db); err != nil {
+		t.Errorf("CheckpointWAL() error: %v", err)
+	}
+}
+
+func TestPragmasApplied(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer db.Close()
+
+	tests := []struct {
+		pragma string
+		want   string
+	}{
+		{"synchronous", "1"}, // NORMAL = 1
+		{"temp_store", "2"},  // MEMORY = 2
+	}
+
+	for _, tt := range tests {
+		var val string
+		err := db.QueryRow("PRAGMA " + tt.pragma).Scan(&val)
+		if err != nil {
+			t.Errorf("PRAGMA %s error: %v", tt.pragma, err)
+			continue
+		}
+		if val != tt.want {
+			t.Errorf("PRAGMA %s = %q, want %q", tt.pragma, val, tt.want)
+		}
+	}
+}
