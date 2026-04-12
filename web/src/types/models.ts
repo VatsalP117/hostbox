@@ -1,0 +1,206 @@
+export type DeploymentStatus =
+  | "queued"
+  | "building"
+  | "ready"
+  | "failed"
+  | "cancelled";
+
+export type EnvVarScope = "all" | "production" | "preview";
+
+export type NotificationChannel = "discord" | "slack" | "webhook";
+
+export type NotificationEvent =
+  | "deploy_started"
+  | "deploy_success"
+  | "deploy_failed"
+  | "domain_verified";
+
+export type Framework =
+  | "nextjs"
+  | "vite"
+  | "cra"
+  | "astro"
+  | "gatsby"
+  | "nuxt"
+  | "sveltekit"
+  | "hugo"
+  | "plain-html"
+  | "unknown";
+
+export type ActivityAction =
+  | "project.created"
+  | "project.updated"
+  | "project.deleted"
+  | "deployment.created"
+  | "deployment.cancelled"
+  | "deployment.rolled_back"
+  | "domain.added"
+  | "domain.verified"
+  | "domain.deleted"
+  | "env_var.created"
+  | "env_var.updated"
+  | "env_var.deleted"
+  | "user.login"
+  | "user.logout"
+  | "user.created"
+  | "settings.updated";
+
+export type ResourceType =
+  | "project"
+  | "deployment"
+  | "domain"
+  | "env_var"
+  | "user"
+  | "settings";
+
+export interface User {
+  id: string;
+  email: string;
+  display_name: string;
+  is_admin: boolean;
+  email_verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  owner_id: string;
+  name: string;
+  slug: string;
+  github_repo: string | null;
+  github_installation_id: number | null;
+  production_branch: string;
+  framework: Framework | null;
+  build_command: string | null;
+  install_command: string | null;
+  output_directory: string | null;
+  root_directory: string;
+  node_version: string;
+  auto_deploy: boolean;
+  preview_deployments: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Deployment {
+  id: string;
+  project_id: string;
+  commit_sha: string;
+  commit_message: string | null;
+  commit_author: string | null;
+  branch: string;
+  status: DeploymentStatus;
+  is_production: boolean;
+  deployment_url: string | null;
+  artifact_path: string;
+  artifact_size_bytes: number | null;
+  log_path: string;
+  error_message: string | null;
+  is_rollback: boolean;
+  rollback_source_id: string | null;
+  github_pr_number: number | null;
+  build_duration_ms: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface Domain {
+  id: string;
+  project_id: string;
+  domain: string;
+  verified: boolean;
+  verified_at: string | null;
+  last_checked_at: string | null;
+  created_at: string;
+}
+
+export interface EnvVar {
+  id: string;
+  project_id: string;
+  key: string;
+  value: string;
+  is_secret: boolean;
+  scope: EnvVarScope;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationConfig {
+  id: string;
+  project_id: string | null;
+  channel: NotificationChannel;
+  webhook_url: string;
+  events: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  url: string;
+  description: string;
+  private: boolean;
+  default_branch: string;
+}
+
+export interface GitHubInstallation {
+  id: number;
+  account: {
+    login: string;
+    type: "User" | "Organization";
+    avatar_url: string;
+  };
+  created_at: string;
+}
+
+export interface Session {
+  id: string;
+  user_agent: string;
+  ip_address: string;
+  is_current: boolean;
+  last_active_at: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface Activity {
+  id: string;
+  user_id: string;
+  user_email: string;
+  action: ActivityAction;
+  resource_type: ResourceType;
+  resource_id: string;
+  resource_name: string | null;
+  metadata: Record<string, unknown> | null;
+  ip_address: string;
+  created_at: string;
+}
+
+export interface SystemStats {
+  disk_usage: {
+    total_bytes: number;
+    used_bytes: number;
+    available_bytes: number;
+    deployment_bytes: number;
+  };
+  project_count: number;
+  deployment_count: number;
+  active_builds: number;
+  uptime_seconds: number;
+}
+
+export interface PlatformSettings {
+  registration_enabled: boolean;
+  max_projects: number;
+  max_concurrent_builds: number;
+  artifact_retention_days: number;
+}
+
+export interface DnsInstructions {
+  a_record: string;
+  cname_record: string;
+}
