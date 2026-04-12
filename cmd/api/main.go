@@ -18,10 +18,14 @@ import (
 	dockerpkg "github.com/vatsalpatel/hostbox/internal/platform/docker"
 	"github.com/vatsalpatel/hostbox/internal/repository"
 	"github.com/vatsalpatel/hostbox/internal/services"
+	adminsvc "github.com/vatsalpatel/hostbox/internal/services/admin"
+	"github.com/vatsalpatel/hostbox/internal/services/backup"
 	caddysvc "github.com/vatsalpatel/hostbox/internal/services/caddy"
 	deploysvc "github.com/vatsalpatel/hostbox/internal/services/deployment"
 	ghsvc "github.com/vatsalpatel/hostbox/internal/services/github"
+	"github.com/vatsalpatel/hostbox/internal/services/notification"
 	"github.com/vatsalpatel/hostbox/internal/services/scheduler"
+	"github.com/vatsalpatel/hostbox/internal/version"
 	"github.com/vatsalpatel/hostbox/internal/worker"
 	"github.com/vatsalpatel/hostbox/migrations"
 )
@@ -59,6 +63,15 @@ func main() {
 		repos.User, repos.Session, repos.Settings, repos.Activity,
 		cfg, l,
 	)
+
+	// 6a. Create notification service
+	notificationService := notification.NewService(repos.Notification, l)
+
+	// 6b. Create backup service
+	backupService := backup.NewService(db, cfg.BackupDir, 10, l)
+
+	// 6c. Create update service
+	updateService := adminsvc.NewUpdateService(version.Version, "", l)
 
 	// 7. Start session cleanup
 	go func() {
@@ -148,6 +161,8 @@ func main() {
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, cfg.PlatformDomain, l)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, l)
 	adminHandler := handlers.NewAdminHandler(repos.User, repos.Project, repos.Deployment, repos.Activity, repos.Settings, cfg, l)
+	adminHandler.SetBackupService(backupService)
+	adminHandler.SetUpdateService(updateService)
 
 	// 12. Initialize build pipeline (executor, pool, service) if Docker is available
 	if dockerClient != nil {
@@ -162,8 +177,10 @@ func main() {
 			cfg.PlatformDomain,
 		)
 
-		// Wire Caddy route updates into the build pipeline
-		executor.SetPostBuildHook(caddysvc.NewPostBuildRouteHook(routeManager, l))
+		// Wire Caddy route updates and notifications into the build pipeline
+		caddyHook := caddysvc.NewPostBuildRouteHook(routeManager, l)
+		notifHook := notification.NewPostBuildNotificationHook(notificationService, fmt.Sprintf("https://%s", cfg.PlatformDomain))
+		executor.SetPostBuildHook(worker.NewCompositePostBuildHook(caddyHook, notifHook))
 
 		pool := worker.NewPool(
 			cfg.MaxConcurrentBuilds,

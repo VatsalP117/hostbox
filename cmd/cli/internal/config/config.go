@@ -8,19 +8,20 @@ import (
 )
 
 const (
-	configDir  = ".config/hostbox"
-	configFile = "config.json"
-	tokenFile  = "token"
+	configDirName = ".config/hostbox"
+	configFile    = "config.json"
+	tokenFile     = "token"
 )
 
-type Config struct {
-	ServerURL string `json:"server_url"`
-	path      string
-}
+// configRoot can be overridden for testing.
+var configRoot = ""
 
 func configDirPath() string {
+	if configRoot != "" {
+		return configRoot
+	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, configDir)
+	return filepath.Join(home, configDirName)
 }
 
 func configFilePath() string {
@@ -29,6 +30,11 @@ func configFilePath() string {
 
 func tokenFilePath() string {
 	return filepath.Join(configDirPath(), tokenFile)
+}
+
+type Config struct {
+	ServerURL string `json:"server_url"`
+	path      string
 }
 
 func Load() (*Config, error) {
@@ -57,9 +63,6 @@ func (c *Config) Save() error {
 	}
 	return os.WriteFile(configFilePath(), data, 0600)
 }
-
-// Token management — stored as a plain file with 0600 perms.
-// Future: integrate OS keyring for better security.
 
 func SaveToken(token string) error {
 	if err := os.MkdirAll(configDirPath(), 0700); err != nil {

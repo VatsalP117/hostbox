@@ -15,6 +15,8 @@ import (
 	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
 	"github.com/vatsalpatel/hostbox/internal/models"
 	"github.com/vatsalpatel/hostbox/internal/repository"
+	adminsvc "github.com/vatsalpatel/hostbox/internal/services/admin"
+	"github.com/vatsalpatel/hostbox/internal/services/backup"
 )
 
 type AdminHandler struct {
@@ -26,6 +28,8 @@ type AdminHandler struct {
 	config         *config.Config
 	startTime      time.Time
 	logger         *slog.Logger
+	backupService  *backup.Service
+	updateService  *adminsvc.UpdateService
 }
 
 func NewAdminHandler(
@@ -223,4 +227,85 @@ func fileSize(path string) int64 {
 		return 0
 	}
 	return info.Size()
+}
+
+// SetBackupService injects the backup service for admin endpoints.
+func (h *AdminHandler) SetBackupService(svc *backup.Service) {
+	h.backupService = svc
+}
+
+// SetUpdateService injects the update service for admin endpoints.
+func (h *AdminHandler) SetUpdateService(svc *adminsvc.UpdateService) {
+	h.updateService = svc
+}
+
+func (h *AdminHandler) CreateBackup(c echo.Context) error {
+	if h.backupService == nil {
+		return apperrors.NewInternal(fmt.Errorf("backup service not configured"))
+	}
+
+	compress := true
+	if c.QueryParam("compress") == "false" {
+		compress = false
+	}
+
+	result, err := h.backupService.CreateBackup(c.Request().Context(), compress)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"backup": result,
+	})
+}
+
+func (h *AdminHandler) ListBackups(c echo.Context) error {
+	if h.backupService == nil {
+		return apperrors.NewInternal(fmt.Errorf("backup service not configured"))
+	}
+
+	backups, err := h.backupService.ListBackups()
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"backups": backups,
+	})
+}
+
+func (h *AdminHandler) RestoreBackup(c echo.Context) error {
+	if h.backupService == nil {
+		return apperrors.NewInternal(fmt.Errorf("backup service not configured"))
+	}
+
+	var req struct {
+		Path string `json:"path" validate:"required"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+
+	if err := h.backupService.Restore(c.Request().Context(), req.Path); err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Database restored successfully. Server will restart.",
+	})
+}
+
+func (h *AdminHandler) CheckUpdate(c echo.Context) error {
+	if h.updateService == nil {
+		return apperrors.NewInternal(fmt.Errorf("update service not configured"))
+	}
+
+	check, err := h.updateService.Check(c.Request().Context())
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"update": check,
+	})
 }

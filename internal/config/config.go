@@ -51,6 +51,7 @@ type Config struct {
 	DeploymentsDir string
 	LogsDir        string
 	CacheDir       string
+	BackupDir      string
 
 	// Caddy
 	CaddyAdminURL    string
@@ -112,6 +113,7 @@ func Load() (*Config, error) {
 		DeploymentsDir:      getEnv("DEPLOYMENTS_DIR", "/app/deployments"),
 		LogsDir:             getEnv("LOGS_DIR", "/app/logs"),
 		CacheDir:            getEnv("CACHE_DIR", "/cache"),
+		BackupDir:           getEnv("BACKUP_DIR", "/app/data/backups"),
 		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
 		ACMEEmail:           getEnv("ACME_EMAIL", ""),
 		DNSProvider:         getEnv("DNS_PROVIDER", ""),

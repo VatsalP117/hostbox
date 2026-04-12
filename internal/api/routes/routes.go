@@ -105,6 +105,10 @@ func Register(e *echo.Echo, deps Deps) {
 	admin.GET("/users", deps.AdminHandler.Users)
 	admin.GET("/settings", deps.AdminHandler.GetSettings)
 	admin.PUT("/settings", deps.AdminHandler.UpdateSettings)
+	admin.POST("/backups", deps.AdminHandler.CreateBackup)
+	admin.GET("/backups", deps.AdminHandler.ListBackups)
+	admin.POST("/backups/restore", deps.AdminHandler.RestoreBackup)
+	admin.GET("/update/check", deps.AdminHandler.CheckUpdate)
 
 	// --- GitHub webhook (public, signature-verified) ---
 	if deps.GitHubWebhookHandler != nil {
