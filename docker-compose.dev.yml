@@ -1,0 +1,63 @@
+# Development compose — hot-reload for Go + Vite dev server for frontend
+services:
+  hostbox-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: hostbox-dev
+    volumes:
+      - .:/app
+      - go_mod_cache:/go/pkg/mod
+      - hostbox_dev_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_PATH=/app/data/hostbox.db
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=text
+      - PLATFORM_DOMAIN=localhost
+      - PLATFORM_HTTPS=false
+      - CADDY_ADMIN_URL=http://caddy-dev:2019
+    depends_on:
+      - caddy-dev
+    networks:
+      - hostbox-dev
+
+  caddy-dev:
+    build:
+      context: ./docker/caddy
+    container_name: hostbox-caddy-dev
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_dev_data:/data
+      - caddy_dev_config:/config
+    command: caddy run --resume
+    networks:
+      - hostbox-dev
+
+  frontend-dev:
+    image: node:20-alpine
+    container_name: hostbox-frontend-dev
+    working_dir: /app/web
+    volumes:
+      - ./web:/app/web
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    networks:
+      - hostbox-dev
+
+volumes:
+  go_mod_cache:
+  hostbox_dev_data:
+  caddy_dev_data:
+  caddy_dev_config:
+
+networks:
+  hostbox-dev:
+    driver: bridge

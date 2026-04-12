@@ -1,0 +1,24 @@
+# Development Dockerfile with hot-reload support
+FROM golang:1.25-alpine
+
+RUN apk add --no-cache gcc musl-dev sqlite-dev git curl
+
+# Install air for Go hot-reload
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ENV CGO_ENABLED=1 \
+    HOST=0.0.0.0 \
+    PORT=8080 \
+    DATABASE_PATH=/app/data/hostbox.db \
+    LOG_LEVEL=debug \
+    LOG_FORMAT=text
+
+EXPOSE 8080
+
+CMD ["air", "-c", ".air.toml"]
