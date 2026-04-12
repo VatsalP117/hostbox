@@ -106,6 +106,46 @@ func (r *NotificationRepository) ListGlobal(ctx context.Context) ([]models.Notif
 	return configs, rows.Err()
 }
 
+func (r *NotificationRepository) FindByProjectAndEvent(ctx context.Context, projectID, event string) ([]models.NotificationConfig, error) {
+	rows, err := r.db.QueryContext(ctx,
+		notifSelectSQL+` WHERE project_id = ? AND enabled = TRUE AND (events = 'all' OR events LIKE '%' || ? || '%')`,
+		projectID, event)
+	if err != nil {
+		return nil, fmt.Errorf("find notification configs by project and event: %w", err)
+	}
+	defer rows.Close()
+
+	var configs []models.NotificationConfig
+	for rows.Next() {
+		c, err := scanNotificationRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		configs = append(configs, *c)
+	}
+	return configs, rows.Err()
+}
+
+func (r *NotificationRepository) FindGlobalByEvent(ctx context.Context, event string) ([]models.NotificationConfig, error) {
+	rows, err := r.db.QueryContext(ctx,
+		notifSelectSQL+` WHERE project_id IS NULL AND enabled = TRUE AND (events = 'all' OR events LIKE '%' || ? || '%')`,
+		event)
+	if err != nil {
+		return nil, fmt.Errorf("find global notification configs by event: %w", err)
+	}
+	defer rows.Close()
+
+	var configs []models.NotificationConfig
+	for rows.Next() {
+		c, err := scanNotificationRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		configs = append(configs, *c)
+	}
+	return configs, rows.Err()
+}
+
 const notifSelectSQL = `SELECT id, project_id, channel, webhook_url, events, enabled, created_at FROM notification_configs`
 
 func scanNotification(s scanner) (*models.NotificationConfig, error) {
