@@ -320,7 +320,39 @@ func (r *DeploymentRepository) DeactivateBranchDeployments(ctx context.Context, 
 	return deployments, nil
 }
 
-// ActiveDeploymentRow is a denormalized row from the deployment+project join.
+// ListAllByProject returns all deployments for a project ordered by created_at DESC.
+func (r *DeploymentRepository) ListAllByProject(ctx context.Context, projectID string) ([]models.Deployment, error) {
+	rows, err := r.db.QueryContext(ctx, deploymentSelectSQL+` WHERE d.project_id = ? ORDER BY d.created_at DESC`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list all by project: %w", err)
+	}
+	defer rows.Close()
+
+	var deployments []models.Deployment
+	for rows.Next() {
+		d, err := scanDeploymentRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, *d)
+	}
+	return deployments, rows.Err()
+}
+
+// ClearArtifact nullifies artifact and log paths for a deployment (keeps record for history).
+func (r *DeploymentRepository) ClearArtifact(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE deployments SET artifact_path = NULL, log_path = NULL WHERE id = ?`, id)
+	return err
+}
+
+// HasLogPath checks if a deployment with the given ID has a non-null log_path.
+func (r *DeploymentRepository) HasLogPath(ctx context.Context, id string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM deployments WHERE id = ? AND log_path IS NOT NULL)`, id).Scan(&exists)
+	return exists, err
+}
 type ActiveDeploymentRow struct {
 	DeploymentID string
 	ProjectID    string

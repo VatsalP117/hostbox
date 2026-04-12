@@ -126,6 +126,25 @@ func (r *DomainRepository) ListUnverified(ctx context.Context) ([]models.Domain,
 	return domains, rows.Err()
 }
 
+// ListVerified returns all verified domains.
+func (r *DomainRepository) ListVerified(ctx context.Context) ([]models.Domain, error) {
+	rows, err := r.db.QueryContext(ctx, domainSelectSQL+` WHERE verified = 1 ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list verified domains: %w", err)
+	}
+	defer rows.Close()
+
+	var domains []models.Domain
+	for rows.Next() {
+		d, err := scanDomainRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		domains = append(domains, *d)
+	}
+	return domains, rows.Err()
+}
+
 const domainSelectSQL = `SELECT id, project_id, domain, verified, verified_at, last_checked_at, created_at FROM domains`
 
 func scanDomain(s scanner) (*models.Domain, error) {

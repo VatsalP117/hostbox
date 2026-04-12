@@ -21,6 +21,7 @@ import (
 	caddysvc "github.com/vatsalpatel/hostbox/internal/services/caddy"
 	deploysvc "github.com/vatsalpatel/hostbox/internal/services/deployment"
 	ghsvc "github.com/vatsalpatel/hostbox/internal/services/github"
+	"github.com/vatsalpatel/hostbox/internal/services/scheduler"
 	"github.com/vatsalpatel/hostbox/internal/worker"
 	"github.com/vatsalpatel/hostbox/migrations"
 )
@@ -212,6 +213,17 @@ func main() {
 	srv.OnShutdown(func() {
 		l.Info("stopping caddy periodic sync")
 		syncCancel()
+	})
+
+	// 12b. Start background schedulers
+	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
+	schedulerMgr := scheduler.NewManager(db, repos.Deployment, repos.Project, repos.Settings, repos.Domain, cfg.Build.LogBaseDir, l)
+	schedulerMgr.Start(schedulerCtx)
+	l.Info("background schedulers started")
+
+	srv.OnShutdown(func() {
+		l.Info("stopping background schedulers")
+		schedulerCancel()
 	})
 
 	// 13. Register routes
