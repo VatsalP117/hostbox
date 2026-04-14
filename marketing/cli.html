@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hostbox | Sovereign CLI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#201f1f",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "on-tertiary": "#581e00",
+                        "on-error": "#690005",
+                        "on-background": "#e5e2e1",
+                        "surface-container-lowest": "#0e0e0e",
+                        "surface-bright": "#3a3939",
+                        "on-surface-variant": "#c3c6d7",
+                        "tertiary-container": "#bc4800",
+                        "background": "#131313",
+                        "surface-variant": "#353534",
+                        "outline-variant": "#434655",
+                        "tertiary": "#ffb596",
+                        "primary": "#adc6ff",
+                        "inverse-on-surface": "#313030",
+                        "surface-container-low": "#1c1b1b",
+                        "on-primary-fixed-variant": "#004395",
+                        "tertiary-fixed": "#ffdbcd",
+                        "on-secondary-container": "#b0b2ff",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#d8e2ff",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "surface-container-high": "#2a2a2a",
+                        "primary-fixed-dim": "#adc6ff",
+                        "surface": "#131313",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed": "#07006c",
+                        "on-primary-container": "#ecf0ff",
+                        "inverse-primary": "#005ac2",
+                        "primary-container": "#0f69dc",
+                        "on-surface": "#e5e2e1",
+                        "on-tertiary-container": "#ffede6",
+                        "on-primary-fixed": "#001a42",
+                        "inverse-surface": "#e5e2e1",
+                        "secondary-fixed": "#e1e0ff",
+                        "on-primary": "#002e6a",
+                        "surface-tint": "#adc6ff",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "surface-dim": "#131313",
+                        "outline": "#8d90a0",
+                        "surface-container-highest": "#353534",
+                        "secondary-container": "#3131c0",
+                        "on-secondary": "#1000a9",
+                        "secondary": "#c0c1ff",
+                        "on-tertiary-fixed": "#360f00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .terminal-glow {
+            background: radial-gradient(circle at top right, rgba(173, 198, 255, 0.08), transparent 70%);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0e0e0e;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #353534;
+            border-radius: 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30 min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#131313]/80 backdrop-blur-xl border-b border-[#434655]/15 shadow-2xl shadow-black/40">
+<div class="flex justify-between items-center max-w-[1400px] mx-auto px-6 h-16">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#ADC6FF]" data-icon="terminal">terminal</span>
+<a class="text-2xl font-black tracking-tighter text-white font-headline" href="index.html">Hostbox</a>
+</div>
+<div class="flex items-center gap-6">
+<nav class="hidden md:flex gap-6 font-headline text-sm font-medium tracking-tight">
+<a class="text-[#ADC6FF] border-b-2 border-[#ADC6FF] pb-1" href="features.html">Features</a>
+<a class="text-[#434655] hover:text-white transition-colors" href="https://github.com/vatsalpatel/hostbox/tree/main/docs" rel="noopener noreferrer" target="_blank">Docs</a>
+</nav>
+<a class="bg-[#353534]/50 hover:bg-[#353534] transition-all duration-300 px-4 py-2 rounded-xl text-white font-headline text-sm font-medium flex items-center gap-2 active:scale-95" href="https://github.com/vatsalpatel/hostbox" rel="noopener noreferrer" target="_blank">
+                    GitHub
+                </a>
+</div>
+</div>
+</header>
+<main class="pt-24 pb-12 px-6 flex-grow flex flex-col gap-12 max-w-md mx-auto">
+<!-- Hero Section & Install Guide -->
+<section class="flex flex-col gap-8">
+<div class="space-y-2">
+<span class="font-label text-[0.6875rem] uppercase tracking-widest text-primary">Deployment Sovereign</span>
+<h1 class="font-headline text-4xl font-extrabold tracking-tight text-white">Scale from the source.</h1>
+<p class="text-on-surface-variant text-sm leading-relaxed">Hostbox CLI puts the architect back in control. Deploy, monitor, and scale with a single binary.</p>
+</div>
+<!-- 1-2-3 Install Guide -->
+<div class="bg-surface-container-low rounded-xl p-6 relative overflow-hidden terminal-glow border border-outline-variant/10">
+<div class="flex flex-col gap-6">
+<div class="flex gap-4 items-start">
+<div class="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center font-label text-xs shrink-0 border border-primary/20">1</div>
+<div class="space-y-1">
+<p class="text-white font-headline text-sm font-bold">Install Binary</p>
+<div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[0.75rem] text-primary-fixed border border-outline-variant/20 flex justify-between items-center group">
+<code>curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install-cli.sh | bash</code>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-active:text-primary" data-icon="content_copy">content_copy</span>
+</div>
+</div>
+</div>
+<div class="flex gap-4 items-start">
+<div class="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center font-label text-xs shrink-0 border border-primary/20">2</div>
+<div class="space-y-1">
+<p class="text-white font-headline text-sm font-bold">Authenticate</p>
+<code class="block bg-surface-container-lowest rounded-lg p-3 font-label text-[0.75rem] text-on-surface-variant/80 border border-outline-variant/20">hostbox login</code>
+</div>
+</div>
+<div class="flex gap-4 items-start">
+<div class="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center font-label text-xs shrink-0 border border-primary/20">3</div>
+<div class="space-y-1 w-full">
+<p class="text-white font-headline text-sm font-bold">Initialize Project</p>
+<code class="block bg-surface-container-lowest rounded-lg p-3 font-label text-[0.75rem] text-on-surface-variant/80 border border-outline-variant/20">hostbox init</code>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Command Showcase -->
+<section class="space-y-4">
+<div class="flex justify-between items-end">
+<h2 class="font-headline text-xl font-bold text-white tracking-tight">Core Commands</h2>
+<span class="font-label text-[0.6875rem] text-outline">v2.4.0-STABLE</span>
+</div>
+<div class="grid grid-cols-1 gap-3">
+<div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+<div class="flex justify-between items-center mb-1">
+<code class="text-primary font-label text-sm">hostbox deploy</code>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-lg" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<p class="text-xs text-on-surface-variant">Push local changes to global edge nodes.</p>
+</div>
+<div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+<div class="flex justify-between items-center mb-1">
+<code class="text-primary font-label text-sm">hostbox logs</code>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-lg" data-icon="subject">subject</span>
+</div>
+<p class="text-xs text-on-surface-variant">Real-time telemetry stream from all instances.</p>
+</div>
+<div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+<div class="flex justify-between items-center mb-1">
+<code class="text-primary font-label text-sm">hostbox rollback</code>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-lg" data-icon="history">history</span>
+</div>
+<p class="text-xs text-on-surface-variant">Instant revert to the last healthy build state.</p>
+</div>
+</div>
+</section>
+<!-- Logs Preview Terminal -->
+<section class="space-y-4">
+<h2 class="font-headline text-xl font-bold text-white tracking-tight">Real-time Stream</h2>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden border border-outline-variant/30 shadow-2xl">
+<!-- Terminal Header -->
+<div class="bg-surface-container-high px-4 py-2 flex items-center justify-between">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/40"></div>
+</div>
+<div class="font-label text-[10px] text-outline tracking-widest uppercase">hostbox-logs --follow</div>
+<div class="w-10"></div>
+</div>
+<!-- Terminal Body -->
+<div class="p-4 font-label text-[11px] leading-relaxed h-64 overflow-y-auto custom-scrollbar">
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:01</span>
+<span class="text-[#89DDFF]">[SYS]</span>
+<span class="text-on-surface-variant">Initializing build environment...</span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:03</span>
+<span class="text-[#C3E88D]">[OK]</span>
+<span class="text-on-surface-variant">Docker layer cache hit for <span class="text-primary">node:20-alpine</span></span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:05</span>
+<span class="text-primary-container">[INFO]</span>
+<span class="text-on-surface-variant">Compiling assets with <span class="italic">esbuild</span>...</span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:08</span>
+<span class="text-[#FFCB6B]">[WARN]</span>
+<span class="text-on-surface-variant">Large bundle detected in <span class="text-tertiary">/vendor/core.js</span></span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:10</span>
+<span class="text-[#C3E88D]">[OK]</span>
+<span class="text-on-surface-variant">Build completed in 8.42s</span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:11</span>
+<span class="text-[#89DDFF]">[SYS]</span>
+<span class="text-on-surface-variant">Streaming image to <span class="text-primary">us-east-1</span> (Edge)</span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:14</span>
+<span class="text-primary-container">[INFO]</span>
+<span class="text-on-surface-variant">Health check status: <span class="text-[#C3E88D]">PASS</span></span>
+</div>
+<div class="flex gap-3 mb-1">
+<span class="text-outline shrink-0">14:02:15</span>
+<span class="text-[#ADC6FF]">[LIVE]</span>
+<span class="text-white font-bold underline decoration-primary/50">https://sovereign-app-v2.hb.app</span>
+</div>
+<div class="flex gap-2 mt-2 animate-pulse">
+<span class="text-primary">_</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Documentation CTA -->
+<section class="mt-4">
+<a class="w-full bg-primary text-on-primary font-headline font-bold py-4 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(173,198,255,0.2)] active:scale-[0.98] transition-transform" href="https://github.com/vatsalpatel/hostbox/tree/main/docs" rel="noopener noreferrer" target="_blank">
+                Deep dive into the docs
+                <span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span>
+</a>
+<p class="text-center text-[10px] font-label text-outline mt-4 tracking-tighter uppercase">Comprehensive guides for API, CLI, and Edge deployment.</p>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#0E0E0E] w-full py-16 px-8 mt-auto border-t border-outline-variant/10">
+<div class="max-w-[1400px] mx-auto">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
+<div class="col-span-2">
+<span class="text-xl font-bold text-white font-headline">Hostbox</span>
+<p class="text-[#434655] text-xs mt-4 max-w-xs font-body leading-relaxed uppercase tracking-wide">Infrastructure for the sovereign architect. High-performance, low-latency, absolute control.</p>
+</div>
+<div class="flex flex-col gap-4">
+<span class="font-label text-xs uppercase tracking-widest text-primary">Resources</span>
+<ul class="flex flex-col gap-2 font-label text-xs text-[#434655]">
+<li><a class="hover:text-[#ADC6FF] transition-colors" href="features.html">Features</a></li>
+<li><a class="hover:text-[#ADC6FF] transition-colors" href="index.html">Home</a></li>
+<li><a class="hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox/tree/main/docs" rel="noopener noreferrer" target="_blank">Docs</a></li>
+</ul>
+</div>
+<div class="flex flex-col gap-4">
+<span class="font-label text-xs uppercase tracking-widest text-primary">Legal</span>
+<ul class="flex flex-col gap-2 font-label text-xs text-[#434655]">
+<li><a class="hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+<li><a class="hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox/blob/main/LICENSE" rel="noopener noreferrer" target="_blank">License</a></li>
+</ul>
+</div>
+</div>
+<div class="pt-8 border-t border-outline-variant/5">
+<p class="font-label text-[10px] uppercase tracking-[0.2em] text-[#434655]">© 2026 Hostbox. Built for the sovereign architect.</p>
+</div>
+</div>
+</footer>
+</body></html>

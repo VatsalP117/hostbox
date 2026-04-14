@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hostbox — The Sovereign Architect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&amp;family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container": "#201f1f",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "on-secondary-fixed-variant": "#2f2ebe",
+                      "on-tertiary": "#581e00",
+                      "on-error": "#690005",
+                      "on-background": "#e5e2e1",
+                      "surface-container-lowest": "#0e0e0e",
+                      "surface-bright": "#3a3939",
+                      "on-surface-variant": "#c3c6d7",
+                      "tertiary-container": "#bc4800",
+                      "background": "#131313",
+                      "surface-variant": "#353534",
+                      "outline-variant": "#434655",
+                      "tertiary": "#ffb596",
+                      "primary": "#adc6ff",
+                      "inverse-on-surface": "#313030",
+                      "surface-container-low": "#1c1b1b",
+                      "on-primary-fixed-variant": "#004395",
+                      "tertiary-fixed": "#ffdbcd",
+                      "on-secondary-container": "#b0b2ff",
+                      "error-container": "#93000a",
+                      "primary-fixed": "#d8e2ff",
+                      "error": "#ffb4ab",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "surface-container-high": "#2a2a2a",
+                      "primary-fixed-dim": "#adc6ff",
+                      "surface": "#131313",
+                      "on-error-container": "#ffdad6",
+                      "on-secondary-fixed": "#07006c",
+                      "on-primary-container": "#ecf0ff",
+                      "inverse-primary": "#005ac2",
+                      "primary-container": "#0f69dc",
+                      "on-surface": "#e5e2e1",
+                      "on-tertiary-container": "#ffede6",
+                      "on-primary-fixed": "#001a42",
+                      "inverse-surface": "#e5e2e1",
+                      "secondary-fixed": "#e1e0ff",
+                      "on-primary": "#002e6a",
+                      "surface-tint": "#adc6ff",
+                      "secondary-fixed-dim": "#c0c1ff",
+                      "surface-dim": "#131313",
+                      "outline": "#8d90a0",
+                      "surface-container-highest": "#353534",
+                      "secondary-container": "#3131c0",
+                      "on-secondary": "#1000a9",
+                      "secondary": "#c0c1ff",
+                      "on-tertiary-fixed": "#360f00"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "fontFamily": {
+                      "headline": ["Manrope"],
+                      "body": ["Inter"],
+                      "label": ["Space Grotesk"]
+              }
+            },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(53, 53, 52, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(67, 70, 85, 0.15);
+        }
+        .glow-accent {
+            background: radial-gradient(circle at top right, rgba(173, 198, 255, 0.08), transparent 70%);
+        }
+        .tonal-shift {
+            background: linear-gradient(to bottom, #131313, #0e0e0e);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#131313]/80 backdrop-blur-xl border-b border-[#434655]/15 shadow-2xl shadow-black/40">
+<div class="flex justify-between items-center max-w-[1400px] mx-auto px-6 h-20">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#ADC6FF]" data-icon="terminal">terminal</span>
+<a class="text-2xl font-black tracking-tighter text-white font-manrope" href="index.html">Hostbox</a>
+</div>
+<div class="flex items-center gap-6">
+<a class="font-manrope text-sm font-medium tracking-tight text-[#ADC6FF] border-b-2 border-[#ADC6FF] pb-1" href="features.html">Features</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-[#ADC6FF]" href="cli.html">CLI</a>
+<a class="hover:bg-[#353534]/50 transition-all duration-300 px-4 py-2 rounded-xl text-white font-manrope text-sm font-medium" href="https://github.com/vatsalpatel/hostbox" rel="noopener noreferrer" target="_blank">GitHub</a>
+</div>
+</div>
+</header>
+<main class="flex-grow pt-24 pb-12">
+<!-- Hero Section -->
+<section class="px-6 py-12 glow-accent relative overflow-hidden">
+<div class="max-w-xl mx-auto">
+<div class="inline-block mb-6 px-3 py-1 rounded-full bg-primary-container/10 border border-primary/20">
+<span class="font-label text-[10px] uppercase tracking-[0.2em] text-primary">v1.2.0 is live</span>
+</div>
+<h1 class="font-headline text-4xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
+                    The Vercel experience, on your own VPS.
+                </h1>
+<p class="font-body text-on-surface-variant text-base leading-relaxed mb-10">
+                    Radically lightweight frontend deployment platform. Push to GitHub, get a live URL with SSL, previews, and rollbacks on a $4/month server.
+                </p>
+<!-- Primary CTA: Terminal -->
+<div class="mb-6">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant/20 overflow-hidden shadow-2xl">
+<div class="bg-surface-container-high px-4 py-2 flex items-center justify-between">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-outline-variant/30"></div>
+</div>
+<span class="font-label text-[10px] text-outline">bash — install</span>
+</div>
+<div class="p-4 flex items-center justify-between gap-4">
+<code class="font-label text-xs text-primary truncate">curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install.sh | sudo bash</code>
+<button class="p-2 text-outline-variant hover:text-white transition-colors" data-copy-value="curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install.sh | sudo bash" type="button">
+<span class="material-symbols-outlined text-lg" data-icon="content_copy">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Secondary CTA -->
+<a class="w-full flex items-center justify-center gap-2 py-4 px-6 rounded-xl border border-outline-variant/20 font-headline font-bold text-white hover:bg-surface-container-low transition-all active:scale-[0.98]" href="https://github.com/vatsalpatel/hostbox" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined" data-icon="star">star</span>
+                    View on GitHub
+                </a>
+</div>
+</section>
+<!-- Visual Flow Section -->
+<section class="px-6 py-8">
+<div class="glass-panel p-8 rounded-[2rem] relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-primary/5 to-transparent pointer-events-none"></div>
+<div class="flex flex-col items-center justify-center gap-8 relative z-10">
+<div class="flex flex-col items-center">
+<div class="w-16 h-16 rounded-2xl bg-surface-container-low flex items-center justify-center border border-outline-variant/10">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="account_tree">account_tree</span>
+</div>
+<span class="font-label text-[10px] mt-2 uppercase tracking-widest text-outline">git push</span>
+</div>
+<div class="h-16 w-0.5 bg-gradient-to-b from-primary to-transparent relative">
+<div class="absolute -bottom-1 -left-1 w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+</div>
+<div class="flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-primary-container flex items-center justify-center shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined text-3xl text-on-primary-container" data-icon="rocket_launch">rocket_launch</span>
+</div>
+<span class="font-label text-[10px] mt-2 uppercase tracking-widest text-white">Live URL</span>
+<div class="mt-4 px-4 py-2 bg-surface-container-lowest rounded-lg border border-primary/20">
+<span class="font-label text-xs text-primary">https://app-v2.hostbox.dev</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Frameworks (Horizontal Scroll) -->
+<section class="py-12">
+<div class="px-6 mb-8">
+<span class="font-label text-[10px] uppercase tracking-[0.3em] text-outline">Supported Frameworks</span>
+</div>
+<div class="flex overflow-x-auto gap-8 px-6 no-scrollbar pb-4">
+<div class="flex-shrink-0 flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<span class="font-headline font-bold text-xl text-white">Next.js</span>
+</div>
+<div class="flex-shrink-0 flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<span class="font-headline font-bold text-xl text-white">Vite</span>
+</div>
+<div class="flex-shrink-0 flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<span class="font-headline font-bold text-xl text-white">Astro</span>
+</div>
+<div class="flex-shrink-0 flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<span class="font-headline font-bold text-xl text-white">SvelteKit</span>
+</div>
+<div class="flex-shrink-0 flex items-center gap-2 opacity-50 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+<span class="font-headline font-bold text-xl text-white">Hugo</span>
+</div>
+</div>
+</section>
+<!-- Key Value Props (Bento Style Mobile) -->
+<section class="px-6 py-12">
+<div class="grid grid-cols-1 gap-4">
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10">
+<div class="mb-4 text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="memory">memory</span>
+</div>
+<h3 class="font-headline text-lg font-bold text-white mb-2">200MB Idle</h3>
+<p class="font-body text-sm text-on-surface-variant">Optimized for small VPS instances. Run dozens of sites on a $4 machine.</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10">
+<div class="mb-4 text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="data_object">data_object</span>
+</div>
+<h3 class="font-headline text-lg font-bold text-white mb-2">Single Binary</h3>
+<p class="font-body text-sm text-on-surface-variant">Written in Go. No heavy dependencies. One binary to rule your entire server.</p>
+</div>
+<div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10">
+<div class="mb-4 text-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="security">security</span>
+</div>
+<h3 class="font-headline text-lg font-bold text-white mb-2">Zero Config SSL</h3>
+<p class="font-body text-sm text-on-surface-variant">Automatic Let's Encrypt certificates managed by Caddy under the hood.</p>
+</div>
+</div>
+</section>
+<!-- Dashboard Preview -->
+<section class="px-6 py-12 relative overflow-hidden">
+<div class="mb-8">
+<h2 class="font-headline text-2xl font-bold text-white">Built for the Sovereign Architect.</h2>
+<p class="font-body text-sm text-on-surface-variant mt-2">Control everything from a refined web interface or the CLI.</p>
+</div>
+<div class="bg-surface-container-lowest rounded-t-[2rem] border-x border-t border-outline-variant/20 shadow-[0_-20px_40px_rgba(0,0,0,0.5)] transform translate-y-4">
+<div class="p-6">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant/10"></div>
+<div class="h-4 w-24 bg-surface-container-high rounded-full"></div>
+</div>
+<span class="material-symbols-outlined text-outline" data-icon="settings">settings</span>
+</div>
+<div class="space-y-4">
+<div class="p-4 rounded-xl bg-surface-container-low border border-primary/10 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl" data-icon="cloud">cloud</span>
+</div>
+<div>
+<div class="text-sm font-bold text-white">portfolio-site</div>
+<div class="text-[10px] font-label text-outline uppercase tracking-wider">Production — Main</div>
+</div>
+</div>
+<div class="px-2 py-1 rounded bg-primary/10 border border-primary/20">
+<span class="font-label text-[10px] text-primary">ONLINE</span>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/5 flex items-center justify-between opacity-60">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-outline text-xl" data-icon="cloud_off">cloud_off</span>
+</div>
+<div>
+<div class="text-sm font-bold text-white">staging-api</div>
+<div class="text-[10px] font-label text-outline uppercase tracking-wider">Draft — Feature-A</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="h-24 bg-gradient-to-t from-surface-container-lowest to-transparent pointer-events-none"></div>
+</div>
+</section>
+<!-- Final CTA -->
+<section class="px-6 py-20 text-center bg-surface-container-lowest relative overflow-hidden">
+<div class="absolute inset-0 bg-primary/5 blur-[120px] rounded-full scale-150 -z-10"></div>
+<h2 class="font-headline text-3xl font-extrabold text-white mb-6">Start deploying in 60 seconds.</h2>
+<p class="font-body text-on-surface-variant mb-10 max-w-xs mx-auto">
+                No credit card required. Connect your VPS and reclaim your independence.
+            </p>
+<a class="w-full py-4 px-8 bg-primary rounded-xl font-headline font-bold text-on-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all inline-block" href="https://github.com/vatsalpatel/hostbox/blob/main/docs/SELF-HOSTING.md" rel="noopener noreferrer" target="_blank">
+                Get Started for Free
+            </a>
+<div class="mt-8 flex justify-center gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle" data-weight="fill">check_circle</span>
+<span class="font-label text-[10px] uppercase text-outline tracking-wider">Self-hosted</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle" data-weight="fill">check_circle</span>
+<span class="font-label text-[10px] uppercase text-outline tracking-wider">Open Source</span>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-16 px-8 mt-auto bg-[#0E0E0E] tonal-shift from-[#131313] to-[#0E0E0E]">
+<div class="max-w-[1400px] mx-auto">
+<div class="grid grid-cols-2 gap-12 mb-16">
+<div>
+<h4 class="font-label text-xs uppercase tracking-widest text-white mb-6">Product</h4>
+<ul class="space-y-4">
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="features.html">Features</a></li>
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="cli.html">CLI</a></li>
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox/blob/main/docs/SELF-HOSTING.md" rel="noopener noreferrer" target="_blank">Docs</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-label text-xs uppercase tracking-widest text-white mb-6">Social</h4>
+<ul class="space-y-4">
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox" rel="noopener noreferrer" target="_blank">GitHub</a></li>
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox/blob/main/LICENSE" rel="noopener noreferrer" target="_blank">License</a></li>
+<li><a class="font-body text-xs text-[#434655] hover:text-[#ADC6FF] transition-colors" href="https://github.com/vatsalpatel/hostbox/tree/main/docs" rel="noopener noreferrer" target="_blank">Documentation</a></li>
+</ul>
+</div>
+</div>
+<div class="pt-8 border-t border-outline-variant/10">
+<div class="text-xl font-bold text-white mb-4 font-manrope">Hostbox</div>
+<p class="font-label text-[10px] uppercase tracking-widest text-[#434655]">© 2026 Hostbox. Built for the sovereign architect.</p>
+</div>
+</div>
+</footer>
+<script>
+  document.querySelectorAll("[data-copy-value]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const value = button.getAttribute("data-copy-value");
+      if (!value) return;
+
+      try {
+        await navigator.clipboard.writeText(value);
+        button.classList.add("text-primary");
+        setTimeout(() => button.classList.remove("text-primary"), 800);
+      } catch (_) {}
+    });
+  });
+</script>
+</body></html>
