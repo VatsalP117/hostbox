@@ -10,9 +10,8 @@ export type EnvVarScope = "all" | "production" | "preview";
 export type NotificationChannel = "discord" | "slack" | "webhook";
 
 export type NotificationEvent =
-  | "deploy_started"
+  | "deploy_failure"
   | "deploy_success"
-  | "deploy_failed"
   | "domain_verified";
 
 export type Framework =
@@ -138,23 +137,20 @@ export interface NotificationConfig {
 }
 
 export interface GitHubRepo {
-  id: number;
   name: string;
   full_name: string;
-  url: string;
-  description: string;
+  html_url: string;
+  description: string | null;
   private: boolean;
   default_branch: string;
+  language: string | null;
 }
 
 export interface GitHubInstallation {
   id: number;
-  account: {
-    login: string;
-    type: "User" | "Organization";
-    avatar_url: string;
-  };
-  created_at: string;
+  account: string;
+  avatar_url: string;
+  target_type: "User" | "Organization";
 }
 
 export interface Session {
@@ -168,15 +164,12 @@ export interface Session {
 }
 
 export interface Activity {
-  id: string;
-  user_id: string;
-  user_email: string;
-  action: ActivityAction;
-  resource_type: ResourceType;
-  resource_id: string;
-  resource_name: string | null;
-  metadata: Record<string, unknown> | null;
-  ip_address: string;
+  id: number;
+  user_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  metadata: string | null;
   created_at: string;
 }
 
@@ -186,10 +179,14 @@ export interface SystemStats {
     used_bytes: number;
     available_bytes: number;
     deployment_bytes: number;
+    deployments_bytes?: number;
+    logs_bytes?: number;
+    database_bytes?: number;
   };
   project_count: number;
   deployment_count: number;
   active_builds: number;
+  user_count?: number;
   uptime_seconds: number;
 }
 

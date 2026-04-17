@@ -34,15 +34,13 @@ export function useVerifyDomain() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      projectId,
       domainId,
+      projectId,
     }: {
-      projectId: string;
       domainId: string;
+      projectId: string;
     }) =>
-      api.post<VerifyDomainResponse>(
-        `/projects/${projectId}/domains/${domainId}/verify`,
-      ),
+      api.post<VerifyDomainResponse>(`/domains/${domainId}/verify`),
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.domains(projectId),
@@ -55,12 +53,12 @@ export function useDeleteDomain() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      projectId,
       domainId,
+      projectId,
     }: {
-      projectId: string;
       domainId: string;
-    }) => api.delete<void>(`/projects/${projectId}/domains/${domainId}`),
+      projectId: string;
+    }) => api.delete<void>(`/domains/${domainId}`),
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.domains(projectId),

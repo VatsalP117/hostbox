@@ -29,10 +29,16 @@ func JWTAuth(authService *services.AuthService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
-			if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+			tokenStr := ""
+			if strings.HasPrefix(auth, "Bearer ") {
+				tokenStr = strings.TrimPrefix(auth, "Bearer ")
+			}
+			if tokenStr == "" {
+				tokenStr = c.QueryParam("token")
+			}
+			if tokenStr == "" {
 				return apperrors.NewUnauthorized("Missing or invalid authorization header")
 			}
-			tokenStr := strings.TrimPrefix(auth, "Bearer ")
 
 			claims, err := authService.ValidateAccessToken(tokenStr)
 			if err != nil {

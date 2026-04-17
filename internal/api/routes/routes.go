@@ -21,6 +21,7 @@ type Deps struct {
 	DeploymentHandler    *handlers.DeploymentHandler
 	DomainHandler        *handlers.DomainHandler
 	EnvVarHandler        *handlers.EnvVarHandler
+	NotificationHandler  *handlers.NotificationHandler
 	AdminHandler         *handlers.AdminHandler
 	GitHubWebhookHandler *handlers.GitHubWebhookHandler
 	GitHubHandler        *handlers.GitHubHandler
@@ -94,6 +95,13 @@ func Register(e *echo.Echo, deps Deps) {
 	authed.PATCH("/env-vars/:id", deps.EnvVarHandler.Update)
 	authed.DELETE("/env-vars/:id", deps.EnvVarHandler.Delete)
 
+	// Notifications
+	authed.POST("/projects/:projectId/notifications", deps.NotificationHandler.Create)
+	authed.GET("/projects/:projectId/notifications", deps.NotificationHandler.ListByProject)
+	authed.PATCH("/notifications/:id", deps.NotificationHandler.Update)
+	authed.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
+	authed.POST("/notifications/:id/test", deps.NotificationHandler.Test)
+
 	// --- Admin routes (JWT + admin + user rate limit) ---
 	admin := api.Group("/admin")
 	admin.Use(middleware.JWTAuth(deps.AuthService))
@@ -101,6 +109,7 @@ func Register(e *echo.Echo, deps Deps) {
 	admin.Use(middleware.RateLimit(apiLimiter, middleware.UserKeyFunc))
 
 	admin.GET("/stats", deps.AdminHandler.Stats)
+	admin.GET("/deployments", deps.AdminHandler.ListDeployments)
 	admin.GET("/activity", deps.AdminHandler.Activity)
 	admin.GET("/users", deps.AdminHandler.Users)
 	admin.GET("/settings", deps.AdminHandler.GetSettings)

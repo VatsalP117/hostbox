@@ -62,10 +62,20 @@ export function useCancelDeployment() {
 export function useRollbackDeployment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<DeploymentResponse>(`/deployments/${id}/rollback`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployments"] });
+    mutationFn: ({
+      projectId,
+      deploymentId,
+    }: {
+      projectId: string;
+      deploymentId: string;
+    }) =>
+      api.post<DeploymentResponse>(`/projects/${projectId}/rollback`, {
+        deployment_id: deploymentId,
+      }),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.deployments(projectId),
+      });
     },
   });
 }
@@ -73,10 +83,12 @@ export function useRollbackDeployment() {
 export function useRedeployment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      api.post<DeploymentResponse>(`/deployments/${id}/redeploy`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployments"] });
+    mutationFn: (projectId: string) =>
+      api.post<DeploymentResponse>(`/projects/${projectId}/redeploy`),
+    onSuccess: (_, projectId) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.deployments(projectId),
+      });
     },
   });
 }

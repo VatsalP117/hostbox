@@ -17,17 +17,27 @@ import (
 )
 
 type ProjectHandler struct {
-	projectRepo  *repository.ProjectRepository
-	activityRepo *repository.ActivityRepository
-	logger       *slog.Logger
+	projectRepo    *repository.ProjectRepository
+	deploymentRepo *repository.DeploymentRepository
+	domainRepo     *repository.DomainRepository
+	activityRepo   *repository.ActivityRepository
+	logger         *slog.Logger
 }
 
 func NewProjectHandler(
 	projectRepo *repository.ProjectRepository,
+	deploymentRepo *repository.DeploymentRepository,
+	domainRepo *repository.DomainRepository,
 	activityRepo *repository.ActivityRepository,
 	logger *slog.Logger,
 ) *ProjectHandler {
-	return &ProjectHandler{projectRepo: projectRepo, activityRepo: activityRepo, logger: logger}
+	return &ProjectHandler{
+		projectRepo:    projectRepo,
+		deploymentRepo: deploymentRepo,
+		domainRepo:     domainRepo,
+		activityRepo:   activityRepo,
+		logger:         logger,
+	}
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -43,13 +53,19 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	slug := util.Slugify(req.Name)
 
 	project := &models.Project{
-		OwnerID:         user.ID,
-		Name:            req.Name,
-		Slug:            slug,
-		GitHubRepo:      req.GitHubRepo,
-		BuildCommand:    req.BuildCommand,
-		InstallCommand:  req.InstallCommand,
-		OutputDirectory: req.OutputDirectory,
+		OwnerID:              user.ID,
+		Name:                 req.Name,
+		Slug:                 slug,
+		GitHubRepo:           req.GitHubRepo,
+		GitHubInstallationID: req.GitHubInstallationID,
+		ProductionBranch:     "main",
+		BuildCommand:         req.BuildCommand,
+		InstallCommand:       req.InstallCommand,
+		OutputDirectory:      req.OutputDirectory,
+		RootDirectory:        "/",
+		NodeVersion:          "20",
+		AutoDeploy:           true,
+		PreviewDeployments:   true,
 	}
 
 	if req.RootDirectory != nil {
@@ -102,8 +118,31 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	latestDeployment, err := h.deploymentRepo.GetLatestByProjectAndBranch(c.Request().Context(), project.ID, project.ProductionBranch)
+	if err != nil && err != sql.ErrNoRows {
+		return apperrors.NewInternal(err)
+	}
+
+	domains, err := h.domainRepo.ListByProject(c.Request().Context(), project.ID)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	domainData := make([]dto.DomainResponse, len(domains))
+	for i, d := range domains {
+		domainData[i] = toDomainResponse(&d)
+	}
+
+	var latestResp interface{}
+	if latestDeployment != nil {
+		latestResp = toDeploymentResponse(latestDeployment)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"project": toProjectResponse(project),
+		"project":           toProjectResponse(project),
+		"latest_deployment": latestResp,
+		"domains":           domainData,
 	})
 }
 
@@ -206,22 +245,23 @@ func (h *ProjectHandler) logActivity(c echo.Context, userID *string, action, res
 
 func toProjectResponse(p *models.Project) dto.ProjectResponse {
 	resp := dto.ProjectResponse{
-		ID:                 p.ID,
-		OwnerID:            p.OwnerID,
-		Name:               p.Name,
-		Slug:               p.Slug,
-		GitHubRepo:         p.GitHubRepo,
-		ProductionBranch:   p.ProductionBranch,
-		Framework:          p.Framework,
-		BuildCommand:       p.BuildCommand,
-		InstallCommand:     p.InstallCommand,
-		OutputDirectory:    p.OutputDirectory,
-		RootDirectory:      p.RootDirectory,
-		NodeVersion:        p.NodeVersion,
-		AutoDeploy:         p.AutoDeploy,
-		PreviewDeployments: p.PreviewDeployments,
-		CreatedAt:          p.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:          p.UpdatedAt.Format(time.RFC3339),
+		ID:                   p.ID,
+		OwnerID:              p.OwnerID,
+		Name:                 p.Name,
+		Slug:                 p.Slug,
+		GitHubRepo:           p.GitHubRepo,
+		GitHubInstallationID: p.GitHubInstallationID,
+		ProductionBranch:     p.ProductionBranch,
+		Framework:            p.Framework,
+		BuildCommand:         p.BuildCommand,
+		InstallCommand:       p.InstallCommand,
+		OutputDirectory:      p.OutputDirectory,
+		RootDirectory:        p.RootDirectory,
+		NodeVersion:          p.NodeVersion,
+		AutoDeploy:           p.AutoDeploy,
+		PreviewDeployments:   p.PreviewDeployments,
+		CreatedAt:            p.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:            p.UpdatedAt.Format(time.RFC3339),
 	}
 	return resp
 }

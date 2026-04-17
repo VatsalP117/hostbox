@@ -54,9 +54,8 @@ export function AddNotificationForm({
 }: AddNotificationFormProps) {
   const createNotification = useCreateNotification(projectId);
   const [selectedEvents, setSelectedEvents] = useState<NotificationEvent[]>([
-    "deploy_started",
+    "deploy_failure",
     "deploy_success",
-    "deploy_failed",
   ]);
 
   const form = useForm<FormValues>({
@@ -69,13 +68,13 @@ export function AddNotificationForm({
       {
         channel: values.channel as NotificationChannel,
         webhook_url: values.webhook_url,
-        events: selectedEvents,
+        events: selectedEvents.join(","),
       },
       {
         onSuccess: () => {
           toast.success("Notification added");
           form.reset();
-          setSelectedEvents(["deploy_started", "deploy_success", "deploy_failed"]);
+          setSelectedEvents(["deploy_failure", "deploy_success"]);
           onOpenChange(false);
         },
         onError: (err) => toast.error(getApiErrorMessage(err)),

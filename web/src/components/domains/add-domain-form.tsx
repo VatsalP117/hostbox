@@ -25,7 +25,7 @@ import { getApiErrorMessage } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 const schema = z.object({
-  hostname: z
+  domain: z
     .string()
     .min(1, "Domain is required")
     .regex(
@@ -50,7 +50,7 @@ export function AddDomainForm({
   const addDomain = useAddDomain(projectId);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { hostname: "" },
+    defaultValues: { domain: "" },
   });
 
   const onSubmit = (values: FormValues) => {
@@ -77,7 +77,7 @@ export function AddDomainForm({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="hostname"
+              name="domain"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Domain</FormLabel>

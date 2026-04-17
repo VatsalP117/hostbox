@@ -3,9 +3,8 @@ import { Label } from "@/components/ui/label";
 import type { NotificationEvent } from "@/types/models";
 
 const allEvents: { value: NotificationEvent; label: string }[] = [
-  { value: "deploy_started", label: "Deployment Started" },
+  { value: "deploy_failure", label: "Deployment Failed" },
   { value: "deploy_success", label: "Deployment Succeeded" },
-  { value: "deploy_failed", label: "Deployment Failed" },
   { value: "domain_verified", label: "Domain Verified" },
 ];
 

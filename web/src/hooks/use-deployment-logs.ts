@@ -45,6 +45,7 @@ export function useDeploymentLogs(
     if (token) params.set("token", token);
 
     const url = `/api/v1/deployments/${deploymentId}/logs/stream?${params.toString()}`;
+    let lineNumber = 0;
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
@@ -55,10 +56,20 @@ export function useDeploymentLogs(
 
     eventSource.addEventListener("log", (e) => {
       try {
-        const data = JSON.parse(e.data) as LogEvent;
-        setLines((prev) => [...prev, data]);
+        const parsed = JSON.parse(e.data) as Partial<LogEvent>;
+        const logLine: LogEvent = {
+          line: parsed.line ?? ++lineNumber,
+          message: parsed.message ?? e.data,
+          timestamp: parsed.timestamp ?? new Date().toISOString(),
+        };
+        setLines((prev) => [...prev, logLine]);
       } catch {
-        // ignore malformed events
+        const logLine: LogEvent = {
+          line: ++lineNumber,
+          message: e.data,
+          timestamp: new Date().toISOString(),
+        };
+        setLines((prev) => [...prev, logLine]);
       }
     });
 
@@ -82,7 +93,7 @@ export function useDeploymentLogs(
       }
     });
 
-    eventSource.addEventListener("complete", (e) => {
+    const handleComplete = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data) as CompleteEvent;
         setComplete(data);
@@ -91,7 +102,10 @@ export function useDeploymentLogs(
       } catch {
         // ignore
       }
-    });
+    };
+
+    eventSource.addEventListener("complete", handleComplete);
+    eventSource.addEventListener("done", handleComplete);
 
     eventSource.onerror = () => {
       setIsConnected(false);

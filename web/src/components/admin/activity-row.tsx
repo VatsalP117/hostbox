@@ -15,11 +15,11 @@ export function ActivityRow({ activity }: ActivityRowProps) {
         <div className="min-w-0">
           <p className="text-sm font-medium capitalize">{actionLabel}</p>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{activity.user_email}</span>
-            {activity.resource_name && (
+            <span>{activity.user_id ? `User ${activity.user_id}` : "System"}</span>
+            {activity.resource_id && (
               <>
                 <span>·</span>
-                <span className="truncate">{activity.resource_name}</span>
+                <span className="truncate">{activity.resource_id}</span>
               </>
             )}
           </div>

@@ -114,7 +114,7 @@ func (h *EnvVarHandler) ListByProject(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"data": data,
+		"env_vars": data,
 	})
 }
 

@@ -80,13 +80,14 @@ type ChangePasswordRequest struct {
 // --- Projects ---
 
 type CreateProjectRequest struct {
-	Name            string  `json:"name" validate:"required,min=1,max=100"`
-	GitHubRepo      *string `json:"github_repo" validate:"omitempty,max=200"`
-	BuildCommand    *string `json:"build_command" validate:"omitempty,max=500"`
-	InstallCommand  *string `json:"install_command" validate:"omitempty,max=500"`
-	OutputDirectory *string `json:"output_directory" validate:"omitempty,max=200"`
-	RootDirectory   *string `json:"root_directory" validate:"omitempty,max=200"`
-	NodeVersion     *string `json:"node_version" validate:"omitempty,oneof=18 20 22"`
+	Name                 string  `json:"name" validate:"required,min=1,max=100"`
+	GitHubRepo           *string `json:"github_repo" validate:"omitempty,max=200"`
+	GitHubInstallationID *int64  `json:"github_installation_id"`
+	BuildCommand         *string `json:"build_command" validate:"omitempty,max=500"`
+	InstallCommand       *string `json:"install_command" validate:"omitempty,max=500"`
+	OutputDirectory      *string `json:"output_directory" validate:"omitempty,max=200"`
+	RootDirectory        *string `json:"root_directory" validate:"omitempty,max=200"`
+	NodeVersion          *string `json:"node_version" validate:"omitempty,oneof=18 20 22"`
 }
 
 type UpdateProjectRequest struct {
@@ -110,7 +111,7 @@ type CreateDeploymentRequest struct {
 
 type TriggerDeployRequest struct {
 	Branch        string  `json:"branch" validate:"required,min=1,max=200"`
-	CommitSHA     string  `json:"commit_sha" validate:"required,min=1,max=40"`
+	CommitSHA     string  `json:"commit_sha" validate:"omitempty,max=40"`
 	CommitMessage *string `json:"commit_message,omitempty" validate:"omitempty,max=500"`
 	CommitAuthor  *string `json:"commit_author,omitempty" validate:"omitempty,max=100"`
 }
@@ -196,22 +197,23 @@ type AuthResponse struct {
 }
 
 type ProjectResponse struct {
-	ID                 string  `json:"id"`
-	OwnerID            string  `json:"owner_id"`
-	Name               string  `json:"name"`
-	Slug               string  `json:"slug"`
-	GitHubRepo         *string `json:"github_repo,omitempty"`
-	ProductionBranch   string  `json:"production_branch"`
-	Framework          *string `json:"framework,omitempty"`
-	BuildCommand       *string `json:"build_command,omitempty"`
-	InstallCommand     *string `json:"install_command,omitempty"`
-	OutputDirectory    *string `json:"output_directory,omitempty"`
-	RootDirectory      string  `json:"root_directory"`
-	NodeVersion        string  `json:"node_version"`
-	AutoDeploy         bool    `json:"auto_deploy"`
-	PreviewDeployments bool    `json:"preview_deployments"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                   string  `json:"id"`
+	OwnerID              string  `json:"owner_id"`
+	Name                 string  `json:"name"`
+	Slug                 string  `json:"slug"`
+	GitHubRepo           *string `json:"github_repo,omitempty"`
+	GitHubInstallationID *int64  `json:"github_installation_id,omitempty"`
+	ProductionBranch     string  `json:"production_branch"`
+	Framework            *string `json:"framework,omitempty"`
+	BuildCommand         *string `json:"build_command,omitempty"`
+	InstallCommand       *string `json:"install_command,omitempty"`
+	OutputDirectory      *string `json:"output_directory,omitempty"`
+	RootDirectory        string  `json:"root_directory"`
+	NodeVersion          string  `json:"node_version"`
+	AutoDeploy           bool    `json:"auto_deploy"`
+	PreviewDeployments   bool    `json:"preview_deployments"`
+	CreatedAt            string  `json:"created_at"`
+	UpdatedAt            string  `json:"updated_at"`
 }
 
 type ProjectListResponse struct {
@@ -273,12 +275,13 @@ type EnvVarResponse struct {
 }
 
 type NotificationConfigResponse struct {
-	ID        string  `json:"id"`
-	ProjectID *string `json:"project_id,omitempty"`
-	Channel   string  `json:"channel"`
-	Events    string  `json:"events"`
-	Enabled   bool    `json:"enabled"`
-	CreatedAt string  `json:"created_at"`
+	ID         string  `json:"id"`
+	ProjectID  *string `json:"project_id,omitempty"`
+	Channel    string  `json:"channel"`
+	WebhookURL string  `json:"webhook_url"`
+	Events     string  `json:"events"`
+	Enabled    bool    `json:"enabled"`
+	CreatedAt  string  `json:"created_at"`
 }
 
 type ActivityLogResponse struct {
@@ -351,9 +354,12 @@ type AdminStatsResponse struct {
 
 type DiskUsageResponse struct {
 	DeploymentsBytes int64 `json:"deployments_bytes"`
+	DeploymentBytes  int64 `json:"deployment_bytes"`
 	LogsBytes        int64 `json:"logs_bytes"`
 	DatabaseBytes    int64 `json:"database_bytes"`
 	TotalBytes       int64 `json:"total_bytes"`
+	UsedBytes        int64 `json:"used_bytes"`
+	AvailableBytes   int64 `json:"available_bytes"`
 }
 
 type UserListResponse struct {

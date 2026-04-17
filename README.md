@@ -106,7 +106,11 @@ See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed self-hosting instr
 ```bash
 # Prerequisites: Go 1.25+, Node 20+, Docker, SQLite
 
+# Create local env first
+cp .env.example .env
+
 # Backend
+set -a && source .env && set +a
 go run ./cmd/api
 
 # Frontend
@@ -115,6 +119,11 @@ cd web && npm install && npm run dev
 # Or use Docker Compose
 docker compose -f docker-compose.dev.yml up
 ```
+
+Local dev defaults:
+
+- dashboard: `http://localhost:3000`
+- API: `http://localhost:8080`
 
 See [docs/ONBOARDING.md](docs/ONBOARDING.md) for an implementation-first contributor guide that explains the current codebase, local workflow, and known gaps.
 

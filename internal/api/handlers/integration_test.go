@@ -53,15 +53,15 @@ func setupTestEnv(t *testing.T) *testEnv {
 	repos := repository.New(db)
 
 	cfg := &config.Config{
-		DatabasePath:   dbPath,
-		JWTSecret:      "test-jwt-secret-that-is-long-enough-32chars!",
-		EncryptionKey:  "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-		AccessTokenTTL: 15 * time.Minute,
+		DatabasePath:    dbPath,
+		JWTSecret:       "test-jwt-secret-that-is-long-enough-32chars!",
+		EncryptionKey:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 7 * 24 * time.Hour,
-		PlatformDomain: "test.example.com",
-		PlatformHTTPS:  false,
-		DeploymentsDir: dir + "/deployments",
-		LogsDir:        dir + "/logs",
+		PlatformDomain:  "test.example.com",
+		PlatformHTTPS:   false,
+		DeploymentsDir:  dir + "/deployments",
+		LogsDir:         dir + "/logs",
 	}
 	os.MkdirAll(cfg.DeploymentsDir, 0o755)
 	os.MkdirAll(cfg.LogsDir, 0o755)
@@ -105,7 +105,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	healthHandler := handlers.NewHealthHandler(startTime, db)
 	setupHandler := handlers.NewSetupHandler(authService, repos.User, repos.Settings, repos.Activity, false, logger)
 	authHandler := handlers.NewAuthHandler(authService, false, logger)
-	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Activity, logger)
+	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Deployment, repos.Domain, repos.Activity, logger)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, logger)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, "test.example.com", logger)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, logger)

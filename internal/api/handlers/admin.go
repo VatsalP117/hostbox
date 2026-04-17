@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -61,6 +62,16 @@ func (h *AdminHandler) Stats(c echo.Context) error {
 		return apperrors.NewInternal(err)
 	}
 
+	deploymentCount, err := h.deploymentRepo.Count(ctx)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	activeBuilds, err := h.deploymentRepo.CountByStatuses(ctx, string(models.DeploymentStatusQueued), string(models.DeploymentStatusBuilding))
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
 	userCount, err := h.userRepo.Count(ctx)
 	if err != nil {
 		return apperrors.NewInternal(err)
@@ -70,6 +81,8 @@ func (h *AdminHandler) Stats(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, dto.AdminStatsResponse{
 		ProjectCount:    int64(projectCount),
+		DeploymentCount: int64(deploymentCount),
+		ActiveBuilds:    int64(activeBuilds),
 		UserCount:       int64(userCount),
 		DiskUsage:       diskUsage,
 		UptimeSeconds:   int64(time.Since(h.startTime).Seconds()),
@@ -133,14 +146,12 @@ func (h *AdminHandler) Users(c echo.Context) error {
 }
 
 func (h *AdminHandler) GetSettings(c echo.Context) error {
-	settings, err := h.settingsRepo.GetAll(c.Request().Context())
+	settings, err := h.loadSettings(c.Request().Context())
 	if err != nil {
 		return apperrors.NewInternal(err)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"settings": settings,
-	})
+	return c.JSON(http.StatusOK, map[string]interface{}{"settings": settings})
 }
 
 func (h *AdminHandler) UpdateSettings(c echo.Context) error {
@@ -187,13 +198,76 @@ func (h *AdminHandler) getDiskUsage() dto.DiskUsageResponse {
 	deploymentsSize := dirSize(h.config.DeploymentsDir)
 	logsSize := dirSize(h.config.LogsDir)
 	dbSize := fileSize(h.config.DatabasePath)
+	totalSize := deploymentsSize + logsSize + dbSize
 
 	return dto.DiskUsageResponse{
 		DeploymentsBytes: deploymentsSize,
+		DeploymentBytes:  deploymentsSize,
 		LogsBytes:        logsSize,
 		DatabaseBytes:    dbSize,
-		TotalBytes:       deploymentsSize + logsSize + dbSize,
+		TotalBytes:       totalSize,
+		UsedBytes:        totalSize,
+		AvailableBytes:   0,
 	}
+}
+
+func (h *AdminHandler) ListDeployments(c echo.Context) error {
+	var pq dto.PaginationQuery
+	if err := c.Bind(&pq); err != nil {
+		return apperrors.NewBadRequest("Invalid query parameters")
+	}
+
+	page := pq.PageOrDefault()
+	perPage := pq.PerPageOrDefault()
+
+	deployments, total, err := h.deploymentRepo.ListRecent(c.Request().Context(), page, perPage)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	data := make([]dto.DeploymentResponse, len(deployments))
+	for i, d := range deployments {
+		data[i] = toDeploymentResponse(&d)
+	}
+
+	return c.JSON(http.StatusOK, dto.DeploymentListResponse{
+		Deployments: data,
+		Pagination:  dto.NewPaginationResponse(total, page, perPage),
+	})
+}
+
+func (h *AdminHandler) loadSettings(ctx context.Context) (map[string]interface{}, error) {
+	settings, err := h.settingsRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	parseBool := func(key string, defaultValue bool) bool {
+		value, ok := settings[key]
+		if !ok {
+			return defaultValue
+		}
+		return value == "true"
+	}
+
+	parseInt := func(key string, defaultValue int) int {
+		value, ok := settings[key]
+		if !ok {
+			return defaultValue
+		}
+		var parsed int
+		if _, err := fmt.Sscanf(value, "%d", &parsed); err != nil {
+			return defaultValue
+		}
+		return parsed
+	}
+
+	return map[string]interface{}{
+		"registration_enabled":    parseBool("registration_enabled", true),
+		"max_projects":            parseInt("max_projects", 10),
+		"max_concurrent_builds":   parseInt("max_concurrent_builds", 3),
+		"artifact_retention_days": parseInt("artifact_retention_days", 30),
+	}, nil
 }
 
 func toActivityResponse(a *models.ActivityLog) dto.ActivityLogResponse {

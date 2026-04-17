@@ -48,6 +48,7 @@ RUN apk add --no-cache \
 
 COPY --from=backend /hostbox /usr/local/bin/hostbox
 COPY --from=backend /hostbox-cli /usr/local/bin/hostbox-cli
+COPY --from=backend /build/web/dist /app/web/dist
 
 # Create data directories
 RUN mkdir -p /app/data/backups /app/deployments /app/logs /cache \

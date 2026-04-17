@@ -10,11 +10,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   BuildSettingsForm,
   type BuildSettingsValues,
 } from "@/components/projects/build-settings-form";
+import { useGitHubInstallations, useGitHubRepos } from "@/hooks/use-github";
 import { useCreateProject } from "@/hooks/use-projects";
 import { routes } from "@/lib/constants";
 import { getApiErrorMessage } from "@/lib/utils";
@@ -27,12 +35,23 @@ export function CreateProjectWizard() {
   const createProject = useCreateProject();
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
+  const [installationId, setInstallationId] = useState<string>("");
+
+  const { data: installations } = useGitHubInstallations();
+  const { data: repos } = useGitHubRepos(
+    installationId
+      ? { installation_id: Number(installationId), per_page: 100 }
+      : undefined,
+  );
 
   const handleSubmit = (values: BuildSettingsValues) => {
     createProject.mutate(
       {
         name: values.name,
         github_repo: repoUrl || undefined,
+        github_installation_id: installationId
+          ? Number(installationId)
+          : undefined,
         build_command: values.build_command || undefined,
         install_command: values.install_command || undefined,
         output_directory: values.output_directory || undefined,
@@ -79,13 +98,60 @@ export function CreateProjectWizard() {
           <CardHeader>
             <CardTitle>Connect Repository</CardTitle>
             <CardDescription>
-              Enter a GitHub repository URL or skip to create a project without
-              one.
+              Pick a repository from a GitHub App installation or enter one
+              manually.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {installations?.installations?.length ? (
+              <>
+                <div className="space-y-2">
+                  <Label>GitHub Installation</Label>
+                  <Select
+                    value={installationId}
+                    onValueChange={(value) => {
+                      setInstallationId(value);
+                      setRepoUrl("");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an installation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {installations.installations.map((installation) => (
+                        <SelectItem
+                          key={installation.id}
+                          value={String(installation.id)}
+                        >
+                          {installation.account} ({installation.target_type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {installationId && (
+                  <div className="space-y-2">
+                    <Label>Repository</Label>
+                    <Select value={repoUrl} onValueChange={setRepoUrl}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a repository" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {repos?.repos?.map((repo) => (
+                          <SelectItem key={repo.full_name} value={repo.full_name}>
+                            {repo.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </>
+            ) : null}
+
             <div className="space-y-2">
-              <Label htmlFor="repo">GitHub Repository</Label>
+              <Label htmlFor="repo">GitHub Repository (manual)</Label>
               <Input
                 id="repo"
                 placeholder="owner/repository"
@@ -93,7 +159,8 @@ export function CreateProjectWizard() {
                 onChange={(e) => setRepoUrl(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                e.g. vercel/next.js
+                Use this when GitHub App integration is not configured or you
+                want to test against a public repository directly.
               </p>
             </div>
             <div className="flex justify-end gap-2">

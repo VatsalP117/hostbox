@@ -153,6 +153,35 @@ func (r *DeploymentRepository) CountByProject(ctx context.Context, projectID str
 	return count, err
 }
 
+func (r *DeploymentRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployments`).Scan(&count)
+	return count, err
+}
+
+func (r *DeploymentRepository) CountByStatuses(ctx context.Context, statuses ...string) (int, error) {
+	if len(statuses) == 0 {
+		return 0, nil
+	}
+
+	placeholders := ""
+	args := make([]interface{}, len(statuses))
+	for i, status := range statuses {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args[i] = status
+	}
+
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM deployments WHERE status IN (%s)`, placeholders)
+	var count int
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *DeploymentRepository) CancelQueuedByProjectAndBranch(ctx context.Context, projectID, branch string) (int64, error) {
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = 'cancelled' WHERE project_id = ? AND branch = ? AND status = 'queued'`,
@@ -339,6 +368,30 @@ func (r *DeploymentRepository) ListAllByProject(ctx context.Context, projectID s
 	return deployments, rows.Err()
 }
 
+func (r *DeploymentRepository) ListRecent(ctx context.Context, page, perPage int) ([]models.Deployment, int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM deployments`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count deployments: %w", err)
+	}
+
+	offset := (page - 1) * perPage
+	rows, err := r.db.QueryContext(ctx, deploymentSelectSQL+` ORDER BY d.created_at DESC LIMIT ? OFFSET ?`, perPage, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list recent deployments: %w", err)
+	}
+	defer rows.Close()
+
+	var deployments []models.Deployment
+	for rows.Next() {
+		d, err := scanDeploymentRows(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		deployments = append(deployments, *d)
+	}
+	return deployments, total, rows.Err()
+}
+
 // ClearArtifact nullifies artifact and log paths for a deployment (keeps record for history).
 func (r *DeploymentRepository) ClearArtifact(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx,
@@ -353,6 +406,7 @@ func (r *DeploymentRepository) HasLogPath(ctx context.Context, id string) (bool,
 		`SELECT EXISTS(SELECT 1 FROM deployments WHERE id = ? AND log_path IS NOT NULL)`, id).Scan(&exists)
 	return exists, err
 }
+
 type ActiveDeploymentRow struct {
 	DeploymentID string
 	ProjectID    string

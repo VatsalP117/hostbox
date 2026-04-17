@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { routes } from "@/lib/constants";
 import { getApiErrorMessage } from "@/lib/utils";
 import { useLogin } from "@/hooks/use-auth";
+import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const login = useLogin();
+  const { data: setupStatus } = useSetupStatus();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const form = useForm<LoginFormValues>({
@@ -45,6 +47,7 @@ export function LoginPage() {
   });
 
   if (isAuthenticated) return <Navigate to={routes.dashboard} replace />;
+  if (setupStatus?.setup_required) return <Navigate to={routes.setup} replace />;
 
   const onSubmit = (values: LoginFormValues) => {
     login.mutate(values, {

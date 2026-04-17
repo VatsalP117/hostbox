@@ -11,10 +11,7 @@ import { useAuthStore } from "@/stores/auth-store";
 export function useSetupStatus() {
   return useQuery({
     queryKey: queryKeys.setupStatus,
-    queryFn: () =>
-      api.post<SetupStatusResponse>("/setup", undefined, true).catch(() => ({
-        setup_complete: false,
-      })),
+    queryFn: () => api.get<SetupStatusResponse>("/setup/status"),
     retry: false,
   });
 }

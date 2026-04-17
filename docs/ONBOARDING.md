@@ -49,20 +49,18 @@ What currently looks strong:
 
 What currently lowers confidence:
 
-- frontend and backend response/route mismatches
-- setup/auth flow drift
-- production dashboard serving appears incomplete
 - no browser end-to-end tests
+- no verified VM/public-domain smoke test in CI
 - some documented features are still TODOs or stubs
 
 From the current checkout:
 
 - `go test ./...` passes
 - Docker images build
-- frontend build succeeds in Docker
-- frontend lint is **not green** in local CI-style execution
+- frontend lint passes with warnings only
+- frontend build succeeds locally and in Docker
 
-Treat the project as **implemented enough to understand and improve**, but **not yet validated enough to assume it works as a hosted product**.
+Treat the project as **implemented enough to run locally and contribute to**, but **not yet validated enough to assume every hosted workflow is production-proven**.
 
 ---
 
@@ -304,7 +302,15 @@ Main files:
 
 ### Important reality check
 
-The frontend exists and is substantial, but **it is not fully aligned with the backend contract right now**. See [Known implementation gaps](#12-known-implementation-gaps) below before assuming the dashboard works end to end.
+The dashboard is now much closer to the backend contract than it was originally:
+
+- setup status and login routing line up
+- project detail returns project + latest deployment + domains
+- notifications have real API handlers
+- deployment rollback/redeploy actions now hit the correct routes
+- log streaming works with the current SSE protocol
+
+That said, the UI still has not been proven with automated browser tests.
 
 ---
 
@@ -337,12 +343,30 @@ The CLI is useful for understanding the intended API usage, but it is not featur
 
 You have two realistic ways to work on the codebase.
 
+Before either option, create a local env file:
+
+```bash
+cp .env.example .env
+```
+
+For a local-only setup, these values are enough:
+
+```dotenv
+PLATFORM_DOMAIN=localhost
+PLATFORM_HTTPS=false
+JWT_SECRET=dev-secret-dev-secret-dev-secret-1234
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
 ### Option A: run services directly
 
 #### Backend
 
 ```bash
 go mod download
+set -a
+source .env
+set +a
 CGO_ENABLED=1 go run ./cmd/api
 ```
 
@@ -353,6 +377,19 @@ cd web
 npm install
 npm run dev
 ```
+
+Then open:
+
+- dashboard dev UI: `http://localhost:3000`
+- API: `http://localhost:8080/api/v1/health`
+
+On a fresh database the UI should send you to `/setup`. After setup you should be able to:
+
+1. create the first admin account
+2. sign in
+3. create a project
+4. trigger a deployment
+5. watch build logs in the deployment detail page
 
 ### Important note about environment variables
 
@@ -395,9 +432,30 @@ This intends to start:
 - Caddy on `:80/:443`
 - frontend dev server in a Node container
 
-#### Current caveat
+The dev compose stack now aligns with the Vite dev server on port `3000`, so the expected local endpoints are:
 
-`docker-compose.dev.yml` exposes frontend port `5173`, but `web/package.json` runs Vite on port `3000`. That means the current dev compose frontend wiring looks inconsistent and should be treated as suspicious until fixed.
+- frontend: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Caddy: `http://localhost`
+
+Compose still depends on a valid `.env` file in the repo root for secrets like `JWT_SECRET` and `ENCRYPTION_KEY`.
+
+### Local GitHub testing
+
+The current GitHub flow is **GitHub App based**, not “sign in with GitHub OAuth”.
+
+If you configure `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PEM`, and `GITHUB_WEBHOOK_SECRET`:
+
+1. the dashboard can list app installations
+2. the project creation wizard can list repos for an installation
+3. Hostbox stores `github_installation_id` with the project
+4. builds can clone installation-backed repos using an installation token
+
+Practical limits:
+
+- for **manual deployments**, a local setup is enough
+- for **push-triggered deployments**, GitHub still needs a public webhook target, so use a tunnel such as ngrok or Cloudflare Tunnel
+- for **custom domains**, you still need real DNS pointing at your instance
 
 ---
 
@@ -416,17 +474,11 @@ Production runtime is defined by:
 3. build the Go CLI binary
 4. package the binaries into an Alpine runtime image
 
-### Important packaging mismatch
+### Current packaging behavior
 
-The docs describe a production binary that embeds and serves the React dashboard, but the current implementation does **not** appear to do that:
+The production image now includes `web/dist`, and the Go server serves the built dashboard for non-API routes. That means the platform hostname can be reverse proxied to the API process and still render the dashboard.
 
-- `docker/Dockerfile` copies `web/dist` into the Go build context
-- but there is no actual `go:embed` or static file serving implementation in the API server
-- Caddy’s platform route currently reverse proxies the platform hostname to the API upstream
-
-So, as the code stands, **production dashboard serving looks incomplete or missing** even though the build pipeline produces frontend assets.
-
-This is one of the biggest doc-vs-implementation mismatches in the repo.
+It is still filesystem-based serving, not an embedded `go:embed` bundle.
 
 ---
 
@@ -460,9 +512,9 @@ You should trust:
 
 You should not assume:
 
-- the dashboard works fully
-- the onboarding/setup flow works fully
-- production serving works fully
+- webhook-triggered deploys are proven locally without a tunnel
+- custom domains can be tested without real DNS
+- every dashboard flow has browser-level test coverage
 
 ---
 
@@ -470,56 +522,33 @@ You should not assume:
 
 These are the main things a contributor should know before diving in.
 
-### 1. Frontend and backend contracts have drifted
+### 1. No end-to-end browser coverage
 
-Examples:
+The major dashboard flows now line up with the API more closely, but there is still no Playwright/Cypress-style suite proving:
 
-- `web/src/hooks/use-projects.ts` expects `GET /projects/:id` to return:
-  - `project`
-  - `latest_deployment`
-  - `domains`
-- but `internal/api/handlers/projects.go` returns only:
-  - `project`
+- initial setup
+- login refresh bootstrap
+- project creation
+- deployment logs
+- notifications CRUD
+- admin flows
 
-More mismatches:
+Manual testing is still required for confidence.
 
-- `web/src/types/api.ts` expects domain/env-var list wrappers like `domains` / `env_vars`
-- `internal/api/handlers/domains.go` and `internal/api/handlers/env_vars.go` return `data`
+### 2. Setup still relies on refresh-cookie behavior
 
-Route mismatches also exist:
+The first-run setup flow now reaches the dashboard correctly in local testing, but it still deserves special scrutiny because setup/login/bootstrap auth each touch different auth paths.
 
-- frontend verify domain path differs from backend verify route
-- frontend delete domain path differs from backend delete route
-- frontend rollback/redeploy hooks target different paths than backend exposes
+If you change auth or setup code, re-test the first-run browser flow manually.
 
-This is the single biggest source of likely UI breakage.
+### 3. Domain verification is basic
 
-### 2. Setup flow is inconsistent
+Domain verification is no longer a stub, but the current check is still simple:
 
-The setup/status API and frontend do not line up cleanly:
+- it verifies that the hostname resolves in DNS
+- it does **not** deeply validate that the record points to the expected Hostbox/Caddy target
 
-- backend exposes `GET /api/v1/setup/status`
-- `web/src/hooks/use-setup-status.ts` incorrectly posts to `/setup`
-- `web/src/components/shared/setup-guard.tsx` expects `setup_complete`
-- backend status handler appears to model setup as `setup_required`
-
-Also, `internal/api/handlers/setup.go` sets a refresh cookie but does **not** persist a session record the same way the normal auth flow does. That means first-run auth/session behavior is not something you should assume is correct.
-
-### 3. Production dashboard serving appears incomplete
-
-As noted above:
-
-- the frontend is built during Docker image creation
-- but the Go server does not appear to embed or serve those static files
-- and Caddy proxies the platform hostname to the API
-
-This suggests the dashboard is currently reliable mainly as a dev app, not as a proven production-served UI.
-
-### 4. Domain verification is stubbed
-
-`internal/api/handlers/domains.go` returns **501 Not Implemented** for verification.
-
-The domain model and Caddy route code exist, but verification flow is not fully implemented at the API layer.
+That is good enough for a first local/manual implementation, but not strong enough to call finished.
 
 ### 5. Email flows are not complete
 
@@ -531,14 +560,11 @@ The domain model and Caddy route code exist, but verification flow is not fully 
 
 The build pipeline and post-build hook integration are present, but not every deployment lifecycle path is fully wired.
 
-### 7. Frontend local quality gate is not green
+### 6. Rollback/promote lifecycle still deserves scrutiny
 
-In current local CI-style execution, frontend lint fails, including errors in:
+`internal/services/deployment/service.go` still contains TODO notes around route updates for rollback/promote flows.
 
-- `web/src/types/api.ts`
-- `web/tailwind.config.ts`
-
-That matters because it means the frontend is currently not in a fully clean contributor state.
+The core deployment path is much healthier now, but those follow-up lifecycle transitions still deserve targeted manual testing.
 
 ---
 
@@ -546,25 +572,15 @@ That matters because it means the frontend is currently not in a fully clean con
 
 If you want to make meaningful progress quickly, the best first contribution areas are:
 
-### A. Fix frontend/backend contract drift
+### A. Add end-to-end confidence
 
-Good files to compare side by side:
+The highest-value next step is no longer basic contract repair. It is proving the repaired flows with:
 
-- `internal/api/handlers/*.go`
-- `web/src/hooks/*.ts`
-- `web/src/types/api.ts`
+- browser tests for setup/login/project creation
+- deployment smoke tests against a running local stack
+- a documented webhook-tunnel test recipe
 
-This is probably the highest-leverage contributor task.
-
-### B. Make local dev reliable
-
-Likely tasks:
-
-- fix dev frontend port mismatch
-- document a known-good native dev flow
-- add a simple smoke-test script for API + frontend
-
-### C. Repair setup/auth onboarding
+### B. Keep hardening setup/auth onboarding
 
 Focus files:
 
@@ -573,20 +589,13 @@ Focus files:
 - `web/src/hooks/use-setup-status.ts`
 - `web/src/components/shared/setup-guard.tsx`
 
-### D. Finish production dashboard serving
+### C. Strengthen domain verification
 
-This likely requires one of:
+The current verification path is intentionally simple and would benefit from:
 
-- actually embedding `web/dist` into the Go binary and serving it
-- or changing Caddy/runtime wiring so the built dashboard is served correctly
-
-### E. Add end-to-end confidence
-
-The repo would benefit heavily from:
-
-- API smoke tests against a running instance
-- deployment smoke tests
-- browser tests for setup/login/project creation
+- expected-target validation
+- clearer DNS instructions for apex vs subdomain records
+- tests around verified/unverified state changes
 
 ---
 

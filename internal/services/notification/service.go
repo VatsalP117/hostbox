@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -180,4 +181,14 @@ func (s *Service) sendWithRetry(
 		"event", payload.Event,
 		"project", payload.Project.Slug,
 	)
+}
+
+func (s *Service) SendTest(ctx context.Context, config *models.NotificationConfig, payload NotificationPayload) error {
+	client, ok := s.clients[config.Channel]
+	if !ok {
+		return fmt.Errorf("unknown notification channel %q", config.Channel)
+	}
+
+	payload.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	return client.Send(ctx, config.WebhookURL, payload)
 }

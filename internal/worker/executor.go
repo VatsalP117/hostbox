@@ -33,6 +33,10 @@ func (n *noopPostBuildHook) OnBuildFailure(_ context.Context, _ *models.Project,
 	return nil
 }
 
+type InstallationTokenProvider interface {
+	GetInstallationToken(installationID int64) (string, error)
+}
+
 // BuildExecutor runs the 6-step build pipeline for a single deployment.
 type BuildExecutor struct {
 	cfg            *config.BuildConfig
@@ -44,6 +48,7 @@ type BuildExecutor struct {
 	sseHub         *SSEHub
 	postBuild      PostBuildHook
 	platformDomain string
+	tokenProvider  InstallationTokenProvider
 
 	mu        sync.Mutex
 	cancelFns map[string]context.CancelFunc
@@ -59,6 +64,7 @@ func NewBuildExecutor(
 	envVarRepo *repository.EnvVarRepository,
 	sseHub *SSEHub,
 	platformDomain string,
+	tokenProvider InstallationTokenProvider,
 ) *BuildExecutor {
 	return &BuildExecutor{
 		cfg:            cfg,
@@ -70,6 +76,7 @@ func NewBuildExecutor(
 		sseHub:         sseHub,
 		postBuild:      &noopPostBuildHook{},
 		platformDomain: platformDomain,
+		tokenProvider:  tokenProvider,
 		cancelFns:      make(map[string]context.CancelFunc),
 	}
 }
@@ -128,6 +135,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	startTime := time.Now()
 
 	// === STEP 1: Clone Repository ===
+	e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "clone"})
 	logger.Info("▶ Cloning repository...")
 	cloneDir, err := e.stepClone(ctx, project, deployment, logger)
 	if err != nil {
@@ -148,6 +156,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	}
 
 	// === STEP 2: Detect Framework ===
+	e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "install"})
 	logger.Info("▶ Detecting framework...")
 	fw, pkg, err := detect.DetectFramework(sourceDir)
 	if err != nil {
@@ -231,6 +240,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	// === STEP 4: Execute install + build commands ===
 	if fw.Name != "static" && fw.Name != "hugo" {
 		if installCmd != "" {
+			e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "install"})
 			logger.Infof("▶ Running: %s", installCmd)
 			if err := e.execInContainer(ctx, containerID, installCmd, logger); err != nil {
 				e.handleFailure(ctx, deployment, project, logger, "Install failed: "+err.Error())
@@ -239,6 +249,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		}
 
 		if fw.BuildCommand != "" {
+			e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "build"})
 			logger.Infof("▶ Running: %s", fw.BuildCommand)
 			if err := e.execInContainer(ctx, containerID, fw.BuildCommand, logger); err != nil {
 				e.handleFailure(ctx, deployment, project, logger, "Build failed: "+err.Error())
@@ -246,6 +257,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 			}
 		}
 	} else if fw.Name == "hugo" {
+		e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "build"})
 		logger.Infof("▶ Running: %s", fw.BuildCommand)
 		if err := e.execInContainer(ctx, containerID, fw.BuildCommand, logger); err != nil {
 			e.handleFailure(ctx, deployment, project, logger, "Build failed: "+err.Error())
@@ -259,6 +271,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	}
 
 	// === STEP 5: Copy build output ===
+	e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "deploy"})
 	logger.Info("▶ Copying build output...")
 	var artifactSize int64
 
@@ -347,7 +360,19 @@ func (e *BuildExecutor) stepClone(
 	if project.GitHubRepo != nil {
 		repoName = *project.GitHubRepo
 	}
+	if repoName == "" {
+		return "", fmt.Errorf("project is not linked to a GitHub repository")
+	}
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", repoName)
+	cloneToken := ""
+	if project.GitHubInstallationID != nil && e.tokenProvider != nil {
+		token, err := e.tokenProvider.GetInstallationToken(*project.GitHubInstallationID)
+		if err != nil {
+			return "", fmt.Errorf("get github installation token: %w", err)
+		}
+		cloneToken = token
+		cloneURL = fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", token, repoName)
+	}
 
 	cloneTimeout := time.Duration(e.cfg.CloneTimeoutSeconds) * time.Second
 	maxRetries := e.cfg.CloneMaxRetries
@@ -388,7 +413,11 @@ func (e *BuildExecutor) stepClone(
 			return cloneDir, nil
 		}
 
-		lastErr = fmt.Errorf("git clone (attempt %d): %w\n%s", attempt, err, string(output))
+		outputText := string(output)
+		if cloneToken != "" {
+			outputText = strings.ReplaceAll(outputText, cloneToken, "***")
+		}
+		lastErr = fmt.Errorf("git clone (attempt %d): %w\n%s", attempt, err, outputText)
 		logger.Warn(fmt.Sprintf("  Clone attempt %d failed: %v", attempt, err))
 	}
 

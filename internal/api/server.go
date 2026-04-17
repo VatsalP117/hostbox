@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -118,6 +120,33 @@ func (s *Server) Start() error {
 // Shutdown gracefully stops the server with a timeout.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.Echo.Shutdown(ctx)
+}
+
+func (s *Server) ServeDashboard(distDir string) {
+	stat, err := os.Stat(distDir)
+	if err != nil || !stat.IsDir() {
+		s.Logger.Warn("dashboard dist directory not found; API-only mode enabled", "path", distDir)
+		return
+	}
+
+	s.Echo.GET("/*", func(c echo.Context) error {
+		requestPath := c.Request().URL.Path
+		if requestPath == "" || requestPath == "/" {
+			return c.File(filepath.Join(distDir, "index.html"))
+		}
+		if len(requestPath) >= 5 && requestPath[:5] == "/api/" {
+			return echo.NewHTTPError(http.StatusNotFound)
+		}
+
+		relativePath := requestPath[1:]
+		if info, err := os.Stat(filepath.Join(distDir, relativePath)); err == nil && !info.IsDir() {
+			return c.File(filepath.Join(distDir, relativePath))
+		}
+		if _, err := fs.Stat(os.DirFS(distDir), relativePath); err == nil {
+			return c.File(filepath.Join(distDir, relativePath))
+		}
+		return c.File(filepath.Join(distDir, "index.html"))
+	})
 }
 
 // customErrorHandler converts Echo errors and AppErrors into consistent JSON responses.

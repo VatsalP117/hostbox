@@ -29,14 +29,20 @@ export function DeploymentActions({ deployment }: DeploymentActionsProps) {
   };
 
   const handleRollback = () => {
-    rollback.mutate(deployment.id, {
-      onSuccess: () => toast.success("Rollback triggered"),
-      onError: (err) => toast.error(getApiErrorMessage(err)),
-    });
+    rollback.mutate(
+      {
+        projectId: deployment.project_id,
+        deploymentId: deployment.id,
+      },
+      {
+        onSuccess: () => toast.success("Rollback triggered"),
+        onError: (err) => toast.error(getApiErrorMessage(err)),
+      },
+    );
   };
 
   const handleRedeploy = () => {
-    redeploy.mutate(deployment.id, {
+    redeploy.mutate(deployment.project_id, {
       onSuccess: () => toast.success("Redeployment triggered"),
       onError: (err) => toast.error(getApiErrorMessage(err)),
     });

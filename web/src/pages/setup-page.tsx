@@ -31,7 +31,6 @@ const setupSchema = z
     email: z.string().email("Invalid email address"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirm_password: z.string(),
-    platform_domain: z.string().min(1, "Platform domain is required"),
   })
   .refine((data) => data.password === data.confirm_password, {
     message: "Passwords do not match",
@@ -46,13 +45,12 @@ export function SetupPage() {
 
   const form = useForm<SetupFormValues>({
     resolver: zodResolver(setupSchema),
-    defaultValues: {
-      display_name: "",
-      email: "",
-      password: "",
-      confirm_password: "",
-      platform_domain: "",
-    },
+      defaultValues: {
+        display_name: "",
+        email: "",
+        password: "",
+        confirm_password: "",
+      },
   });
 
   const onSubmit = (values: SetupFormValues) => {
@@ -61,7 +59,6 @@ export function SetupPage() {
         display_name: values.display_name,
         email: values.email,
         password: values.password,
-        platform_domain: values.platform_domain,
       },
       {
         onSuccess: () => {
@@ -137,22 +134,6 @@ export function SetupPage() {
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
                     <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="platform_domain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Platform Domain</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="hostbox.example.com"
-                      {...field}
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

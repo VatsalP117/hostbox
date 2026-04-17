@@ -27,10 +27,12 @@ import {
 export function DashboardPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const isAdmin = !!user?.is_admin;
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: queryKeys.adminStats,
     queryFn: () => api.get<AdminStatsResponse>("/admin/stats"),
+    enabled: isAdmin,
   });
 
   const { data: recentDeploys, isLoading: deploysLoading } = useQuery({
@@ -39,6 +41,7 @@ export function DashboardPage() {
       api.get<DeploymentListResponse>("/admin/deployments", {
         per_page: 5,
       }),
+    enabled: isAdmin,
   });
 
   return (

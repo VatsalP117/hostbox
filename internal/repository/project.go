@@ -22,6 +22,21 @@ func (r *ProjectRepository) Create(ctx context.Context, project *models.Project)
 	if project.ID == "" {
 		project.ID = util.NewID()
 	}
+	if project.ProductionBranch == "" {
+		project.ProductionBranch = "main"
+	}
+	if project.RootDirectory == "" {
+		project.RootDirectory = "/"
+	}
+	if project.NodeVersion == "" {
+		project.NodeVersion = "20"
+	}
+	if !project.AutoDeploy {
+		project.AutoDeploy = true
+	}
+	if !project.PreviewDeployments {
+		project.PreviewDeployments = true
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO projects (id, owner_id, name, slug, github_repo, github_installation_id,

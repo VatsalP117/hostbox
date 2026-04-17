@@ -34,7 +34,7 @@ export function EnvVarImportDialog({
     if (!parsed.length) return;
 
     bulkImport.mutate(
-      { env_vars: parsed },
+      { env_vars: parsed, scope: "all" },
       {
         onSuccess: (data) => {
           toast.success(

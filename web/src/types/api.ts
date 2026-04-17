@@ -49,14 +49,13 @@ export interface ApiError {
 // ─── Setup ───────────────────────────────────────────
 
 export interface SetupStatusResponse {
-  setup_complete: boolean;
+  setup_required: boolean;
 }
 
 export interface SetupRequest {
   email: string;
   password: string;
   display_name: string;
-  platform_domain: string;
 }
 
 export interface SetupResponse {
@@ -183,7 +182,7 @@ export interface LogsResponse {
 // ─── Domains ─────────────────────────────────────────
 
 export interface CreateDomainRequest {
-  hostname: string;
+  domain: string;
 }
 
 export interface CreateDomainResponse {
@@ -204,17 +203,17 @@ export interface VerifyDomainResponse {
 export interface CreateEnvVarRequest {
   key: string;
   value: string;
-  environment?: string;
+  scope?: EnvVarScope;
 }
 
 export interface UpdateEnvVarRequest {
   value?: string;
-  environment?: string;
+  scope?: EnvVarScope;
 }
 
 export interface BulkImportEnvVarRequest {
   env_vars: Array<{ key: string; value: string }>;
-  environment?: string;
+  scope?: EnvVarScope;
 }
 
 export interface EnvVarListResponse {
@@ -243,12 +242,12 @@ export interface GitHubInstallationsResponse {
 export interface CreateNotificationRequest {
   channel: NotificationChannel;
   webhook_url: string;
-  events?: string[];
+  events?: string;
 }
 
 export interface UpdateNotificationRequest {
   webhook_url?: string;
-  events?: string[];
+  events?: string;
   enabled?: boolean;
 }
 
@@ -258,7 +257,7 @@ export interface NotificationListResponse {
 
 // ─── Admin ───────────────────────────────────────────
 
-export interface AdminStatsResponse extends SystemStats {}
+export type AdminStatsResponse = SystemStats;
 
 export interface AdminUsersResponse {
   users: User[];

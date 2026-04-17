@@ -25,7 +25,10 @@ export function useCreateNotification(projectId: string) {
     mutationFn: (data: CreateNotificationRequest) =>
       api.post<{ notification: NotificationConfig }>(
         `/projects/${projectId}/notifications`,
-        data,
+        {
+          ...data,
+          events: data.events,
+        },
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({

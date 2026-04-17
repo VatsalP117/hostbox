@@ -37,7 +37,7 @@ const schema = z.object({
     .min(1, "Key is required")
     .regex(/^[A-Z_][A-Z0-9_]*$/i, "Must be a valid env var name"),
   value: z.string().min(1, "Value is required"),
-  environment: z.string().optional(),
+  scope: z.enum(["all", "production", "preview"]).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -56,7 +56,7 @@ export function AddEnvVarForm({
   const createEnvVar = useCreateEnvVar(projectId);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { key: "", value: "", environment: "all" },
+    defaultValues: { key: "", value: "", scope: "all" },
   });
 
   const onSubmit = (values: FormValues) => {
@@ -117,7 +117,7 @@ export function AddEnvVarForm({
             />
             <FormField
               control={form.control}
-              name="environment"
+              name="scope"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Scope</FormLabel>

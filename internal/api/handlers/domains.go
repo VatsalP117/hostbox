@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -104,7 +105,7 @@ func (h *DomainHandler) ListByProject(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"data": data,
+		"domains": data,
 	})
 }
 
@@ -139,10 +140,37 @@ func (h *DomainHandler) Delete(c echo.Context) error {
 }
 
 func (h *DomainHandler) Verify(c echo.Context) error {
-	// DNS verification will be implemented in Phase 4 (Caddy integration)
-	return c.JSON(http.StatusNotImplemented, dto.SuccessResponse{
-		Success: false,
-		Message: "Domain verification not yet implemented",
+	domain, err := h.domainRepo.GetByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return apperrors.NewNotFound("Domain")
+		}
+		return apperrors.NewInternal(err)
+	}
+
+	if _, err := h.getOwnedProject(c, domain.ProjectID); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	if err := h.domainRepo.UpdateLastChecked(c.Request().Context(), domain.ID, now); err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	if _, err := net.LookupHost(domain.Domain); err != nil {
+		return apperrors.NewBadRequest("Domain DNS record not found yet")
+	}
+
+	if err := h.domainRepo.UpdateVerification(c.Request().Context(), domain.ID, true, &now); err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	domain.Verified = true
+	domain.VerifiedAt = &now
+	domain.LastCheckedAt = &now
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"domain": toDomainResponse(domain),
 	})
 }
 

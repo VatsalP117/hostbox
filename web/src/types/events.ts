@@ -14,14 +14,14 @@ export interface ErrorEvent {
 }
 
 export interface CompleteEvent {
-  status: "ready" | "failed";
+  status: "ready" | "failed" | "cancelled";
   duration_ms: number;
   url?: string;
-  artifact_size_bytes?: number;
+  artifact_size?: number;
   error?: string;
 }
 
-export type SSEEventType = "log" | "status" | "error" | "complete";
+export type SSEEventType = "log" | "status" | "error" | "done" | "complete";
 
 export interface SSEMessage {
   id?: string;

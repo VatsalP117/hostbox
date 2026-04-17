@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/vatsalpatel/hostbox/internal/api"
@@ -127,6 +128,7 @@ func main() {
 
 	// 9b. Initialize GitHub services (optional, only if configured)
 	var ghClient *ghsvc.Client
+	var ghTokenProvider *ghsvc.TokenProvider
 	var ghEventRouter *ghsvc.GitHubEventRouter
 	var ghWebhookHandler *handlers.GitHubWebhookHandler
 	var ghHandler *handlers.GitHubHandler
@@ -143,6 +145,7 @@ func main() {
 			os.Exit(1)
 		}
 
+		ghTokenProvider = tokenProvider
 		ghClient = ghsvc.NewClient(tokenProvider, l)
 		ghHandler = handlers.NewGitHubHandler(ghClient, l)
 
@@ -156,10 +159,11 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(srv.StartTime(), db)
 	setupHandler := handlers.NewSetupHandler(authService, repos.User, repos.Settings, repos.Activity, cfg.PlatformHTTPS, l)
 	authHandler := handlers.NewAuthHandler(authService, cfg.PlatformHTTPS, l)
-	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Activity, l)
+	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Deployment, repos.Domain, repos.Activity, l)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, l)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, cfg.PlatformDomain, l)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, l)
+	notificationHandler := handlers.NewNotificationHandler(repos.Notification, repos.Project, repos.Activity, notificationService, l)
 	adminHandler := handlers.NewAdminHandler(repos.User, repos.Project, repos.Deployment, repos.Activity, repos.Settings, cfg, l)
 	adminHandler.SetBackupService(backupService)
 	adminHandler.SetUpdateService(updateService)
@@ -175,6 +179,7 @@ func main() {
 			repos.EnvVar,
 			sseHub,
 			cfg.PlatformDomain,
+			ghTokenProvider,
 		)
 
 		// Wire Caddy route updates and notifications into the build pipeline
@@ -254,10 +259,12 @@ func main() {
 		DeploymentHandler:    deploymentHandler,
 		DomainHandler:        domainHandler,
 		EnvVarHandler:        envVarHandler,
+		NotificationHandler:  notificationHandler,
 		AdminHandler:         adminHandler,
 		GitHubWebhookHandler: ghWebhookHandler,
 		GitHubHandler:        ghHandler,
 	})
+	srv.ServeDashboard(filepath.Join("web", "dist"))
 
 	// 14. Start server (blocks until shutdown signal)
 	if err := srv.Start(); err != nil {
