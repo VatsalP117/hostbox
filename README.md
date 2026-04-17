@@ -116,6 +116,8 @@ cd web && npm install && npm run dev
 docker compose -f docker-compose.dev.yml up
 ```
 
+See [docs/ONBOARDING.md](docs/ONBOARDING.md) for an implementation-first contributor guide that explains the current codebase, local workflow, and known gaps.
+
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the full development guide.
 
 ## Tech Stack
