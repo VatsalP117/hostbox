@@ -61,7 +61,7 @@ func NewServer(cfg *config.Config, db *sql.DB, repos *repository.Repositories, l
 	e.Use(appmiddleware.RequestID())
 	e.Use(appmiddleware.Logger(logger))
 	e.Use(appmiddleware.Recovery(logger))
-	e.Use(appmiddleware.CORS(cfg.PlatformDomain, cfg.PlatformHTTPS))
+	e.Use(appmiddleware.CORS([]string{cfg.DashboardBaseURL()}))
 	e.Use(appmiddleware.SecurityHeaders())
 
 	// Custom error handler

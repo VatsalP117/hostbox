@@ -51,7 +51,7 @@ docker compose up -d
 
 ### Access Dashboard
 
-Open `https://your-domain.com` and create your admin account.
+Open `https://hostbox.your-domain.com` and create your admin account.
 
 ## Architecture
 

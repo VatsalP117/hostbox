@@ -11,16 +11,16 @@ const commentMarker = "<!-- hostbox-preview-deployment -->"
 
 // PRCommentManager handles creating and updating Hostbox's PR comments.
 type PRCommentManager struct {
-	client         *Client
-	platformDomain string
-	logger         *slog.Logger
+	client          *Client
+	dashboardDomain string
+	logger          *slog.Logger
 }
 
-func NewPRCommentManager(client *Client, platformDomain string, logger *slog.Logger) *PRCommentManager {
+func NewPRCommentManager(client *Client, dashboardDomain string, logger *slog.Logger) *PRCommentManager {
 	return &PRCommentManager{
-		client:         client,
-		platformDomain: platformDomain,
-		logger:         logger,
+		client:          client,
+		dashboardDomain: dashboardDomain,
+		logger:          logger,
 	}
 }
 
@@ -107,7 +107,7 @@ func (m *PRCommentManager) buildCommentBody(d DeploymentInfo) string {
 	}
 
 	sb.WriteString("\n---\n")
-	sb.WriteString(fmt.Sprintf("*Deployed with [Hostbox](https://%s)*\n", m.platformDomain))
+	sb.WriteString(fmt.Sprintf("*Deployed with [Hostbox](https://%s)*\n", m.dashboardDomain))
 
 	return sb.String()
 }

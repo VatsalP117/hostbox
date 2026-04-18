@@ -7,11 +7,12 @@ import (
 
 func newTestBuilder() *ConfigBuilder {
 	return NewConfigBuilder(BuilderConfig{
-		PlatformDomain: "hostbox.example.com",
-		PlatformHTTPS:  true,
-		ACMEEmail:      "admin@example.com",
-		APIUpstream:    "localhost:8080",
-		DeploymentRoot: "/app/deployments",
+		PlatformDomain:  "example.com",
+		DashboardDomain: "hostbox.example.com",
+		PlatformHTTPS:   true,
+		ACMEEmail:       "admin@example.com",
+		APIUpstream:     "localhost:8080",
+		DeploymentRoot:  "/app/deployments",
 	})
 }
 
@@ -88,17 +89,17 @@ func TestBuildFullConfig_DeploymentRoutes(t *testing.T) {
 		switch r.ID {
 		case "route-prod-prj_001":
 			foundProd = true
-			if r.Match[0].Host[0] != "my-app.hostbox.example.com" {
+			if r.Match[0].Host[0] != "my-app.example.com" {
 				t.Errorf("production host = %q", r.Match[0].Host[0])
 			}
 		case "route-deploy-dpl_abc12345":
 			foundPreview1 = true
-			if r.Match[0].Host[0] != "my-app-dpl_abc1.hostbox.example.com" {
+			if r.Match[0].Host[0] != "my-app-dpl_abc1.example.com" {
 				t.Errorf("preview1 host = %q", r.Match[0].Host[0])
 			}
 		case "route-deploy-dpl_def67890":
 			foundPreview2 = true
-			if r.Match[0].Host[0] != "my-app-dpl_def6.hostbox.example.com" {
+			if r.Match[0].Host[0] != "my-app-dpl_def6.example.com" {
 				t.Errorf("preview2 host = %q", r.Match[0].Host[0])
 			}
 		}
@@ -235,9 +236,10 @@ func TestBuildFullConfig_StaticHandlers(t *testing.T) {
 
 func TestBuildFullConfig_TLSPolicies(t *testing.T) {
 	b := NewConfigBuilder(BuilderConfig{
-		PlatformDomain: "hostbox.example.com",
-		ACMEEmail:      "admin@example.com",
-		DNSProvider:    "cloudflare",
+		PlatformDomain:  "example.com",
+		DashboardDomain: "hostbox.example.com",
+		ACMEEmail:       "admin@example.com",
+		DNSProvider:     "cloudflare",
 		DNSProviderConf: json.RawMessage(`{"name":"cloudflare","api_token":"{env.CF_API_TOKEN}"}`),
 	})
 
@@ -251,7 +253,7 @@ func TestBuildFullConfig_TLSPolicies(t *testing.T) {
 	if policies[0].Subjects[0] != "hostbox.example.com" {
 		t.Errorf("policy 0 subject = %q", policies[0].Subjects[0])
 	}
-	if policies[1].Subjects[0] != "*.hostbox.example.com" {
+	if policies[1].Subjects[0] != "*.example.com" {
 		t.Errorf("policy 1 subject = %q", policies[1].Subjects[0])
 	}
 	if policies[1].Issuers[0].Challenges == nil {
@@ -261,8 +263,9 @@ func TestBuildFullConfig_TLSPolicies(t *testing.T) {
 
 func TestBuildFullConfig_TLSNoDNS(t *testing.T) {
 	b := NewConfigBuilder(BuilderConfig{
-		PlatformDomain: "hostbox.example.com",
-		ACMEEmail:      "admin@example.com",
+		PlatformDomain:  "example.com",
+		DashboardDomain: "hostbox.example.com",
+		ACMEEmail:       "admin@example.com",
 	})
 
 	config := b.BuildFullConfig(nil, nil)
@@ -270,6 +273,9 @@ func TestBuildFullConfig_TLSNoDNS(t *testing.T) {
 
 	if len(policies) != 1 {
 		t.Fatalf("expected 1 TLS policy (no DNS), got %d", len(policies))
+	}
+	if policies[0].Subjects[0] != "hostbox.example.com" {
+		t.Errorf("policy 0 subject = %q", policies[0].Subjects[0])
 	}
 }
 

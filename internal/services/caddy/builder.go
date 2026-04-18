@@ -9,6 +9,7 @@ import (
 // BuilderConfig holds platform-level settings for config generation.
 type BuilderConfig struct {
 	PlatformDomain  string
+	DashboardDomain string
 	PlatformHTTPS   bool
 	ACMEEmail       string
 	APIUpstream     string // "localhost:8080"
@@ -69,7 +70,7 @@ func (b *ConfigBuilder) buildPlatformRoute() CaddyRoute {
 	return CaddyRoute{
 		ID:    "route-platform",
 		Group: "platform",
-		Match: []CaddyMatch{{Host: []string{b.cfg.PlatformDomain}}},
+		Match: []CaddyMatch{{Host: []string{b.cfg.DashboardDomain}}},
 		Handle: []CaddyHandler{
 			{
 				Handler: "subroute",
@@ -179,7 +180,7 @@ func (b *ConfigBuilder) buildFileServerHandlers(artifactPath, framework string) 
 			Handler: "headers",
 			Response: &CaddyHeaderOps{
 				Set: map[string][]string{
-					"X-Frame-Options":       {"DENY"},
+					"X-Frame-Options":        {"DENY"},
 					"X-Content-Type-Options": {"nosniff"},
 					"Referrer-Policy":        {"strict-origin-when-cross-origin"},
 				},
@@ -235,7 +236,7 @@ func (b *ConfigBuilder) buildFileServerHandlers(artifactPath, framework string) 
 func (b *ConfigBuilder) buildTLSConfig(domains []VerifiedDomain) *CaddyTLSApp {
 	policies := []CaddyTLSPolicy{
 		{
-			Subjects: []string{b.cfg.PlatformDomain},
+			Subjects: []string{b.cfg.DashboardDomain},
 			Issuers: []CaddyTLSIssuer{{
 				Module: "acme",
 				Email:  b.cfg.ACMEEmail,

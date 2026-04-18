@@ -26,9 +26,10 @@ type Config struct {
 	RefreshTokenTTL time.Duration
 
 	// Platform
-	PlatformDomain string
-	PlatformHTTPS  bool
-	PlatformName   string
+	PlatformDomain  string
+	DashboardDomain string
+	PlatformHTTPS   bool
+	PlatformName    string
 
 	// GitHub App
 	GitHubAppID         int64
@@ -54,9 +55,9 @@ type Config struct {
 	BackupDir      string
 
 	// Caddy
-	CaddyAdminURL    string
-	ACMEEmail        string
-	DNSProvider      string
+	CaddyAdminURL     string
+	ACMEEmail         string
+	DNSProvider       string
 	DNSProviderConfig string
 
 	// Limits
@@ -97,6 +98,7 @@ func Load() (*Config, error) {
 		AccessTokenTTL:      getEnvDuration("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTokenTTL:     getEnvDuration("REFRESH_TOKEN_TTL", 168*time.Hour),
 		PlatformDomain:      getEnv("PLATFORM_DOMAIN", ""),
+		DashboardDomain:     getEnv("DASHBOARD_DOMAIN", ""),
 		PlatformHTTPS:       getEnvBool("PLATFORM_HTTPS", true),
 		PlatformName:        getEnv("PLATFORM_NAME", "Hostbox"),
 		GitHubAppID:         int64(getEnvInt("GITHUB_APP_ID", 0)),
@@ -169,6 +171,16 @@ func (c *Config) Validate() error {
 		errs = append(errs, "PLATFORM_DOMAIN must not include protocol prefix")
 	}
 
+	if c.DashboardDomain == "" {
+		c.DashboardDomain = "hostbox." + c.PlatformDomain
+	}
+	if strings.HasPrefix(c.DashboardDomain, "http://") || strings.HasPrefix(c.DashboardDomain, "https://") {
+		errs = append(errs, "DASHBOARD_DOMAIN must not include protocol prefix")
+	}
+	if c.DashboardDomain == c.PlatformDomain {
+		errs = append(errs, "DASHBOARD_DOMAIN must differ from PLATFORM_DOMAIN")
+	}
+
 	if c.Port < 1 || c.Port > 65535 {
 		errs = append(errs, "PORT must be between 1 and 65535")
 	}
@@ -195,6 +207,15 @@ func (c *Config) BaseURL() string {
 		scheme = "http"
 	}
 	return fmt.Sprintf("%s://%s", scheme, c.PlatformDomain)
+}
+
+// DashboardBaseURL returns the full dashboard URL (e.g., "https://hostbox.example.com").
+func (c *Config) DashboardBaseURL() string {
+	scheme := "https"
+	if !c.PlatformHTTPS {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s", scheme, c.DashboardDomain)
 }
 
 func getEnv(key, fallback string) string {

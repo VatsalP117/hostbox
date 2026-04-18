@@ -180,9 +180,9 @@ func TestPushHandler_IgnoresDisabledAutoDeploy(t *testing.T) {
 	handler := NewPushHandler(projectRepo, deploySvc, slog.Default())
 
 	payload, _ := json.Marshal(map[string]interface{}{
-		"ref":        "refs/heads/main",
-		"after":      "abc123",
-		"repository": map[string]string{"full_name": "user/repo"},
+		"ref":          "refs/heads/main",
+		"after":        "abc123",
+		"repository":   map[string]string{"full_name": "user/repo"},
 		"installation": map[string]int64{"id": 99},
 		"head_commit": map[string]interface{}{
 			"id":      "abc123",
@@ -310,7 +310,7 @@ func TestInstallationHandler_Deleted(t *testing.T) {
 
 func TestCommentManager_BuildCommentBody(t *testing.T) {
 	m := &PRCommentManager{
-		platformDomain: "hostbox.example.com",
+		dashboardDomain: "hostbox.example.com",
 	}
 
 	tests := []struct {
@@ -363,7 +363,7 @@ func TestCommentManager_BuildCommentBody(t *testing.T) {
 				t.Errorf("body missing expected text %q", tt.expect)
 			}
 			if !contains(body, "hostbox.example.com") {
-				t.Error("missing platform domain")
+				t.Error("missing dashboard domain")
 			}
 		})
 	}

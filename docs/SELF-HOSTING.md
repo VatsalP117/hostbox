@@ -12,7 +12,7 @@ Complete guide to self-hosting Hostbox on your own server.
 | OS | Ubuntu 22.04+ / Debian 12+ | Ubuntu 24.04 |
 
 You also need:
-- A **domain name** (e.g., `hostbox.example.com`)
+- A **domain name** (e.g., `example.com`)
 - **Docker** and **Docker Compose** installed
 - Ports **80** and **443** open
 
@@ -21,9 +21,11 @@ You also need:
 Point your domain and wildcard subdomain to your server's IP:
 
 ```
-A     hostbox.example.com       → YOUR_SERVER_IP
-A     *.hostbox.example.com     → YOUR_SERVER_IP
+A     example.com       → YOUR_SERVER_IP
+A     *.example.com     → YOUR_SERVER_IP
 ```
+
+With the default configuration, the dashboard runs on `hostbox.example.com`, which is covered by the wildcard record.
 
 ### Provider-Specific Guides
 
@@ -59,7 +61,8 @@ curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/docker-comp
 
 # Create environment file
 cat > .env << 'EOF'
-PLATFORM_DOMAIN=hostbox.example.com
+PLATFORM_DOMAIN=example.com
+DASHBOARD_DOMAIN=hostbox.example.com
 PLATFORM_HTTPS=true
 JWT_SECRET=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
@@ -78,6 +81,7 @@ All configuration is done via environment variables in the `.env` file:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PLATFORM_DOMAIN` | Your domain (required) | — |
+| `DASHBOARD_DOMAIN` | Dashboard host | `hostbox.{PLATFORM_DOMAIN}` |
 | `PLATFORM_HTTPS` | Enable HTTPS | `true` |
 | `PLATFORM_NAME` | Display name | `Hostbox` |
 | `JWT_SECRET` | JWT signing key (required) | — |
@@ -119,8 +123,8 @@ To enable git-push deployments:
 
 1. Go to **GitHub Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**
 2. Set the following:
-   - **Homepage URL**: `https://your-domain.com`
-   - **Webhook URL**: `https://your-domain.com/api/v1/github/webhook`
+   - **Homepage URL**: `https://hostbox.your-domain.com`
+   - **Webhook URL**: `https://hostbox.your-domain.com/api/v1/github/webhook`
    - **Webhook secret**: Use the `GITHUB_WEBHOOK_SECRET` from your `.env`
 3. **Permissions**:
    - Repository: Contents (Read), Pull requests (Read & Write), Commit statuses (Read & Write)
@@ -163,7 +167,7 @@ sudo ufw enable
 hostbox admin backup
 
 # Via API
-curl -X POST https://your-domain.com/api/v1/admin/backups \
+curl -X POST https://hostbox.your-domain.com/api/v1/admin/backups \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -176,7 +180,7 @@ Backups are stored in `/opt/hostbox/data/backups/`.
 hostbox admin restore /path/to/backup.db.gz
 
 # Via API
-curl -X POST https://your-domain.com/api/v1/admin/backups/restore \
+curl -X POST https://hostbox.your-domain.com/api/v1/admin/backups/restore \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"path": "/app/data/backups/hostbox-20240115-103000.db.gz"}'
 ```
