@@ -41,8 +41,14 @@ func TestBuildFullConfig_PlatformRoute(t *testing.T) {
 	if platform.ID != "route-platform" {
 		t.Errorf("platform route id = %q", platform.ID)
 	}
+	if len(platform.Match[0].Host) != 2 {
+		t.Fatalf("platform hosts = %v, want dashboard + apex", platform.Match[0].Host)
+	}
 	if platform.Match[0].Host[0] != "hostbox.example.com" {
-		t.Errorf("platform host = %q", platform.Match[0].Host[0])
+		t.Errorf("platform dashboard host = %q", platform.Match[0].Host[0])
+	}
+	if platform.Match[0].Host[1] != "example.com" {
+		t.Errorf("platform apex host = %q", platform.Match[0].Host[1])
 	}
 	if !platform.Terminal {
 		t.Error("platform route should be terminal")
@@ -94,12 +100,12 @@ func TestBuildFullConfig_DeploymentRoutes(t *testing.T) {
 			}
 		case "route-deploy-dpl_abc12345":
 			foundPreview1 = true
-			if r.Match[0].Host[0] != "my-app-dpl_abc1.example.com" {
+			if r.Match[0].Host[0] != "my-app-d-2621ea.example.com" {
 				t.Errorf("preview1 host = %q", r.Match[0].Host[0])
 			}
 		case "route-deploy-dpl_def67890":
 			foundPreview2 = true
-			if r.Match[0].Host[0] != "my-app-dpl_def6.example.com" {
+			if r.Match[0].Host[0] != "my-app-d-0d573f.example.com" {
 				t.Errorf("preview2 host = %q", r.Match[0].Host[0])
 			}
 		}
@@ -250,8 +256,14 @@ func TestBuildFullConfig_TLSPolicies(t *testing.T) {
 		t.Fatalf("expected 2 TLS policies (platform + wildcard), got %d", len(policies))
 	}
 
+	if len(policies[0].Subjects) != 2 {
+		t.Fatalf("expected 2 subjects in platform policy, got %d", len(policies[0].Subjects))
+	}
 	if policies[0].Subjects[0] != "hostbox.example.com" {
-		t.Errorf("policy 0 subject = %q", policies[0].Subjects[0])
+		t.Errorf("policy 0 dashboard subject = %q", policies[0].Subjects[0])
+	}
+	if policies[0].Subjects[1] != "example.com" {
+		t.Errorf("policy 0 apex subject = %q", policies[0].Subjects[1])
 	}
 	if policies[1].Subjects[0] != "*.example.com" {
 		t.Errorf("policy 1 subject = %q", policies[1].Subjects[0])
@@ -274,8 +286,14 @@ func TestBuildFullConfig_TLSNoDNS(t *testing.T) {
 	if len(policies) != 1 {
 		t.Fatalf("expected 1 TLS policy (no DNS), got %d", len(policies))
 	}
+	if len(policies[0].Subjects) != 2 {
+		t.Fatalf("expected 2 subjects in platform policy, got %d", len(policies[0].Subjects))
+	}
 	if policies[0].Subjects[0] != "hostbox.example.com" {
-		t.Errorf("policy 0 subject = %q", policies[0].Subjects[0])
+		t.Errorf("policy 0 dashboard subject = %q", policies[0].Subjects[0])
+	}
+	if policies[0].Subjects[1] != "example.com" {
+		t.Errorf("policy 0 apex subject = %q", policies[0].Subjects[1])
 	}
 }
 

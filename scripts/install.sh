@@ -109,12 +109,14 @@ configure() {
     DNS_CONFIG=""
     if [ "$DNS_PROVIDER" = "cloudflare" ]; then
         read -rp "Cloudflare API token: " CF_TOKEN
-        DNS_CONFIG="CLOUDFLARE_API_TOKEN=${CF_TOKEN}"
+        DNS_CONFIG="CF_API_TOKEN=${CF_TOKEN}"
     elif [ "$DNS_PROVIDER" = "route53" ]; then
         read -rp "AWS Access Key ID: " AWS_KEY
         read -rp "AWS Secret Access Key: " AWS_SECRET
+        read -rp "AWS Hosted Zone ID: " AWS_ZONE_ID
         DNS_CONFIG="AWS_ACCESS_KEY_ID=${AWS_KEY}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET}"
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
+AWS_HOSTED_ZONE_ID=${AWS_ZONE_ID}"
     elif [ "$DNS_PROVIDER" = "digitalocean" ]; then
         read -rp "DigitalOcean API token: " DO_TOKEN
         DNS_CONFIG="DO_AUTH_TOKEN=${DO_TOKEN}"

@@ -188,6 +188,11 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest, userAgen
 	return user, accessToken, rawRefresh, nil
 }
 
+// CreateSession creates a new access/refresh-token session for an existing user.
+func (s *AuthService) CreateSession(ctx context.Context, user *models.User, userAgent, ip string) (string, string, error) {
+	return s.createSession(ctx, user, userAgent, ip)
+}
+
 // Refresh validates a refresh token and issues a new access token.
 func (s *AuthService) Refresh(ctx context.Context, rawRefreshToken string) (string, error) {
 	tokenHash := hashToken(rawRefreshToken)

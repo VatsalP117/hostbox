@@ -108,28 +108,15 @@ func (h *SetupHandler) Setup(c echo.Context) error {
 		return apperrors.NewInternal(err)
 	}
 
-	// Generate tokens
-	accessToken, err := h.authService.GenerateAccessToken(user)
+	accessToken, rawRefresh, err := h.authService.CreateSession(
+		ctx,
+		user,
+		c.Request().UserAgent(),
+		c.RealIP(),
+	)
 	if err != nil {
 		return apperrors.NewInternal(err)
 	}
-	rawRefresh, tokenHash, err := h.authService.GenerateRefreshToken()
-	if err != nil {
-		return apperrors.NewInternal(err)
-	}
-
-	// Create session
-	session := &models.Session{
-		UserID:           user.ID,
-		RefreshTokenHash: tokenHash,
-	}
-	// Get session repo through a direct DB insert via the auth service pattern
-	// We'll use the auth service's internal flow by just creating a minimal session
-	_ = session // suppress lint - we need direct repo access
-
-	// Use the Register approach but manually since setup is special
-	// Actually, we already have the user. Just create the session via authService-like logic.
-	// Since Setup is a one-time event, let's set the cookie directly.
 	c.SetCookie(&http.Cookie{
 		Name:     "hostbox_refresh",
 		Value:    rawRefresh,

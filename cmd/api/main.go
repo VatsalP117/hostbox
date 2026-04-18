@@ -160,7 +160,15 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(srv.StartTime(), db)
 	setupHandler := handlers.NewSetupHandler(authService, repos.User, repos.Settings, repos.Activity, cfg.PlatformHTTPS, l)
 	authHandler := handlers.NewAuthHandler(authService, cfg.PlatformHTTPS, l)
-	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Deployment, repos.Domain, repos.Activity, l)
+	projectHandler := handlers.NewProjectHandler(
+		repos.Project,
+		repos.Deployment,
+		repos.Domain,
+		repos.Activity,
+		cfg.PlatformDomain,
+		cfg.DashboardDomain,
+		l,
+	)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, l)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, cfg.PlatformDomain, l)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, l)

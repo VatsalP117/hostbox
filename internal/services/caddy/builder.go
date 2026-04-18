@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 )
 
 // BuilderConfig holds platform-level settings for config generation.
@@ -67,10 +69,15 @@ func (b *ConfigBuilder) BuildFullConfig(
 }
 
 func (b *ConfigBuilder) buildPlatformRoute() CaddyRoute {
+	hosts := []string{b.cfg.DashboardDomain}
+	if b.cfg.PlatformDomain != b.cfg.DashboardDomain {
+		hosts = append(hosts, b.cfg.PlatformDomain)
+	}
+
 	return CaddyRoute{
 		ID:    "route-platform",
 		Group: "platform",
-		Match: []CaddyMatch{{Host: []string{b.cfg.DashboardDomain}}},
+		Match: []CaddyMatch{{Host: hosts}},
 		Handle: []CaddyHandler{
 			{
 				Handler: "subroute",
@@ -92,12 +99,7 @@ func (b *ConfigBuilder) buildPlatformRoute() CaddyRoute {
 }
 
 func (b *ConfigBuilder) buildPreviewRoute(d ActiveDeployment) CaddyRoute {
-	shortHash := d.DeploymentID
-	if len(shortHash) > 8 {
-		shortHash = shortHash[:8]
-	}
-
-	host := fmt.Sprintf("%s-%s.%s", d.ProjectSlug, shortHash, b.cfg.PlatformDomain)
+	host := hostnames.PreviewHost(d.ProjectSlug, d.DeploymentID, b.cfg.PlatformDomain)
 
 	return CaddyRoute{
 		ID:       fmt.Sprintf("route-deploy-%s", d.DeploymentID),
@@ -108,7 +110,7 @@ func (b *ConfigBuilder) buildPreviewRoute(d ActiveDeployment) CaddyRoute {
 }
 
 func (b *ConfigBuilder) buildProductionRoute(projectSlug, projectID, artifactPath, framework string) CaddyRoute {
-	host := fmt.Sprintf("%s.%s", projectSlug, b.cfg.PlatformDomain)
+	host := hostnames.ProductionHost(projectSlug, b.cfg.PlatformDomain)
 
 	return CaddyRoute{
 		ID:       fmt.Sprintf("route-prod-%s", projectID),
@@ -119,7 +121,7 @@ func (b *ConfigBuilder) buildProductionRoute(projectSlug, projectID, artifactPat
 }
 
 func (b *ConfigBuilder) buildBranchStableRoute(projectSlug, projectID, branchSlug, artifactPath, framework string) CaddyRoute {
-	host := fmt.Sprintf("%s-%s.%s", projectSlug, branchSlug, b.cfg.PlatformDomain)
+	host := hostnames.BranchHost(projectSlug, branchSlug, b.cfg.PlatformDomain)
 
 	return CaddyRoute{
 		ID:       fmt.Sprintf("route-branch-%s-%s", projectID, branchSlug),
@@ -236,7 +238,7 @@ func (b *ConfigBuilder) buildFileServerHandlers(artifactPath, framework string) 
 func (b *ConfigBuilder) buildTLSConfig(domains []VerifiedDomain) *CaddyTLSApp {
 	policies := []CaddyTLSPolicy{
 		{
-			Subjects: []string{b.cfg.DashboardDomain},
+			Subjects: []string{b.cfg.DashboardDomain, b.cfg.PlatformDomain},
 			Issuers: []CaddyTLSIssuer{{
 				Module: "acme",
 				Email:  b.cfg.ACMEEmail,
@@ -244,7 +246,7 @@ func (b *ConfigBuilder) buildTLSConfig(domains []VerifiedDomain) *CaddyTLSApp {
 		},
 	}
 
-	if b.cfg.DNSProvider != "" {
+	if b.cfg.DNSProvider != "" && len(b.cfg.DNSProviderConf) > 0 {
 		policies = append(policies, CaddyTLSPolicy{
 			Subjects: []string{"*." + b.cfg.PlatformDomain},
 			Issuers: []CaddyTLSIssuer{{

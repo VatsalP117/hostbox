@@ -25,7 +25,11 @@ A     example.com       → YOUR_SERVER_IP
 A     *.example.com     → YOUR_SERVER_IP
 ```
 
-With the default configuration, the dashboard runs on `hostbox.example.com`, which is covered by the wildcard record.
+With the default configuration:
+
+- `hostbox.example.com` serves the dashboard
+- `example.com` also serves the dashboard, so the apex record is no longer unused
+- project, branch, and preview hosts stay under the same wildcard zone
 
 ### Provider-Specific Guides
 
@@ -46,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/ins
 The script will:
 1. Install Docker if needed
 2. Ask for your domain and SSL email
-3. Generate secure secrets
+3. Optionally ask for wildcard DNS-provider credentials
 4. Start Hostbox
 
 ### Manual
@@ -87,7 +91,7 @@ All configuration is done via environment variables in the `.env` file:
 | `JWT_SECRET` | JWT signing key (required) | — |
 | `ENCRYPTION_KEY` | Env var encryption key (required) | — |
 | `ACME_EMAIL` | Email for Let's Encrypt | — |
-| `DNS_PROVIDER` | DNS provider for wildcard certs | `none` |
+| `DNS_PROVIDER` | Wildcard certificate provider (`none`, `cloudflare`, `route53`, `digitalocean`) | `none` |
 | `LOG_LEVEL` | Log level: debug/info/warn/error | `info` |
 | `GITHUB_APP_ID` | GitHub App ID | — |
 | `GITHUB_APP_SLUG` | GitHub App slug | — |
@@ -96,7 +100,7 @@ All configuration is done via environment variables in the `.env` file:
 
 ### DNS Provider Configuration
 
-For wildcard SSL certificates, configure a DNS provider:
+If you want Hostbox to request a wildcard certificate up front, configure a DNS provider. If `DNS_PROVIDER=none`, Caddy falls back to individual certificates for the apex, dashboard, and generated subdomains.
 
 **Cloudflare**:
 ```env
@@ -109,6 +113,7 @@ CF_API_TOKEN=your-cloudflare-api-token
 DNS_PROVIDER=route53
 AWS_ACCESS_KEY_ID=your-key
 AWS_SECRET_ACCESS_KEY=your-secret
+AWS_HOSTED_ZONE_ID=your-hosted-zone-id
 ```
 
 **DigitalOcean**:

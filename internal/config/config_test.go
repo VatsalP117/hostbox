@@ -192,6 +192,83 @@ func TestLoadDurationConversion(t *testing.T) {
 	}
 }
 
+func TestLoadDNSProviderNone(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "none")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DNSProvider != "" {
+		t.Fatalf("DNSProvider = %q, want empty", cfg.DNSProvider)
+	}
+	if cfg.DNSProviderConfig != "" {
+		t.Fatalf("DNSProviderConfig = %q, want empty", cfg.DNSProviderConfig)
+	}
+}
+
+func TestLoadDNSProviderConfigDerived(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "cloudflare")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DNSProvider != "cloudflare" {
+		t.Fatalf("DNSProvider = %q, want cloudflare", cfg.DNSProvider)
+	}
+	expected := `{"name":"cloudflare","api_token":"{env.CF_API_TOKEN}"}`
+	if cfg.DNSProviderConfig != expected {
+		t.Fatalf("DNSProviderConfig = %q, want %q", cfg.DNSProviderConfig, expected)
+	}
+}
+
+func TestLoadDNSProviderConfigDerivedWhenWhitespace(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "cloudflare")
+	t.Setenv("DNS_PROVIDER_CONFIG", "   ")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	expected := `{"name":"cloudflare","api_token":"{env.CF_API_TOKEN}"}`
+	if cfg.DNSProviderConfig != expected {
+		t.Fatalf("DNSProviderConfig = %q, want %q", cfg.DNSProviderConfig, expected)
+	}
+}
+
+func TestLoadUnknownDNSProvider(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "unsupported")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should fail for unsupported DNS provider")
+	}
+}
+
+func TestValidateNormalizesDNSProvider(t *testing.T) {
+	cfg := &Config{
+		JWTSecret:       "this-is-a-very-long-secret-that-is-at-least-32-chars",
+		EncryptionKey:   "6368616e676520746869732070617373776f726420746f206120736563726574",
+		DatabasePath:    "/tmp/hostbox-test.db",
+		PlatformDomain:  "example.com",
+		DashboardDomain: "hostbox.example.com",
+		Port:            8080,
+		LogLevel:        "info",
+		DNSProvider:     "none",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error: %v", err)
+	}
+	if cfg.DNSProvider != "" {
+		t.Fatalf("DNSProvider = %q, want empty after normalization", cfg.DNSProvider)
+	}
+}
+
 func TestBaseURL(t *testing.T) {
 	cfg := &Config{PlatformDomain: "example.com", PlatformHTTPS: true}
 	if cfg.BaseURL() != "https://example.com" {
