@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/vatsalpatel/hostbox/cmd/cli/internal/output"
+	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
 )
 
 var domainsCmd = &cobra.Command{

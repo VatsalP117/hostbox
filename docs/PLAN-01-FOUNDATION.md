@@ -133,7 +133,7 @@ migrations/001_initial.sql      # Full initial schema
 
 ```bash
 cd /Users/vatsalpatel/Desktop/Projects/hostbox
-go mod init github.com/vatsalpatel/hostbox
+go mod init github.com/VatsalP117/hostbox
 go get github.com/labstack/echo/v4
 go get github.com/mattn/go-sqlite3
 go get github.com/go-playground/validator/v10
@@ -145,7 +145,7 @@ go mod tidy
 #### go.mod (expected)
 
 ```go
-module github.com/vatsalpatel/hostbox
+module github.com/VatsalP117/hostbox
 
 go 1.23
 
@@ -1602,8 +1602,8 @@ import (
     echomiddleware "github.com/labstack/echo/v4/middleware"
     "github.com/go-playground/validator/v10"
 
-    "github.com/vatsalpatel/hostbox/internal/config"
-    "github.com/vatsalpatel/hostbox/internal/repository"
+    "github.com/VatsalP117/hostbox/internal/config"
+    "github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // Server holds the Echo instance and dependencies.
@@ -1707,7 +1707,7 @@ import (
     "time"
 
     "github.com/labstack/echo/v4"
-    "github.com/vatsalpatel/hostbox/internal/dto"
+    "github.com/VatsalP117/hostbox/internal/dto"
 )
 
 // HealthHandler handles the GET /api/v1/health endpoint.
@@ -1740,7 +1740,7 @@ package routes
 
 import (
     "github.com/labstack/echo/v4"
-    "github.com/vatsalpatel/hostbox/internal/api/handlers"
+    "github.com/VatsalP117/hostbox/internal/api/handlers"
 )
 
 // Register sets up all API routes on the Echo instance.
@@ -1762,7 +1762,7 @@ func Register(e *echo.Echo, health *handlers.HealthHandler) {
 package version
 
 // These are set at build time via ldflags:
-//   go build -ldflags "-X github.com/vatsalpatel/hostbox/internal/version.Version=1.0.0"
+//   go build -ldflags "-X github.com/VatsalP117/hostbox/internal/version.Version=1.0.0"
 var (
     Version   = "dev"
     GitCommit = "unknown"
@@ -1786,14 +1786,14 @@ import (
     "log/slog"
     "os"
 
-    "github.com/vatsalpatel/hostbox/internal/api"
-    "github.com/vatsalpatel/hostbox/internal/api/handlers"
-    "github.com/vatsalpatel/hostbox/internal/api/routes"
-    "github.com/vatsalpatel/hostbox/internal/config"
-    "github.com/vatsalpatel/hostbox/internal/database"
-    "github.com/vatsalpatel/hostbox/internal/logger"
-    "github.com/vatsalpatel/hostbox/internal/repository"
-    "github.com/vatsalpatel/hostbox/migrations"
+    "github.com/VatsalP117/hostbox/internal/api"
+    "github.com/VatsalP117/hostbox/internal/api/handlers"
+    "github.com/VatsalP117/hostbox/internal/api/routes"
+    "github.com/VatsalP117/hostbox/internal/config"
+    "github.com/VatsalP117/hostbox/internal/database"
+    "github.com/VatsalP117/hostbox/internal/logger"
+    "github.com/VatsalP117/hostbox/internal/repository"
+    "github.com/VatsalP117/hostbox/migrations"
 )
 
 func main() {

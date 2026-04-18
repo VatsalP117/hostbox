@@ -38,7 +38,7 @@ A     *.hostbox.example.com     → YOUR_SERVER_IP
 ### Automated (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install.sh | sudo bash
 ```
 
 The script will:
@@ -55,7 +55,7 @@ sudo mkdir -p /opt/hostbox
 cd /opt/hostbox
 
 # Download compose file
-curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/docker-compose.yml -o docker-compose.yml
 
 # Create environment file
 cat > .env << 'EOF'

@@ -9,11 +9,11 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/repository"
 
 	_ "github.com/mattn/go-sqlite3"
 )

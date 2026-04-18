@@ -30,7 +30,7 @@ type UpdateCheck struct {
 
 func NewUpdateService(currentVersion, githubRepo string, logger *slog.Logger) *UpdateService {
 	if githubRepo == "" {
-		githubRepo = "vatsalpatel/hostbox"
+		githubRepo = "VatsalP117/hostbox"
 	}
 	return &UpdateService{
 		currentVersion: currentVersion,

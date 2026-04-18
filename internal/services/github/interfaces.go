@@ -3,7 +3,7 @@ package github
 import (
 	"context"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 // ProjectRepository defines the project data access methods needed by GitHub handlers.

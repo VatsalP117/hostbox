@@ -67,8 +67,8 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME}
           go build -ldflags "-s -w \
-            -X github.com/vatsalpatel/hostbox/internal/version.Version=${VERSION} \
-            -X github.com/vatsalpatel/hostbox/internal/version.GitCommit=${GITHUB_SHA::8}" \
+            -X github.com/VatsalP117/hostbox/internal/version.Version=${VERSION} \
+            -X github.com/VatsalP117/hostbox/internal/version.GitCommit=${GITHUB_SHA::8}" \
             -o hostbox-${{ matrix.suffix }} ./cmd/api
 
       - name: Build CLI binary
@@ -79,7 +79,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME}
           go build -ldflags "-s -w \
-            -X github.com/vatsalpatel/hostbox/internal/version.Version=${VERSION}" \
+            -X github.com/VatsalP117/hostbox/internal/version.Version=${VERSION}" \
             -o hostbox-cli-${{ matrix.suffix }} ./cmd/cli
 
       - name: Create tarballs

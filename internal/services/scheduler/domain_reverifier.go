@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 const domainGracePeriodDays = 7

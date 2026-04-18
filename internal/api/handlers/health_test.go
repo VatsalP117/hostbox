@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	"github.com/vatsalpatel/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {

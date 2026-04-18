@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 // setupTestDB creates a temporary SQLite database with migrations applied.

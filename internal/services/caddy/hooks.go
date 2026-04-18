@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 // PostBuildRouteHook implements worker.PostBuildHook to update Caddy routes after builds.

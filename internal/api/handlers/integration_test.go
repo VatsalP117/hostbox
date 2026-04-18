@@ -15,16 +15,16 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/vatsalpatel/hostbox/internal/api/handlers"
-	appmiddleware "github.com/vatsalpatel/hostbox/internal/api/middleware"
-	"github.com/vatsalpatel/hostbox/internal/api/routes"
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	"github.com/vatsalpatel/hostbox/internal/services"
-	"github.com/vatsalpatel/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/internal/api/handlers"
+	appmiddleware "github.com/VatsalP117/hostbox/internal/api/middleware"
+	"github.com/VatsalP117/hostbox/internal/api/routes"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/services"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 // testEnv holds a fully wired test environment.

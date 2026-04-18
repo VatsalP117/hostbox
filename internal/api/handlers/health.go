@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	"github.com/vatsalpatel/hostbox/internal/version"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	"github.com/VatsalP117/hostbox/internal/version"
 )
 
 // HealthHandler handles the GET /api/v1/health endpoint.

@@ -1,6 +1,6 @@
 services:
   hostbox:
-    image: ghcr.io/vatsalpatel/hostbox:latest
+    image: ghcr.io/VatsalP117/hostbox:latest
     build:
       context: .
       dockerfile: docker/Dockerfile

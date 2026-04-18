@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Hostbox CLI Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install-cli.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install-cli.sh | bash
 
-REPO="vatsalpatel/hostbox"
+REPO="VatsalP117/hostbox"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="hostbox"
 

@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Hostbox Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install.sh | bash
 
 HOSTBOX_DIR="${HOSTBOX_DIR:-/opt/hostbox}"
-REPO="vatsalpatel/hostbox"
+REPO="VatsalP117/hostbox"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

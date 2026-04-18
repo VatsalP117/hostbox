@@ -13,13 +13,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/vatsalpatel/hostbox/internal/api/middleware"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	deploysvc "github.com/vatsalpatel/hostbox/internal/services/deployment"
-	"github.com/vatsalpatel/hostbox/internal/worker"
+	"github.com/VatsalP117/hostbox/internal/api/middleware"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	deploysvc "github.com/VatsalP117/hostbox/internal/services/deployment"
+	"github.com/VatsalP117/hostbox/internal/worker"
 )
 
 type DeploymentHandler struct {

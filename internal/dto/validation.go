@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
 
 	"github.com/go-playground/validator/v10"
 )

@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/vatsalpatel/hostbox/internal/util"
+	"github.com/VatsalP117/hostbox/internal/util"
 )
 
 const RequestIDHeader = "X-Request-ID"

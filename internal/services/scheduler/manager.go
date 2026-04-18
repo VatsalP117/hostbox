@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"log/slog"
 
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // Manager starts and coordinates all background schedulers.

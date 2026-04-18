@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 // generateDeploymentURL creates the URL for a deployment.

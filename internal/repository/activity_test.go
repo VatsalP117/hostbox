@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 func TestActivityRepository_CreateAndList(t *testing.T) {

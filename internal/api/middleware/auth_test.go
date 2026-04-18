@@ -13,12 +13,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	"github.com/vatsalpatel/hostbox/internal/services"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/services"
 )
 
 var testMigrationsFS = fstest.MapFS{

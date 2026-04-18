@@ -24,14 +24,14 @@ ARG GIT_COMMIT=unknown
 
 RUN CGO_ENABLED=1 go build \
     -ldflags "-s -w \
-        -X github.com/vatsalpatel/hostbox/internal/version.Version=${VERSION} \
-        -X github.com/vatsalpatel/hostbox/internal/version.GitCommit=${GIT_COMMIT} \
-        -X github.com/vatsalpatel/hostbox/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        -X github.com/VatsalP117/hostbox/internal/version.Version=${VERSION} \
+        -X github.com/VatsalP117/hostbox/internal/version.GitCommit=${GIT_COMMIT} \
+        -X github.com/VatsalP117/hostbox/internal/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o /hostbox ./cmd/api
 
 RUN CGO_ENABLED=1 go build \
     -ldflags "-s -w \
-        -X github.com/vatsalpatel/hostbox/internal/version.Version=${VERSION}" \
+        -X github.com/VatsalP117/hostbox/internal/version.Version=${VERSION}" \
     -o /hostbox-cli ./cmd/cli
 
 # --- Stage 3: Production image ---

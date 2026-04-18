@@ -8,7 +8,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
 )
 
 // TokenBucket implements a per-key token bucket.

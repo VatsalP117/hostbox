@@ -9,11 +9,11 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/logger"
-	"github.com/vatsalpatel/hostbox/migrations"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/logger"
+	"github.com/VatsalP117/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {

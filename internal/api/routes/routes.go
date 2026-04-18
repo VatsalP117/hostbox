@@ -3,10 +3,10 @@ package routes
 import (
 	"github.com/labstack/echo/v4"
 
-	"github.com/vatsalpatel/hostbox/internal/api/handlers"
-	"github.com/vatsalpatel/hostbox/internal/api/middleware"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	"github.com/vatsalpatel/hostbox/internal/services"
+	"github.com/VatsalP117/hostbox/internal/api/handlers"
+	"github.com/VatsalP117/hostbox/internal/api/middleware"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/services"
 )
 
 // Deps holds all handler and service dependencies needed for route registration.

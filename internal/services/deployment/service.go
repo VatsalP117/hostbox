@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	ghsvc "github.com/vatsalpatel/hostbox/internal/services/github"
-	"github.com/vatsalpatel/hostbox/internal/util"
-	"github.com/vatsalpatel/hostbox/internal/worker"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	ghsvc "github.com/VatsalP117/hostbox/internal/services/github"
+	"github.com/VatsalP117/hostbox/internal/util"
+	"github.com/VatsalP117/hostbox/internal/worker"
 )
 
 type Service struct {

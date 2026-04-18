@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	dockerpkg "github.com/vatsalpatel/hostbox/internal/platform/docker"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	dockerpkg "github.com/VatsalP117/hostbox/internal/platform/docker"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // Pool is a bounded goroutine worker pool that processes deployment build jobs.

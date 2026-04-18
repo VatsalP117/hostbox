@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 func createTestProject(t *testing.T, db *sql.DB) (*models.User, *models.Project) {

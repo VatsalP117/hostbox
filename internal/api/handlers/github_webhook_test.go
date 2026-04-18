@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"github.com/vatsalpatel/hostbox/internal/services/github"
+	"github.com/VatsalP117/hostbox/internal/services/github"
 )
 
 func TestGitHubWebhookHandler_ValidSignature(t *testing.T) {

@@ -15,11 +15,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	appmiddleware "github.com/vatsalpatel/hostbox/internal/api/middleware"
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	appmiddleware "github.com/VatsalP117/hostbox/internal/api/middleware"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // Server holds the Echo instance and dependencies.

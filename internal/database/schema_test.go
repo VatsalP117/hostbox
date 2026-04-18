@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vatsalpatel/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 func TestRealMigration(t *testing.T) {

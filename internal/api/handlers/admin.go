@@ -11,13 +11,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/dto"
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	adminsvc "github.com/vatsalpatel/hostbox/internal/services/admin"
-	"github.com/vatsalpatel/hostbox/internal/services/backup"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/dto"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	adminsvc "github.com/VatsalP117/hostbox/internal/services/admin"
+	"github.com/VatsalP117/hostbox/internal/services/backup"
 )
 
 type AdminHandler struct {

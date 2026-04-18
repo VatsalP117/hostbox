@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/vatsalpatel/hostbox/cmd/cli/internal/client"
-	"github.com/vatsalpatel/hostbox/cmd/cli/internal/config"
-	"github.com/vatsalpatel/hostbox/cmd/cli/internal/output"
+	"github.com/VatsalP117/hostbox/cmd/cli/internal/client"
+	"github.com/VatsalP117/hostbox/cmd/cli/internal/config"
+	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
 	"golang.org/x/term"
 )
 

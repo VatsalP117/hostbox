@@ -3,7 +3,7 @@ package caddy
 import (
 	"context"
 
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // DeploymentRepoAdapter adapts the DeploymentRepository to the DeploymentQuerier interface.

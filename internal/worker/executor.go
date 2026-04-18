@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vatsalpatel/hostbox/internal/config"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/platform/detect"
-	dockerpkg "github.com/vatsalpatel/hostbox/internal/platform/docker"
-	"github.com/vatsalpatel/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/config"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/detect"
+	dockerpkg "github.com/VatsalP117/hostbox/internal/platform/docker"
+	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
 // PostBuildHook is called after a build completes.

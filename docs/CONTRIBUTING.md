@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Hostbox! This guide will help you
 
 ```bash
 # Clone the repository
-git clone https://github.com/vatsalpatel/hostbox.git
+git clone https://github.com/VatsalP117/hostbox.git
 cd hostbox
 
 # Install Go dependencies

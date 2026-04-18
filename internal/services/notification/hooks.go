@@ -3,7 +3,7 @@ package notification
 import (
 	"context"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 // PostBuildNotificationHook implements worker.PostBuildHook to send notifications.

@@ -5,10 +5,10 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	apperrors "github.com/vatsalpatel/hostbox/internal/errors"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/internal/repository"
-	"github.com/vatsalpatel/hostbox/internal/services"
+	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/services"
 )
 
 type contextKey string

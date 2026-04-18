@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/vatsalpatel/hostbox/internal/database"
-	"github.com/vatsalpatel/hostbox/internal/models"
-	"github.com/vatsalpatel/hostbox/migrations"
+	"github.com/VatsalP117/hostbox/internal/database"
+	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 func setupBenchDB(b *testing.B) (*Repositories, func()) {

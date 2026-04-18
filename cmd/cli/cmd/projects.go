@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	clientpkg "github.com/vatsalpatel/hostbox/cmd/cli/internal/client"
-	"github.com/vatsalpatel/hostbox/cmd/cli/internal/output"
+	clientpkg "github.com/VatsalP117/hostbox/cmd/cli/internal/client"
+	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
 )
 
 var projectsCmd = &cobra.Command{

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vatsalpatel/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 func createTestProjectForDomain(t *testing.T, db *sql.DB) *models.Project {

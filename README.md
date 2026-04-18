@@ -2,8 +2,8 @@
 
 **Self-hostable deployment platform.** Push code, get a URL. Like Vercel, but on your own server.
 
-[![Test](https://github.com/vatsalpatel/hostbox/actions/workflows/test.yml/badge.svg)](https://github.com/vatsalpatel/hostbox/actions/workflows/test.yml)
-[![Go Report](https://goreportcard.com/badge/github.com/vatsalpatel/hostbox)](https://goreportcard.com/report/github.com/vatsalpatel/hostbox)
+[![Test](https://github.com/VatsalP117/hostbox/actions/workflows/test.yml/badge.svg)](https://github.com/VatsalP117/hostbox/actions/workflows/test.yml)
+[![Go Report](https://goreportcard.com/badge/github.com/VatsalP117/hostbox)](https://goreportcard.com/report/github.com/VatsalP117/hostbox)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -28,7 +28,7 @@
 ### One-Line Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install.sh | sudo bash
 ```
 
 This will:
@@ -40,7 +40,7 @@ This will:
 
 ```bash
 # Clone and configure
-git clone https://github.com/vatsalpatel/hostbox.git /opt/hostbox
+git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
 cd /opt/hostbox
 cp .env.production.example .env
 # Edit .env with your domain, email, and secrets
@@ -76,7 +76,7 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full technical design.
 Install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vatsalpatel/hostbox/main/scripts/install-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install-cli.sh | bash
 ```
 
 Common commands:
