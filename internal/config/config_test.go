@@ -46,6 +46,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.MaxConcurrentBuilds != 1 {
 		t.Errorf("MaxConcurrentBuilds = %d, want 1", cfg.MaxConcurrentBuilds)
 	}
+	if cfg.CaddyAPIUpstream != "localhost:8080" {
+		t.Errorf("CaddyAPIUpstream = %q, want localhost:8080", cfg.CaddyAPIUpstream)
+	}
 	if cfg.AccessTokenTTL != 15*time.Minute {
 		t.Errorf("AccessTokenTTL = %v, want 15m", cfg.AccessTokenTTL)
 	}
@@ -164,6 +167,9 @@ func TestLoadCustomPort(t *testing.T) {
 	if cfg.Port != 3000 {
 		t.Errorf("Port = %d, want 3000", cfg.Port)
 	}
+	if cfg.CaddyAPIUpstream != "localhost:3000" {
+		t.Errorf("CaddyAPIUpstream = %q, want localhost:3000", cfg.CaddyAPIUpstream)
+	}
 }
 
 func TestLoadBoolConversion(t *testing.T) {
@@ -176,6 +182,19 @@ func TestLoadBoolConversion(t *testing.T) {
 	}
 	if cfg.PlatformHTTPS != false {
 		t.Error("PlatformHTTPS should be false")
+	}
+}
+
+func TestLoadCaddyAPIUpstreamOverride(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("CADDY_API_UPSTREAM", "hostbox:8080")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.CaddyAPIUpstream != "hostbox:8080" {
+		t.Errorf("CaddyAPIUpstream = %q, want hostbox:8080", cfg.CaddyAPIUpstream)
 	}
 }
 
@@ -251,14 +270,15 @@ func TestLoadUnknownDNSProvider(t *testing.T) {
 
 func TestValidateNormalizesDNSProvider(t *testing.T) {
 	cfg := &Config{
-		JWTSecret:       "this-is-a-very-long-secret-that-is-at-least-32-chars",
-		EncryptionKey:   "6368616e676520746869732070617373776f726420746f206120736563726574",
-		DatabasePath:    "/tmp/hostbox-test.db",
-		PlatformDomain:  "example.com",
-		DashboardDomain: "hostbox.example.com",
-		Port:            8080,
-		LogLevel:        "info",
-		DNSProvider:     "none",
+		JWTSecret:        "this-is-a-very-long-secret-that-is-at-least-32-chars",
+		EncryptionKey:    "6368616e676520746869732070617373776f726420746f206120736563726574",
+		DatabasePath:     "/tmp/hostbox-test.db",
+		PlatformDomain:   "example.com",
+		DashboardDomain:  "hostbox.example.com",
+		Port:             8080,
+		LogLevel:         "info",
+		DNSProvider:      "none",
+		CaddyAPIUpstream: "localhost:8080",
 	}
 
 	if err := cfg.Validate(); err != nil {

@@ -1,25 +1,9 @@
-# Caddyfile - Main configuration
-# This file is mounted read-only. Dynamic config is in Caddyfile.d/
-
 {
-    # Admin API for dynamic config
-    admin off
+	admin :2019
 }
 
 :80 {
-    # Health check endpoint
-    handle /health {
-        respond "OK"
-    }
-
-    # API server proxy
-    handle /api/* {
-        reverse_proxy localhost:8080
-    }
-
-    # ACME HTTP challenge
-    handle /.well-known/acme-challenge/* {
-        root * /var/www/caddy
-        file_server
-    }
+	handle /health {
+		respond "OK"
+	}
 }

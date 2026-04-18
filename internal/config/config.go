@@ -56,6 +56,7 @@ type Config struct {
 
 	// Caddy
 	CaddyAdminURL     string
+	CaddyAPIUpstream  string
 	ACMEEmail         string
 	DNSProvider       string
 	DNSProviderConfig string
@@ -117,6 +118,7 @@ func Load() (*Config, error) {
 		CacheDir:            getEnv("CACHE_DIR", "/cache"),
 		BackupDir:           getEnv("BACKUP_DIR", "/app/data/backups"),
 		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
+		CaddyAPIUpstream:    getEnv("CADDY_API_UPSTREAM", ""),
 		ACMEEmail:           getEnv("ACME_EMAIL", ""),
 		DNSProvider:         getEnv("DNS_PROVIDER", ""),
 		DNSProviderConfig:   getEnv("DNS_PROVIDER_CONFIG", ""),
@@ -143,6 +145,9 @@ func Load() (*Config, error) {
 
 	cfg.DNSProvider = normalizeDNSProvider(cfg.DNSProvider)
 	cfg.DNSProviderConfig = strings.TrimSpace(cfg.DNSProviderConfig)
+	if cfg.CaddyAPIUpstream == "" {
+		cfg.CaddyAPIUpstream = fmt.Sprintf("localhost:%d", cfg.Port)
+	}
 	if cfg.DNSProviderConfig == "" {
 		dnsProviderConfig, err := buildDNSProviderConfig(cfg.DNSProvider)
 		if err != nil {
@@ -209,6 +214,9 @@ func (c *Config) Validate() error {
 
 	if c.DatabasePath == "" {
 		errs = append(errs, "DATABASE_PATH must not be empty")
+	}
+	if strings.TrimSpace(c.CaddyAPIUpstream) == "" {
+		errs = append(errs, "CADDY_API_UPSTREAM must not be empty")
 	}
 
 	if len(errs) > 0 {

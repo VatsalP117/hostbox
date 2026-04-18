@@ -20,8 +20,8 @@ func TestBuildFullConfig_PlatformRoute(t *testing.T) {
 	b := newTestBuilder()
 	config := b.BuildFullConfig(nil, nil)
 
-	if config.Admin.Listen != "localhost:2019" {
-		t.Errorf("admin listen = %q, want localhost:2019", config.Admin.Listen)
+	if config.Admin.Listen != ":2019" {
+		t.Errorf("admin listen = %q, want :2019", config.Admin.Listen)
 	}
 
 	servers := config.Apps.HTTP.Servers
@@ -312,7 +312,7 @@ func TestBuildFullConfig_JSONMarshal(t *testing.T) {
 		t.Fatalf("failed to unmarshal config: %v", err)
 	}
 
-	if decoded.Admin.Listen != "localhost:2019" {
+	if decoded.Admin.Listen != ":2019" {
 		t.Error("roundtrip failed for admin listen")
 	}
 }
