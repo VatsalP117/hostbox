@@ -28,6 +28,23 @@ detect_os() {
     fi
 }
 
+detect_docker_gid() {
+    if [ ! -S /var/run/docker.sock ]; then
+        DOCKER_GID=998
+        warn "Docker socket not found at /var/run/docker.sock; defaulting DOCKER_GID=${DOCKER_GID}"
+        return
+    fi
+
+    DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || stat -f '%g' /var/run/docker.sock 2>/dev/null || true)"
+    if [ -z "${DOCKER_GID}" ]; then
+        DOCKER_GID=998
+        warn "Could not detect Docker socket group; defaulting DOCKER_GID=${DOCKER_GID}"
+        return
+    fi
+
+    ok "Detected Docker socket group: ${DOCKER_GID}"
+}
+
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
         fatal "This script must be run as root (or with sudo)"
@@ -150,6 +167,7 @@ ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
 # Database
 DATABASE_PATH=/app/data/hostbox.db
+DOCKER_GID=${DOCKER_GID}
 
 # GitHub App (configure after installation via setup wizard)
 GITHUB_APP_ID=
@@ -186,7 +204,7 @@ wait_for_health() {
     local attempt=0
 
     while [ $attempt -lt $max_attempts ]; do
-        if curl -sf http://localhost:8080/api/v1/health &>/dev/null; then
+        if docker compose -f "${HOSTBOX_DIR}/docker-compose.yml" exec -T hostbox wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/api/v1/health &>/dev/null; then
             ok "Hostbox is ready!"
             return 0
         fi
@@ -249,6 +267,7 @@ main() {
     check_root
     detect_os
     check_prerequisites
+    detect_docker_gid
     setup_directory
     download_files
     configure

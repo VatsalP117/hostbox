@@ -1,239 +1,268 @@
 # Self-Hosting Guide
 
-Complete guide to self-hosting Hostbox on your own server.
+Hostbox is designed to run on a Linux VM with Docker and a domain you control.
+
+The default routing model is:
+
+- `hostbox.example.com` -> dashboard
+- `example.com` -> dashboard
+- `project.example.com` -> production deployment
+- `project-branch.example.com` and `project-suffix.example.com` -> preview deployments
+
+That means the minimum DNS setup is still:
+
+```text
+A     example.com    -> YOUR_SERVER_IP
+A     *.example.com  -> YOUR_SERVER_IP
+```
+
+If you choose a dashboard host outside `*.example.com`, add a separate record for that host too.
 
 ## Requirements
 
 | Resource | Minimum | Recommended |
-|----------|---------|-------------|
+| --- | --- | --- |
+| CPU | 1 vCPU | 2 vCPU |
 | RAM | 512 MB | 1 GB+ |
 | Disk | 10 GB | 20 GB+ |
-| CPU | 1 vCPU | 2 vCPU |
 | OS | Ubuntu 22.04+ / Debian 12+ | Ubuntu 24.04 |
 
 You also need:
-- A **domain name** (e.g., `example.com`)
-- **Docker** and **Docker Compose** installed
-- Ports **80** and **443** open
 
-## DNS Setup
+- Docker Engine and the Docker Compose plugin
+- ports `80/tcp`, `443/tcp`, and `443/udp` open to the internet
+- a public IPv4 address
+- a GitHub App only if you want git-push deployments
 
-Point your domain and wildcard subdomain to your server's IP:
+## Before you install
 
-```
-A     example.com       → YOUR_SERVER_IP
-A     *.example.com     → YOUR_SERVER_IP
-```
+1. Point your apex and wildcard DNS records at the VM.
+2. Keep Cloudflare wildcard records set to **DNS only** if you use Cloudflare.
+3. Decide whether you want wildcard certificates up front:
+   - `DNS_PROVIDER=none`: Caddy issues certificates per host on demand with HTTP-01.
+   - `DNS_PROVIDER=cloudflare|route53|digitalocean`: Caddy can request wildcard certificates with DNS-01.
 
-With the default configuration:
+Without a DNS provider, new subdomains still work, but each hostname must be publicly reachable on ports 80 and 443 when it is first requested.
 
-- `hostbox.example.com` serves the dashboard
-- `example.com` also serves the dashboard, so the apex record is no longer unused
-- project, branch, and preview hosts stay under the same wildcard zone
+## Automated install
 
-### Provider-Specific Guides
-
-**Cloudflare**: Add both A records. Set proxy status to "DNS only" (grey cloud) for the wildcard record to allow direct SSL.
-
-**DigitalOcean**: In the Networking panel, add both A records pointing to your droplet IP.
-
-**Namecheap**: In Advanced DNS, add both A records. Use `@` for the root and `*` for the wildcard.
-
-## Installation
-
-### Automated (Recommended)
+The installer is the easiest path on a fresh Linux VM:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install.sh | sudo bash
 ```
 
-The script will:
-1. Install Docker if needed
-2. Ask for your domain and SSL email
-3. Optionally ask for wildcard DNS-provider credentials
-4. Start Hostbox
+It will:
 
-### Manual
+1. install Docker if needed
+2. ask for your root domain, dashboard host, ACME email, and optional DNS-provider credentials
+3. generate secrets and a `.env`
+4. detect the Docker socket group and wire it into compose so build containers can start
+5. start Hostbox and print the dashboard URL
+
+After the install finishes, open `https://hostbox.example.com` and create the first admin account.
+
+## Manual install
+
+Use this if you want to review everything yourself.
 
 ```bash
-# Create directory
 sudo mkdir -p /opt/hostbox
 cd /opt/hostbox
 
-# Download compose file
 curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/docker-compose.yml -o docker-compose.yml
 
-# Create environment file
-cat > .env << 'EOF'
+JWT_SECRET="$(openssl rand -hex 32)"
+ENCRYPTION_KEY="$(openssl rand -hex 32)"
+GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
+
+cat > .env <<EOF
 PLATFORM_DOMAIN=example.com
 DASHBOARD_DOMAIN=hostbox.example.com
 PLATFORM_HTTPS=true
-JWT_SECRET=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
+PLATFORM_NAME=Hostbox
+
+JWT_SECRET=${JWT_SECRET}
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
+GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+
+DATABASE_PATH=/app/data/hostbox.db
+DOCKER_GID=${DOCKER_GID}
+
 ACME_EMAIL=admin@example.com
+DNS_PROVIDER=none
+
 LOG_LEVEL=info
 EOF
 
-# Start
 docker compose up -d
+```
+
+Then verify the API from inside the container:
+
+```bash
+docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/health
+docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/setup/status
 ```
 
 ## Configuration
 
-All configuration is done via environment variables in the `.env` file:
+Hostbox reads runtime configuration from `.env`.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PLATFORM_DOMAIN` | Your domain (required) | — |
-| `DASHBOARD_DOMAIN` | Dashboard host | `hostbox.{PLATFORM_DOMAIN}` |
-| `PLATFORM_HTTPS` | Enable HTTPS | `true` |
-| `PLATFORM_NAME` | Display name | `Hostbox` |
-| `JWT_SECRET` | JWT signing key (required) | — |
-| `ENCRYPTION_KEY` | Env var encryption key (required) | — |
-| `ACME_EMAIL` | Email for Let's Encrypt | — |
-| `DNS_PROVIDER` | Wildcard certificate provider (`none`, `cloudflare`, `route53`, `digitalocean`) | `none` |
-| `LOG_LEVEL` | Log level: debug/info/warn/error | `info` |
-| `GITHUB_APP_ID` | GitHub App ID | — |
-| `GITHUB_APP_SLUG` | GitHub App slug | — |
-| `GITHUB_APP_PEM` | GitHub App private key (PEM) | — |
-| `GITHUB_WEBHOOK_SECRET` | GitHub webhook secret | — |
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `PLATFORM_DOMAIN` | Yes | Root domain used for production and preview hosts. |
+| `DASHBOARD_DOMAIN` | No | Defaults to `hostbox.${PLATFORM_DOMAIN}` when blank. |
+| `PLATFORM_HTTPS` | No | Keep `true` for real deployments. |
+| `PLATFORM_NAME` | No | UI display name. |
+| `JWT_SECRET` | Yes | At least 32 characters. |
+| `ENCRYPTION_KEY` | Yes | Use `openssl rand -hex 32`. |
+| `DATABASE_PATH` | Yes | Default Docker path is `/app/data/hostbox.db`. |
+| `DOCKER_GID` | Yes for Docker installs | Group ID of `/var/run/docker.sock` on the host. Needed for build access from inside the container. |
+| `ACME_EMAIL` | Yes | Email used for Let's Encrypt / ACME. |
+| `DNS_PROVIDER` | No | `none`, `cloudflare`, `route53`, or `digitalocean`. |
+| `LOG_LEVEL` | No | `debug`, `info`, `warn`, or `error`. |
+| `GITHUB_APP_ID` | No | Required only for GitHub App deployments. |
+| `GITHUB_APP_SLUG` | No | Required only for GitHub App deployments. |
+| `GITHUB_APP_PEM` | No | Required only for GitHub App deployments. |
+| `GITHUB_WEBHOOK_SECRET` | No | Required only for GitHub App deployments. |
 
-### DNS Provider Configuration
+### DNS provider credentials
 
-If you want Hostbox to request a wildcard certificate up front, configure a DNS provider. If `DNS_PROVIDER=none`, Caddy falls back to individual certificates for the apex, dashboard, and generated subdomains.
+**Cloudflare**
 
-**Cloudflare**:
 ```env
 DNS_PROVIDER=cloudflare
 CF_API_TOKEN=your-cloudflare-api-token
 ```
 
-**AWS Route53**:
+**Route53**
+
 ```env
 DNS_PROVIDER=route53
-AWS_ACCESS_KEY_ID=your-key
-AWS_SECRET_ACCESS_KEY=your-secret
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
 AWS_HOSTED_ZONE_ID=your-hosted-zone-id
 ```
 
-**DigitalOcean**:
+**DigitalOcean**
+
 ```env
 DNS_PROVIDER=digitalocean
-DO_AUTH_TOKEN=your-token
+DO_AUTH_TOKEN=your-digitalocean-token
 ```
 
-## GitHub App Setup
+## Networking model
 
-To enable git-push deployments:
+In the production compose file:
 
-1. Go to **GitHub Settings** → **Developer settings** → **GitHub Apps** → **New GitHub App**
-2. Set the following:
-   - **Homepage URL**: `https://hostbox.your-domain.com`
-   - **Webhook URL**: `https://hostbox.your-domain.com/api/v1/github/webhook`
-   - **Webhook secret**: Use the `GITHUB_WEBHOOK_SECRET` from your `.env`
-3. **Permissions**:
-   - Repository: Contents (Read), Pull requests (Read & Write), Commit statuses (Read & Write)
-   - Organization: Members (Read)
-4. **Events**: Push, Pull request, Installation
-5. After creating, note the **App ID** and generate a **Private key**
-6. Add to your `.env`:
-   ```env
-   GITHUB_APP_ID=12345
-   GITHUB_APP_SLUG=my-hostbox
-   GITHUB_APP_PEM="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
-   ```
-7. Restart Hostbox: `docker compose restart`
+- only Caddy publishes ports `80` and `443`
+- the Hostbox API stays internal on the Docker network
+- Caddy talks to Hostbox at `hostbox:8080`
+- Hostbox talks to the Caddy admin API at `http://caddy:2019`
 
-## Firewall
+So from the VM host, use `docker compose exec ...` for direct API health checks instead of `curl http://localhost:8080/...`.
 
-Ensure these ports are open:
+## GitHub App setup
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 80 | TCP | HTTP (redirects to HTTPS) |
-| 443 | TCP/UDP | HTTPS + HTTP/3 |
-| 22 | TCP | SSH (management) |
+If you want repository-driven deployments:
+
+1. Create a GitHub App at <https://github.com/settings/apps>.
+2. Use:
+   - **Homepage URL**: `https://hostbox.example.com`
+   - **Webhook URL**: `https://hostbox.example.com/api/v1/github/webhook`
+3. Grant:
+   - Repository permissions: Contents `Read`, Pull requests `Read & write`, Commit statuses `Read & write`
+   - Organization permission: Members `Read`
+4. Subscribe to `Push`, `Pull request`, and `Installation` events.
+5. Add the generated values to `.env`.
+6. Restart Hostbox:
 
 ```bash
-# UFW example
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 443/udp
-sudo ufw allow 22/tcp
-sudo ufw enable
-```
-
-## Backup & Restore
-
-### Create Backup
-
-```bash
-# Via CLI
-hostbox admin backup
-
-# Via API
-curl -X POST https://hostbox.your-domain.com/api/v1/admin/backups \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Backups are stored in `/opt/hostbox/data/backups/`.
-
-### Restore
-
-```bash
-# Via CLI
-hostbox admin restore /path/to/backup.db.gz
-
-# Via API
-curl -X POST https://hostbox.your-domain.com/api/v1/admin/backups/restore \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"path": "/app/data/backups/hostbox-20240115-103000.db.gz"}'
-```
-
-## Updating
-
-```bash
-cd /opt/hostbox
-docker compose pull
 docker compose up -d
+```
+
+## Operations
+
+### View logs
+
+```bash
+docker compose logs -f hostbox
+docker compose logs -f caddy
+```
+
+### Update
+
+```bash
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+### Stop
+
+```bash
+docker compose down
+```
+
+### Backups
+
+Backups are written under `/app/data/backups` inside the container, which maps to the `hostbox_data` volume.
+
+```bash
+docker compose exec -T hostbox hostbox-cli admin backup
 ```
 
 ## Troubleshooting
 
-### Hostbox won't start
+### Hostbox container keeps restarting
+
+This is usually a bad or incomplete `.env`.
 
 ```bash
-# Check logs
-docker compose logs hostbox
-
-# Check health
-curl http://localhost:8080/api/v1/health
+docker compose logs --tail=100 hostbox
 ```
 
-### SSL certificate issues
+Common startup errors:
+
+- `JWT_SECRET must be at least 32 characters`
+- `ENCRYPTION_KEY is required`
+- `PLATFORM_DOMAIN is required`
+
+### Health checks
 
 ```bash
-# Check Caddy logs
-docker compose logs caddy
-
-# Verify DNS
-dig +short your-domain.com
-dig +short *.your-domain.com
+docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/health
+docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/setup/status
+docker compose exec -T caddy wget --no-verbose --tries=1 -O- http://127.0.0.1:2019/config/
 ```
 
-### Build failures
+### Docker build access is disabled
+
+If Hostbox logs `docker client not available` or `permission denied` for `/var/run/docker.sock`, check the socket group:
 
 ```bash
-# Check Docker socket access
-docker compose exec hostbox ls -la /var/run/docker.sock
-
-# Check available disk space
-df -h
+stat -c '%g %n' /var/run/docker.sock
+grep '^DOCKER_GID=' .env
+docker compose exec -T hostbox sh -lc 'id && ls -ln /var/run/docker.sock'
 ```
 
-### Database issues
+On Linux, `DOCKER_GID` in `.env` should match the socket's group ID on the host. After changing it:
 
 ```bash
-# Check database integrity
-docker compose exec hostbox sqlite3 /app/data/hostbox.db "PRAGMA integrity_check;"
+docker compose up -d
 ```
+
+### TLS or certificate issues
+
+```bash
+docker compose logs --tail=200 caddy
+dig +short example.com
+dig +short hostbox.example.com
+```
+
+If you are using Cloudflare with wildcard DNS, make sure the wildcard record is **DNS only**, not proxied.
+
+### Dashboard host is outside the root zone
+
+If `DASHBOARD_DOMAIN` is not under `PLATFORM_DOMAIN`, the wildcard record will not cover it. Add a separate `A` or `AAAA` record for that host.

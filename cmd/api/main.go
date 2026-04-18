@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -101,7 +100,7 @@ func main() {
 		DashboardDomain: cfg.DashboardDomain,
 		PlatformHTTPS:   cfg.PlatformHTTPS,
 		ACMEEmail:       cfg.ACMEEmail,
-		APIUpstream:     fmt.Sprintf("localhost:%d", cfg.Port),
+		APIUpstream:     cfg.CaddyAPIUpstream,
 		DeploymentRoot:  cfg.DeploymentsDir,
 		DNSProvider:     cfg.DNSProvider,
 		DNSProviderConf: dnsProviderConf,

@@ -51,7 +51,7 @@ func (b *ConfigBuilder) BuildFullConfig(
 	}
 
 	config := &CaddyConfig{
-		Admin: &CaddyAdmin{Listen: "localhost:2019"},
+		Admin: &CaddyAdmin{Listen: ":2019"},
 		Apps: &CaddyApps{
 			HTTP: &CaddyHTTPApp{
 				Servers: map[string]*CaddyServer{

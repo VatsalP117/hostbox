@@ -10,6 +10,8 @@ services:
       - go_mod_cache:/go/pkg/mod
       - hostbox_dev_data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "${DOCKER_GID:-998}"
     ports:
       - "8080:8080"
     environment:
@@ -35,7 +37,7 @@ services:
     volumes:
       - caddy_dev_data:/data
       - caddy_dev_config:/config
-    command: caddy run --resume
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --resume
     networks:
       - hostbox-dev
 
