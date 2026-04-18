@@ -5,9 +5,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 )
 
 // generateDeploymentURL creates the URL for a deployment.
@@ -15,34 +15,10 @@ func generateDeploymentURL(project *models.Project, deployment *models.Deploymen
 	scheme := "https"
 
 	if deployment.IsProduction {
-		return fmt.Sprintf("%s://%s.%s", scheme, project.Slug, platformDomain)
+		return fmt.Sprintf("%s://%s", scheme, hostnames.ProductionHost(project.Slug, platformDomain))
 	}
 
-	shortSHA := deployment.CommitSHA
-	if len(shortSHA) > 8 {
-		shortSHA = shortSHA[:8]
-	}
-
-	return fmt.Sprintf("%s://%s-%s.%s", scheme, project.Slug, shortSHA, platformDomain)
-}
-
-// slugify converts a string to a URL-safe slug.
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	s = strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
-			return r
-		}
-		return '-'
-	}, s)
-	for strings.Contains(s, "--") {
-		s = strings.ReplaceAll(s, "--", "-")
-	}
-	s = strings.Trim(s, "-")
-	if len(s) > 40 {
-		s = s[:40]
-	}
-	return s
+	return fmt.Sprintf("%s://%s", scheme, hostnames.PreviewHost(project.Slug, deployment.ID, platformDomain))
 }
 
 // copyDir recursively copies src to dst. Returns total bytes copied.

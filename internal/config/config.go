@@ -141,6 +141,15 @@ func Load() (*Config, error) {
 		},
 	}
 
+	cfg.DNSProvider = normalizeDNSProvider(cfg.DNSProvider)
+	if cfg.DNSProviderConfig == "" {
+		dnsProviderConfig, err := buildDNSProviderConfig(cfg.DNSProvider)
+		if err != nil {
+			return nil, err
+		}
+		cfg.DNSProviderConfig = dnsProviderConfig
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -188,6 +197,11 @@ func (c *Config) Validate() error {
 	validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 	if !validLogLevels[strings.ToLower(c.LogLevel)] {
 		errs = append(errs, "LOG_LEVEL must be one of: debug, info, warn, error")
+	}
+
+	validDNSProviders := map[string]bool{"": true, "cloudflare": true, "route53": true, "digitalocean": true}
+	if !validDNSProviders[c.DNSProvider] {
+		errs = append(errs, "DNS_PROVIDER must be one of: cloudflare, route53, digitalocean, none")
 	}
 
 	if c.DatabasePath == "" {
@@ -271,6 +285,29 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
+}
+
+func normalizeDNSProvider(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "none" {
+		return ""
+	}
+	return provider
+}
+
+func buildDNSProviderConfig(provider string) (string, error) {
+	switch provider {
+	case "":
+		return "", nil
+	case "cloudflare":
+		return `{"name":"cloudflare","api_token":"{env.CF_API_TOKEN}"}`, nil
+	case "route53":
+		return `{"name":"route53","hosted_zone_id":"{env.AWS_HOSTED_ZONE_ID}"}`, nil
+	case "digitalocean":
+		return `{"name":"digitalocean","api_token":"{env.DO_AUTH_TOKEN}"}`, nil
+	default:
+		return "", fmt.Errorf("unsupported DNS_PROVIDER %q", provider)
+	}
 }
 
 // MustValidEncryptionKey is a helper for generating a valid key in tests.

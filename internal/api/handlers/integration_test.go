@@ -59,6 +59,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 7 * 24 * time.Hour,
 		PlatformDomain:  "test.example.com",
+		DashboardDomain: "hostbox.test.example.com",
 		PlatformHTTPS:   false,
 		DeploymentsDir:  dir + "/deployments",
 		LogsDir:         dir + "/logs",
@@ -105,7 +106,15 @@ func setupTestEnv(t *testing.T) *testEnv {
 	healthHandler := handlers.NewHealthHandler(startTime, db)
 	setupHandler := handlers.NewSetupHandler(authService, repos.User, repos.Settings, repos.Activity, false, logger)
 	authHandler := handlers.NewAuthHandler(authService, false, logger)
-	projectHandler := handlers.NewProjectHandler(repos.Project, repos.Deployment, repos.Domain, repos.Activity, logger)
+	projectHandler := handlers.NewProjectHandler(
+		repos.Project,
+		repos.Deployment,
+		repos.Domain,
+		repos.Activity,
+		cfg.PlatformDomain,
+		cfg.DashboardDomain,
+		logger,
+	)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, logger)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, "test.example.com", logger)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, logger)
@@ -207,6 +216,45 @@ func TestSetup_CreatesAdminUser(t *testing.T) {
 	}
 	if resp.AccessToken == "" {
 		t.Error("access token should not be empty")
+	}
+}
+
+func TestSetup_CreatesRefreshSession(t *testing.T) {
+	env := setupTestEnv(t)
+
+	body := jsonBody(map[string]string{
+		"email":    "admin@test.com",
+		"password": "supersecret123",
+	})
+	rec := doRequest(env.echo, http.MethodPost, "/api/v1/setup", body, nil)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("setup failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	var refreshCookie *http.Cookie
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == "hostbox_refresh" {
+			refreshCookie = cookie
+			break
+		}
+	}
+	if refreshCookie == nil || refreshCookie.Value == "" {
+		t.Fatal("expected refresh cookie from setup response")
+	}
+
+	refreshReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	refreshReq.AddCookie(refreshCookie)
+	refreshRec := httptest.NewRecorder()
+	env.echo.ServeHTTP(refreshRec, refreshReq)
+
+	if refreshRec.Code != http.StatusOK {
+		t.Fatalf("refresh after setup: %d %s", refreshRec.Code, refreshRec.Body.String())
+	}
+
+	var tokenResp dto.TokenResponse
+	mustDecode(t, refreshRec, &tokenResp)
+	if tokenResp.AccessToken == "" {
+		t.Fatal("expected new access token from refresh")
 	}
 }
 
@@ -381,6 +429,40 @@ func TestProjectCRUD(t *testing.T) {
 	rec = doRequest(env.echo, http.MethodGet, "/api/v1/projects/"+projectID, nil, headers)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("get deleted: status = %d, want 404", rec.Code)
+	}
+}
+
+func TestProjectCreate_RejectsDashboardSlug(t *testing.T) {
+	env := setupTestEnv(t)
+	token := setupAdmin(t, env)
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	body := jsonBody(map[string]string{"name": "Hostbox"})
+	rec := doRequest(env.echo, http.MethodPost, "/api/v1/projects", body, headers)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400, body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestProjectCreate_NormalizesLongSlug(t *testing.T) {
+	env := setupTestEnv(t)
+	token := setupAdmin(t, env)
+	headers := map[string]string{"Authorization": "Bearer " + token}
+
+	body := jsonBody(map[string]string{
+		"name": "This Project Name Is Wildly Longer Than A Safe DNS Label And Should Still Produce A Stable Slug",
+	})
+	rec := doRequest(env.echo, http.MethodPost, "/api/v1/projects", body, headers)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201, body: %s", rec.Code, rec.Body.String())
+	}
+
+	var wrapper struct {
+		Project dto.ProjectResponse `json:"project"`
+	}
+	mustDecode(t, rec, &wrapper)
+	if len(wrapper.Project.Slug) > 54 {
+		t.Fatalf("slug length = %d, want <= 54", len(wrapper.Project.Slug))
 	}
 }
 

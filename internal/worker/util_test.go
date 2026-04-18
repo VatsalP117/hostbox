@@ -10,7 +10,7 @@ import (
 
 func TestGenerateDeploymentURL_Production(t *testing.T) {
 	project := &models.Project{Slug: "my-app"}
-	deployment := &models.Deployment{IsProduction: true, CommitSHA: "abc123def456"}
+	deployment := &models.Deployment{ID: "deploy12345678", IsProduction: true, CommitSHA: "abc123def456"}
 
 	url := generateDeploymentURL(project, deployment, "example.com")
 	expected := "https://my-app.example.com"
@@ -21,46 +21,23 @@ func TestGenerateDeploymentURL_Production(t *testing.T) {
 
 func TestGenerateDeploymentURL_Preview(t *testing.T) {
 	project := &models.Project{Slug: "my-app"}
-	deployment := &models.Deployment{IsProduction: false, CommitSHA: "abc123def456789"}
+	deployment := &models.Deployment{ID: "deploy12345678", IsProduction: false, CommitSHA: "abc123def456789"}
 
 	url := generateDeploymentURL(project, deployment, "example.com")
-	expected := "https://my-app-abc123de.example.com"
+	expected := "https://my-app-deploy12.example.com"
 	if url != expected {
 		t.Errorf("got %s, want %s", url, expected)
 	}
 }
 
-func TestGenerateDeploymentURL_ShortSHA(t *testing.T) {
+func TestGenerateDeploymentURL_PreviewSanitizesDeploymentID(t *testing.T) {
 	project := &models.Project{Slug: "app"}
-	deployment := &models.Deployment{IsProduction: false, CommitSHA: "ab12"}
+	deployment := &models.Deployment{ID: "Deploy_ABC123456", IsProduction: false, CommitSHA: "ab12"}
 
 	url := generateDeploymentURL(project, deployment, "host.io")
-	expected := "https://app-ab12.host.io"
+	expected := "https://app-deploy-a.host.io"
 	if url != expected {
 		t.Errorf("got %s, want %s", url, expected)
-	}
-}
-
-func TestSlugify(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"Hello World", "hello-world"},
-		{"My--App", "my-app"},
-		{"--leading-and-trailing--", "leading-and-trailing"},
-		{"UPPER_CASE_123", "upper-case-123"},
-		{"special!@#chars", "special-chars"},
-		{"a", "a"},
-		{"", ""},
-		{"aaaaaaaaaa-bbbbbbbbbb-cccccccccc-dddddddddd-eeeeeeeeee", "aaaaaaaaaa-bbbbbbbbbb-cccccccccc-ddddddd"},
-	}
-
-	for _, tt := range tests {
-		got := slugify(tt.input)
-		if got != tt.expected {
-			t.Errorf("slugify(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
 	}
 }
 

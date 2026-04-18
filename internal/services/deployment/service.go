@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	ghsvc "github.com/VatsalP117/hostbox/internal/services/github"
 	"github.com/VatsalP117/hostbox/internal/util"
@@ -135,7 +136,7 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 	}
 
 	now := time.Now().UTC()
-	deploymentURL := fmt.Sprintf("https://%s.%s", project.Slug, s.platformDomain)
+	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	deployment := &models.Deployment{
 		ID:                util.NewID(),
 		ProjectID:         projectID,
@@ -182,7 +183,7 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 	}
 
 	now := time.Now().UTC()
-	deploymentURL := fmt.Sprintf("https://%s.%s", project.Slug, s.platformDomain)
+	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	promoted := &models.Deployment{
 		ID:                util.NewID(),
 		ProjectID:         projectID,

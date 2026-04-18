@@ -12,8 +12,8 @@ import (
 	"github.com/VatsalP117/hostbox/internal/dto"
 	apperrors "github.com/VatsalP117/hostbox/internal/errors"
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 	"github.com/VatsalP117/hostbox/internal/repository"
-	"github.com/VatsalP117/hostbox/internal/util"
 )
 
 type ProjectHandler struct {
@@ -21,7 +21,11 @@ type ProjectHandler struct {
 	deploymentRepo *repository.DeploymentRepository
 	domainRepo     *repository.DomainRepository
 	activityRepo   *repository.ActivityRepository
-	logger         *slog.Logger
+	config         struct {
+		PlatformDomain  string
+		DashboardDomain string
+	}
+	logger *slog.Logger
 }
 
 func NewProjectHandler(
@@ -29,6 +33,8 @@ func NewProjectHandler(
 	deploymentRepo *repository.DeploymentRepository,
 	domainRepo *repository.DomainRepository,
 	activityRepo *repository.ActivityRepository,
+	platformDomain string,
+	dashboardDomain string,
 	logger *slog.Logger,
 ) *ProjectHandler {
 	return &ProjectHandler{
@@ -36,7 +42,14 @@ func NewProjectHandler(
 		deploymentRepo: deploymentRepo,
 		domainRepo:     domainRepo,
 		activityRepo:   activityRepo,
-		logger:         logger,
+		config: struct {
+			PlatformDomain  string
+			DashboardDomain string
+		}{
+			PlatformDomain:  platformDomain,
+			DashboardDomain: dashboardDomain,
+		},
+		logger: logger,
 	}
 }
 
@@ -50,7 +63,10 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	}
 
 	user := middleware.GetUser(c)
-	slug := util.Slugify(req.Name)
+	slug := hostnames.NormalizeProjectSlug(req.Name)
+	if err := h.validateProjectSlug(slug); err != nil {
+		return err
+	}
 
 	project := &models.Project{
 		OwnerID:              user.ID,
@@ -162,7 +178,10 @@ func (h *ProjectHandler) Update(c echo.Context) error {
 
 	if req.Name != nil {
 		project.Name = *req.Name
-		project.Slug = util.Slugify(*req.Name)
+		project.Slug = hostnames.NormalizeProjectSlug(*req.Name)
+		if err := h.validateProjectSlug(project.Slug); err != nil {
+			return err
+		}
 	}
 	if req.BuildCommand != nil {
 		project.BuildCommand = req.BuildCommand
@@ -241,6 +260,16 @@ func (h *ProjectHandler) logActivity(c echo.Context, userID *string, action, res
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 	})
+}
+
+func (h *ProjectHandler) validateProjectSlug(slug string) error {
+	if hostnames.CollidesWithDashboard(slug, h.config.PlatformDomain, h.config.DashboardDomain) {
+		return apperrors.NewValidationError("Validation failed", []apperrors.FieldError{{
+			Field:   "name",
+			Message: "resolves to a reserved platform subdomain",
+		}})
+	}
+	return nil
 }
 
 func toProjectResponse(p *models.Project) dto.ProjectResponse {

@@ -192,6 +192,48 @@ func TestLoadDurationConversion(t *testing.T) {
 	}
 }
 
+func TestLoadDNSProviderNone(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "none")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DNSProvider != "" {
+		t.Fatalf("DNSProvider = %q, want empty", cfg.DNSProvider)
+	}
+	if cfg.DNSProviderConfig != "" {
+		t.Fatalf("DNSProviderConfig = %q, want empty", cfg.DNSProviderConfig)
+	}
+}
+
+func TestLoadDNSProviderConfigDerived(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "cloudflare")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DNSProvider != "cloudflare" {
+		t.Fatalf("DNSProvider = %q, want cloudflare", cfg.DNSProvider)
+	}
+	expected := `{"name":"cloudflare","api_token":"{env.CF_API_TOKEN}"}`
+	if cfg.DNSProviderConfig != expected {
+		t.Fatalf("DNSProviderConfig = %q, want %q", cfg.DNSProviderConfig, expected)
+	}
+}
+
+func TestLoadUnknownDNSProvider(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DNS_PROVIDER", "unsupported")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() should fail for unsupported DNS provider")
+	}
+}
+
 func TestBaseURL(t *testing.T) {
 	cfg := &Config{PlatformDomain: "example.com", PlatformHTTPS: true}
 	if cfg.BaseURL() != "https://example.com" {
