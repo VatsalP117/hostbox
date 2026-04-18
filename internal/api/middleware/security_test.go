@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/labstack/echo/v4"
 )
 
 func TestRateLimiter_AllowsWithinLimit(t *testing.T) {
@@ -137,7 +137,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestCORS(t *testing.T) {
 	e := echo.New()
-	handler := CORS("hostbox.example.com", true)(func(c echo.Context) error {
+	handler := CORS([]string{"https://hostbox.example.com"})(func(c echo.Context) error {
 		return c.NoContent(200)
 	})
 
@@ -156,6 +156,27 @@ func TestCORS(t *testing.T) {
 	}
 	if rec.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Error("credentials should be allowed")
+	}
+}
+
+func TestCORS_BlocksUnknownOrigin(t *testing.T) {
+	e := echo.New()
+	handler := CORS([]string{"https://hostbox.example.com"})(func(c echo.Context) error {
+		return c.NoContent(200)
+	})
+
+	req := httptest.NewRequest(http.MethodOptions, "/", nil)
+	req.Header.Set("Origin", "https://evil.example.com")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler(c); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("origin should be empty for disallowed origin, got %q", rec.Header().Get("Access-Control-Allow-Origin"))
 	}
 }
 

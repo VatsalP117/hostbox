@@ -14,10 +14,10 @@ This is a problem. The root domain is the most valuable piece of real estate —
 
 ### What We Want
 
-Move the dashboard to a dedicated subdomain (defaulting to `dash.`) so the root domain is freed up:
+Move the dashboard to a dedicated subdomain (defaulting to `hostbox.`) so the root domain is freed up:
 
 ```
-dash.algomind.com          →  Hostbox dashboard (control panel + API)
+hostbox.algomind.com          →  Hostbox dashboard (control panel + API)
 algomind.com               →  Not used by Hostbox unless a project explicitly claims it
 *.algomind.com             →  All project deployments as before
 ```
@@ -44,9 +44,9 @@ The user can never put their own site at `algomind.com`. It's permanently occupi
 ```
 User installs Hostbox → sets domain to algomind.com
 DNS:  A  algomind.com       → 1.2.3.4   (root — available for projects)
-      A  *.algomind.com     → 1.2.3.4   (covers dash.algomind.com + project subdomains)
+      A  *.algomind.com     → 1.2.3.4   (covers hostbox.algomind.com + project subdomains)
 
-dash.algomind.com          →  "Welcome to Hostbox" (dashboard login)
+hostbox.algomind.com          →  "Welcome to Hostbox" (dashboard login)
 algomind.com               →  Unassigned (until claimed by a project)
 myapp.algomind.com         →  User's Next.js app
 ```
@@ -55,18 +55,18 @@ If the user later adds `algomind.com` as a custom domain for a project:
 
 ```
 algomind.com               →  User's production website
-dash.algomind.com          →  Hostbox dashboard (still accessible for management)
+hostbox.algomind.com          →  Hostbox dashboard (still accessible for management)
 myapp.algomind.com         →  User's Next.js app
 ```
 
 This is exactly how platforms like Vercel work — `vercel.com` is the platform itself, while users deploy to their own root domains. With Hostbox being self-hosted, the platform and the user's domain are the same, so the platform should take a subdomain and leave the root free.
 
-### Why a Default of `dash.`
+### Why a Default of `hostbox.`
 
 - **Short and memorable** — easy to type, obvious purpose
 - **Customizable** — users can override via `DASHBOARD_DOMAIN` env var if they prefer `admin.`, `manage.`, `console.`, etc.
-- **No extra DNS entry needed** — `dash.algomind.com` is already covered by the wildcard `*.algomind.com` A record
-- **Backward compatible** — existing installs that skip the new env var get `dash.{PLATFORM_DOMAIN}` automatically
+- **No extra DNS entry needed** — `hostbox.algomind.com` is already covered by the wildcard `*.algomind.com` A record
+- **Backward compatible** — existing installs that skip the new env var get `hostbox.{PLATFORM_DOMAIN}` automatically
 
 ---
 
@@ -98,11 +98,11 @@ Add `DashboardDomain` field with auto-default:
 DashboardDomain string `env:"DASHBOARD_DOMAIN" envDefault:""`
 ```
 
-In validation, default it to `dash.{PlatformDomain}` if empty:
+In validation, default it to `hostbox.{PlatformDomain}` if empty:
 
 ```go
 if cfg.DashboardDomain == "" {
-    cfg.DashboardDomain = "dash." + cfg.PlatformDomain
+    cfg.DashboardDomain = "hostbox." + cfg.PlatformDomain
 }
 ```
 
@@ -121,7 +121,7 @@ func (c *Config) DashboardBaseURL() string {
 #### `internal/config/config_test.go`
 
 Add tests for:
-- `DashboardDomain` defaults to `dash.` + `PlatformDomain` when empty
+- `DashboardDomain` defaults to `hostbox.` + `PlatformDomain` when empty
 - `DashboardDomain` uses explicit value when provided
 - `DashboardBaseURL()` returns correct scheme + domain
 
@@ -130,7 +130,7 @@ Add tests for:
 Add:
 
 ```
-# Dashboard domain (defaults to dash.{PLATFORM_DOMAIN})
+# Dashboard domain (defaults to hostbox.{PLATFORM_DOMAIN})
 DASHBOARD_DOMAIN=
 ```
 
@@ -139,8 +139,8 @@ DASHBOARD_DOMAIN=
 Update `configure()` to prompt for the dashboard host with a default:
 
 ```bash
-read -rp "Dashboard host [dash.${DOMAIN}]: " DASHBOARD_INPUT
-DASHBOARD_DOMAIN="${DASHBOARD_INPUT:-dash.${DOMAIN}}"
+read -rp "Dashboard host [hostbox.${DOMAIN}]: " DASHBOARD_INPUT
+DASHBOARD_DOMAIN="${DASHBOARD_INPUT:-hostbox.${DOMAIN}}"
 ```
 
 Write `DASHBOARD_DOMAIN=${DASHBOARD_DOMAIN}` to the `.env` file.
@@ -180,12 +180,12 @@ func (cb *ConfigBuilder) buildPlatformRoute() Route {
 
 Route ordering in `BuildFullConfig()` becomes:
 
-1. Dashboard route (`dash.algomind.com` → API)
+1. Dashboard route (`hostbox.algomind.com` → API)
 2. Custom domain routes
 3. Project deployment routes (production, preview, branch)
 4. TLS automation policies
 
-If using DNS-01 challenge (wildcard cert), `dash.algomind.com` is already covered by `*.algomind.com` — no change needed.
+If using DNS-01 challenge (wildcard cert), `hostbox.algomind.com` is already covered by `*.algomind.com` — no change needed.
 
 If using HTTP-01 challenge (no DNS provider), use `DashboardDomain` as the primary platform subject for Hostbox routes.
 
@@ -235,7 +235,7 @@ No extra env mapping is required if `.env` already includes `DASHBOARD_DOMAIN` a
 
 #### `docker-compose.dev.yml`
 
-Set `DASHBOARD_DOMAIN=dash.localhost` for `hostbox-dev`.
+Set `DASHBOARD_DOMAIN=hostbox.localhost` for `hostbox-dev`.
 
 ---
 
@@ -243,8 +243,8 @@ Set `DASHBOARD_DOMAIN=dash.localhost` for `hostbox-dev`.
 
 #### `internal/services/caddy/builder_test.go`
 
-- Add `DashboardDomain` (`dash.example.com`) to all test fixtures
-- Assert the platform route host matcher is `dash.example.com` (not `example.com`)
+- Add `DashboardDomain` (`hostbox.example.com`) to all test fixtures
+- Assert the platform route host matcher is `hostbox.example.com` (not `example.com`)
 - Verify route ordering: dashboard route first, then custom domains, then project deployments
 
 #### `internal/config/config_test.go`
@@ -262,7 +262,7 @@ Set `DASHBOARD_DOMAIN=dash.localhost` for `hostbox-dev`.
 
 | File | Change |
 |------|--------|
-| `README.md` | Update "Access Dashboard" to reference `dash.your-domain.com` |
+| `README.md` | Update "Access Dashboard" to reference `hostbox.your-domain.com` |
 | `docs/SELF-HOSTING.md` | Add DNS setup note for dashboard subdomain |
 | `marketing/index.html` | Update setup instructions |
 | `marketing/cli.html` | Update setup instructions |
@@ -301,12 +301,12 @@ marketing/features.html                       — Update domain references
 
 For anyone already running Hostbox with the root domain as the dashboard:
 
-1. Add `DASHBOARD_DOMAIN=dash.<your-domain>` to `.env`
+1. Add `DASHBOARD_DOMAIN=hostbox.<your-domain>` to `.env`
 2. Update docker-compose images
 3. Run `docker compose pull && docker compose up -d`
-4. Update any bookmarks to use `dash.<your-domain>` instead of the root
+4. Update any bookmarks to use `hostbox.<your-domain>` instead of the root
 
-The root domain will no longer serve Hostbox by default, so old root-domain dashboard bookmarks must be updated to `dash.<your-domain>`.
+The root domain will no longer serve Hostbox by default, so old root-domain dashboard bookmarks must be updated to `hostbox.<your-domain>`.
 
 ---
 

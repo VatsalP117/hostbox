@@ -94,8 +94,11 @@ configure() {
     echo -e "${CYAN}═══ Hostbox Configuration ═══${NC}"
     echo ""
 
-    read -rp "Domain (e.g., hostbox.example.com): " DOMAIN
+    read -rp "Root domain (e.g., example.com): " DOMAIN
     [ -z "$DOMAIN" ] && fatal "Domain is required"
+
+    read -rp "Dashboard host [hostbox.${DOMAIN}]: " DASHBOARD_INPUT
+    DASHBOARD_DOMAIN="${DASHBOARD_INPUT:-hostbox.${DOMAIN}}"
 
     read -rp "Email for SSL certificates (Let's Encrypt): " ACME_EMAIL
     [ -z "$ACME_EMAIL" ] && fatal "Email is required"
@@ -135,6 +138,7 @@ generate_env() {
 
 # Platform
 PLATFORM_DOMAIN=${DOMAIN}
+DASHBOARD_DOMAIN=${DASHBOARD_DOMAIN}
 PLATFORM_HTTPS=true
 PLATFORM_NAME=Hostbox
 
@@ -205,16 +209,17 @@ print_success() {
     echo -e "${GREEN}  Hostbox installed successfully! 🚀${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
     echo ""
-    echo -e "  Dashboard:  ${CYAN}https://${DOMAIN}${NC}"
+    echo -e "  Dashboard:  ${CYAN}https://${DASHBOARD_DOMAIN}${NC}"
     echo ""
     echo -e "  ${YELLOW}DNS Setup Required:${NC}"
     echo -e "  Point these records to ${SERVER_IP}:"
     echo -e "    A     ${DOMAIN}        → ${SERVER_IP}"
     echo -e "    A     *.${DOMAIN}      → ${SERVER_IP}"
+    echo -e "  (Dashboard host ${DASHBOARD_DOMAIN} is covered by the wildcard record)"
     echo ""
     echo -e "  ${YELLOW}Next Steps:${NC}"
     echo -e "  1. Configure DNS records above"
-    echo -e "  2. Open https://${DOMAIN} to create your admin account"
+    echo -e "  2. Open https://${DASHBOARD_DOMAIN} to create your admin account"
     echo -e "  3. (Optional) Configure GitHub App in Settings"
     echo ""
     echo -e "  ${YELLOW}Useful Commands:${NC}"

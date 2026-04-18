@@ -98,6 +98,7 @@ func main() {
 
 	configBuilder := caddysvc.NewConfigBuilder(caddysvc.BuilderConfig{
 		PlatformDomain:  cfg.PlatformDomain,
+		DashboardDomain: cfg.DashboardDomain,
 		PlatformHTTPS:   cfg.PlatformHTTPS,
 		ACMEEmail:       cfg.ACMEEmail,
 		APIUpstream:     fmt.Sprintf("localhost:%d", cfg.Port),
@@ -184,7 +185,7 @@ func main() {
 
 		// Wire Caddy route updates and notifications into the build pipeline
 		caddyHook := caddysvc.NewPostBuildRouteHook(routeManager, l)
-		notifHook := notification.NewPostBuildNotificationHook(notificationService, fmt.Sprintf("https://%s", cfg.PlatformDomain))
+		notifHook := notification.NewPostBuildNotificationHook(notificationService, cfg.DashboardBaseURL())
 		executor.SetPostBuildHook(worker.NewCompositePostBuildHook(caddyHook, notifHook))
 
 		pool := worker.NewPool(

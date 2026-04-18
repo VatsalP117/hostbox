@@ -17,6 +17,7 @@ services:
       - LOG_LEVEL=debug
       - LOG_FORMAT=text
       - PLATFORM_DOMAIN=localhost
+      - DASHBOARD_DOMAIN=hostbox.localhost
       - PLATFORM_HTTPS=false
       - CADDY_ADMIN_URL=http://caddy-dev:2019
     depends_on:

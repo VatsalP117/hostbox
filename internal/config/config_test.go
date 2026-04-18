@@ -11,7 +11,7 @@ func validTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("JWT_SECRET", "this-is-a-very-long-secret-that-is-at-least-32-chars")
 	t.Setenv("ENCRYPTION_KEY", "6368616e676520746869732070617373776f726420746f206120736563726574")
-	t.Setenv("PLATFORM_DOMAIN", "hostbox.example.com")
+	t.Setenv("PLATFORM_DOMAIN", "example.com")
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -39,6 +39,9 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.PlatformHTTPS != true {
 		t.Error("PlatformHTTPS should default to true")
+	}
+	if cfg.DashboardDomain != "hostbox.example.com" {
+		t.Errorf("DashboardDomain = %q, want %q", cfg.DashboardDomain, "hostbox.example.com")
 	}
 	if cfg.MaxConcurrentBuilds != 1 {
 		t.Errorf("MaxConcurrentBuilds = %d, want 1", cfg.MaxConcurrentBuilds)
@@ -117,6 +120,39 @@ func TestLoadDomainWithProtocol(t *testing.T) {
 	}
 }
 
+func TestLoadDashboardDomainOverride(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DASHBOARD_DOMAIN", "admin.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DashboardDomain != "admin.example.com" {
+		t.Errorf("DashboardDomain = %q, want %q", cfg.DashboardDomain, "admin.example.com")
+	}
+}
+
+func TestLoadDashboardDomainWithProtocol(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DASHBOARD_DOMAIN", "https://hostbox.example.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when DASHBOARD_DOMAIN includes protocol")
+	}
+}
+
+func TestLoadDashboardDomainEqualsPlatformDomain(t *testing.T) {
+	validTestEnv(t)
+	t.Setenv("DASHBOARD_DOMAIN", "example.com")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should fail when DASHBOARD_DOMAIN equals PLATFORM_DOMAIN")
+	}
+}
+
 func TestLoadCustomPort(t *testing.T) {
 	validTestEnv(t)
 	t.Setenv("PORT", "3000")
@@ -165,6 +201,18 @@ func TestBaseURL(t *testing.T) {
 	cfg.PlatformHTTPS = false
 	if cfg.BaseURL() != "http://example.com" {
 		t.Errorf("BaseURL() = %q, want %q", cfg.BaseURL(), "http://example.com")
+	}
+}
+
+func TestDashboardBaseURL(t *testing.T) {
+	cfg := &Config{DashboardDomain: "hostbox.example.com", PlatformHTTPS: true}
+	if cfg.DashboardBaseURL() != "https://hostbox.example.com" {
+		t.Errorf("DashboardBaseURL() = %q, want %q", cfg.DashboardBaseURL(), "https://hostbox.example.com")
+	}
+
+	cfg.PlatformHTTPS = false
+	if cfg.DashboardBaseURL() != "http://hostbox.example.com" {
+		t.Errorf("DashboardBaseURL() = %q, want %q", cfg.DashboardBaseURL(), "http://hostbox.example.com")
 	}
 }
 
