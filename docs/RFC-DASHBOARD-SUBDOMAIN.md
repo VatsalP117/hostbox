@@ -4,7 +4,7 @@
 
 Today, when a user installs Hostbox and points their domain (say `algomind.com`) at their server, the **root domain** is claimed by the Hostbox management dashboard. User projects are deployed to subdomains like `myapp.algomind.com`. This means:
 
-```
+```text
 algomind.com              →  Hostbox dashboard (wasted on a control panel)
 myapp.algomind.com        →  User's deployed project
 another.algomind.com      →  User's deployed project
@@ -16,7 +16,7 @@ This is a problem. The root domain is the most valuable piece of real estate —
 
 Move the dashboard to a dedicated subdomain (defaulting to `hostbox.`) so the root domain is freed up:
 
-```
+```text
 hostbox.algomind.com          →  Hostbox dashboard (control panel + API)
 algomind.com               →  Not used by Hostbox unless a project explicitly claims it
 *.algomind.com             →  All project deployments as before
@@ -28,7 +28,7 @@ Now `algomind.com` can be used like any other custom domain — a user can claim
 
 **Before (current):**
 
-```
+```text
 User installs Hostbox → sets domain to algomind.com
 DNS:  A  algomind.com       → 1.2.3.4
       A  *.algomind.com     → 1.2.3.4
@@ -41,7 +41,7 @@ The user can never put their own site at `algomind.com`. It's permanently occupi
 
 **After (proposed):**
 
-```
+```text
 User installs Hostbox → sets domain to algomind.com
 DNS:  A  algomind.com       → 1.2.3.4   (root — available for projects)
       A  *.algomind.com     → 1.2.3.4   (covers hostbox.algomind.com + project subdomains)
@@ -53,7 +53,7 @@ myapp.algomind.com         →  User's Next.js app
 
 If the user later adds `algomind.com` as a custom domain for a project:
 
-```
+```text
 algomind.com               →  User's production website
 hostbox.algomind.com          →  Hostbox dashboard (still accessible for management)
 myapp.algomind.com         →  User's Next.js app
@@ -129,8 +129,8 @@ Add tests for:
 
 Add:
 
-```
-# Dashboard domain (defaults to hostbox.{PLATFORM_DOMAIN})
+```bash
+# Dashboard domain (defaults to hostbox.[PLATFORM_DOMAIN])
 DASHBOARD_DOMAIN=
 ```
 
@@ -147,7 +147,7 @@ Write `DASHBOARD_DOMAIN=${DASHBOARD_DOMAIN}` to the `.env` file.
 
 Update `print_success()` to show:
 
-```
+```text
 Dashboard:  https://${DASHBOARD_DOMAIN}
 ```
 
@@ -272,7 +272,7 @@ Set `DASHBOARD_DOMAIN=hostbox.localhost` for `hostbox-dev`.
 
 ## Complete File Change List
 
-```
+```text
 internal/config/config.go                    — DashboardDomain field + DashboardBaseURL()
 internal/config/config_test.go               — Test new field
 internal/services/caddy/builder.go           — Platform route uses DashboardDomain

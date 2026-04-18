@@ -215,7 +215,16 @@ print_success() {
     echo -e "  Point these records to ${SERVER_IP}:"
     echo -e "    A     ${DOMAIN}        → ${SERVER_IP}"
     echo -e "    A     *.${DOMAIN}      → ${SERVER_IP}"
-    echo -e "  (Dashboard host ${DASHBOARD_DOMAIN} is covered by the wildcard record)"
+
+    # Check if the dashboard host falls under the wildcard zone
+    CASE_INSENSITIVE_DOMAIN="${DOMAIN,,}"
+    CASE_INSENSITIVE_DASHDOMAIN="${DASHBOARD_DOMAIN,,}"
+    if [[ "${CASE_INSENSITIVE_DASHDOMAIN}" == *".${CASE_INSENSITIVE_DOMAIN}" ]]; then
+        echo -e "  (${DASHBOARD_DOMAIN} is covered by the wildcard record)"
+    else
+        echo -e "  ${YELLOW}⚠${NC}  Dashboard host ${DASHBOARD_DOMAIN} is outside ${DOMAIN} — add a separate DNS record:"
+        echo -e "    A     ${DASHBOARD_DOMAIN}  → ${SERVER_IP}"
+    fi
     echo ""
     echo -e "  ${YELLOW}Next Steps:${NC}"
     echo -e "  1. Configure DNS records above"
