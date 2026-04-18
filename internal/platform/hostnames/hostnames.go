@@ -72,15 +72,14 @@ func CollidesWithDashboard(projectSlug, platformDomain, dashboardDomain string) 
 }
 
 func compoundLabel(head, tail string) string {
-	head = util.Slugify(head)
+	head = truncateLabel(util.Slugify(head), MaxProjectSlugLength)
 	tail = util.Slugify(tail)
 
 	if tail == "" {
 		return truncateLabel(head, MaxDNSLabelLength)
 	}
 
-	tail = truncateLabel(tail, MaxDNSLabelLength-2)
-	head = truncateLabel(head, MaxDNSLabelLength-len(tail)-1)
+	tail = truncateLabel(tail, MaxDNSLabelLength-len(head)-1)
 	return head + "-" + tail
 }
 
@@ -89,9 +88,7 @@ func previewSuffix(value string) string {
 	if slug == "" {
 		return shortHash(value, PreviewSuffixLength)
 	}
-	if len(slug) > PreviewSuffixLength {
-		slug = slug[:PreviewSuffixLength]
-	}
+	slug = truncateLabel(slug, PreviewSuffixLength)
 	slug = strings.Trim(slug, "-")
 	if slug == "" {
 		return shortHash(value, PreviewSuffixLength)

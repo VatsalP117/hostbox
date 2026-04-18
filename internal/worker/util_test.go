@@ -24,7 +24,7 @@ func TestGenerateDeploymentURL_Preview(t *testing.T) {
 	deployment := &models.Deployment{ID: "deploy12345678", IsProduction: false, CommitSHA: "abc123def456789"}
 
 	url := generateDeploymentURL(project, deployment, "example.com")
-	expected := "https://my-app-deploy12.example.com"
+	expected := "https://my-app-d-a27682.example.com"
 	if url != expected {
 		t.Errorf("got %s, want %s", url, expected)
 	}
@@ -35,7 +35,7 @@ func TestGenerateDeploymentURL_PreviewSanitizesDeploymentID(t *testing.T) {
 	deployment := &models.Deployment{ID: "Deploy_ABC123456", IsProduction: false, CommitSHA: "ab12"}
 
 	url := generateDeploymentURL(project, deployment, "host.io")
-	expected := "https://app-deploy-a.host.io"
+	expected := "https://app-d-c139e0.host.io"
 	if url != expected {
 		t.Errorf("got %s, want %s", url, expected)
 	}

@@ -142,6 +142,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg.DNSProvider = normalizeDNSProvider(cfg.DNSProvider)
+	cfg.DNSProviderConfig = strings.TrimSpace(cfg.DNSProviderConfig)
 	if cfg.DNSProviderConfig == "" {
 		dnsProviderConfig, err := buildDNSProviderConfig(cfg.DNSProvider)
 		if err != nil {
@@ -199,6 +200,8 @@ func (c *Config) Validate() error {
 		errs = append(errs, "LOG_LEVEL must be one of: debug, info, warn, error")
 	}
 
+	c.DNSProvider = normalizeDNSProvider(c.DNSProvider)
+	c.DNSProviderConfig = strings.TrimSpace(c.DNSProviderConfig)
 	validDNSProviders := map[string]bool{"": true, "cloudflare": true, "route53": true, "digitalocean": true}
 	if !validDNSProviders[c.DNSProvider] {
 		errs = append(errs, "DNS_PROVIDER must be one of: cloudflare, route53, digitalocean, none")

@@ -100,12 +100,12 @@ func TestBuildFullConfig_DeploymentRoutes(t *testing.T) {
 			}
 		case "route-deploy-dpl_abc12345":
 			foundPreview1 = true
-			if r.Match[0].Host[0] != "my-app-dpl-abc1.example.com" {
+			if r.Match[0].Host[0] != "my-app-d-2621ea.example.com" {
 				t.Errorf("preview1 host = %q", r.Match[0].Host[0])
 			}
 		case "route-deploy-dpl_def67890":
 			foundPreview2 = true
-			if r.Match[0].Host[0] != "my-app-dpl-def6.example.com" {
+			if r.Match[0].Host[0] != "my-app-d-0d573f.example.com" {
 				t.Errorf("preview2 host = %q", r.Match[0].Host[0])
 			}
 		}
