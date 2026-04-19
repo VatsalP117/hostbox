@@ -4,11 +4,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { SystemAlert } from "@/types/models";
 
 interface SystemAlertsProps {
-  alerts: SystemAlert[];
+  alerts?: SystemAlert[] | null;
 }
 
 export function SystemAlerts({ alerts }: SystemAlertsProps) {
-  if (!alerts.length) return null;
+  if (!alerts?.length) return null;
 
   return (
     <div className="space-y-3">

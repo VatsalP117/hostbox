@@ -325,7 +325,7 @@ func (s *MetricsService) buildTrends(ctx context.Context, now time.Time, current
 }
 
 func deriveAlerts(stats *dto.AdminStatsResponse) []dto.SystemAlertResponse {
-	var alerts []dto.SystemAlertResponse
+	alerts := make([]dto.SystemAlertResponse, 0)
 
 	if stats.Components.Database.Status != "healthy" {
 		alerts = append(alerts, dto.SystemAlertResponse{
