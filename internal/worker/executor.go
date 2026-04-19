@@ -442,22 +442,7 @@ func (e *BuildExecutor) execInContainer(
 }
 
 func (e *BuildExecutor) resolveEnvVars(ctx context.Context, project *models.Project, deployment *models.Deployment) []string {
-	vars := []string{
-		"CI=true",
-		"HOSTBOX=1",
-		"NODE_ENV=production",
-		"HOSTBOX_PROJECT_ID=" + project.ID,
-		"HOSTBOX_PROJECT_NAME=" + project.Name,
-		"HOSTBOX_DEPLOYMENT_ID=" + deployment.ID,
-		"HOSTBOX_BRANCH=" + deployment.Branch,
-		"HOSTBOX_COMMIT_SHA=" + deployment.CommitSHA,
-	}
-
-	if deployment.IsProduction {
-		vars = append(vars, "HOSTBOX_IS_PREVIEW=false")
-	} else {
-		vars = append(vars, "HOSTBOX_IS_PREVIEW=true")
-	}
+	vars := baseBuildEnvVars(project, deployment)
 
 	scope := "preview"
 	if deployment.IsProduction {
@@ -472,6 +457,24 @@ func (e *BuildExecutor) resolveEnvVars(ctx context.Context, project *models.Proj
 	}
 
 	return vars
+}
+
+func baseBuildEnvVars(project *models.Project, deployment *models.Deployment) []string {
+	vars := []string{
+		"CI=true",
+		"HOSTBOX=1",
+		"HOSTBOX_PROJECT_ID=" + project.ID,
+		"HOSTBOX_PROJECT_NAME=" + project.Name,
+		"HOSTBOX_DEPLOYMENT_ID=" + deployment.ID,
+		"HOSTBOX_BRANCH=" + deployment.Branch,
+		"HOSTBOX_COMMIT_SHA=" + deployment.CommitSHA,
+	}
+
+	if deployment.IsProduction {
+		return append(vars, "HOSTBOX_IS_PREVIEW=false")
+	}
+
+	return append(vars, "HOSTBOX_IS_PREVIEW=true")
 }
 
 func (e *BuildExecutor) shouldInvalidateCache(project *models.Project, nodeVersion, pkgManager, lockHash string) bool {

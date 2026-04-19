@@ -2,8 +2,10 @@ package worker
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
+	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/platform/detect"
 )
 
@@ -44,6 +46,27 @@ func TestDescribeContainerExecError_PassesThroughOtherErrors(t *testing.T) {
 	got := describeContainerExecError(assertErr("command exited with code 1"), 1024)
 	if got != "command exited with code 1" {
 		t.Fatalf("unexpected error message: %q", got)
+	}
+}
+
+func TestBaseBuildEnvVars_DoesNotForceNodeEnv(t *testing.T) {
+	t.Parallel()
+
+	project := &models.Project{ID: "project-1", Name: "Manifest"}
+	deployment := &models.Deployment{
+		ID:           "deploy-1",
+		Branch:       "main",
+		CommitSHA:    "abc123",
+		IsProduction: true,
+	}
+
+	vars := baseBuildEnvVars(project, deployment)
+
+	if slices.Contains(vars, "NODE_ENV=production") {
+		t.Fatal("build env should not force NODE_ENV=production")
+	}
+	if !slices.Contains(vars, "HOSTBOX_IS_PREVIEW=false") {
+		t.Fatal("expected production build env flag")
 	}
 }
 
