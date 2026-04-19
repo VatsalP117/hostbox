@@ -1,34 +1,38 @@
 import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./sidebar";
-import { Topbar } from "./topbar";
+import { Topbar, DesktopTopbar } from "./topbar";
 import { MobileNav } from "./mobile-nav";
 import { CommandPalette } from "./command-palette";
 import { useIsMobile } from "@/hooks/use-media-query";
 
 export function RootLayout() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isMobile = useIsMobile();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[#131313]">
       <CommandPalette />
-      {!isMobile && (
-        <Sidebar
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
-      )}
+
+      {/* Sidebar - Desktop only */}
+      <Sidebar />
+
+      {/* Mobile Navigation Sheet */}
       {isMobile && (
         <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
       )}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar
-          onMobileMenuToggle={() => setMobileNavOpen(true)}
-          isMobile={isMobile}
-        />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col overflow-hidden ml-0 md:ml-64">
+        {/* Topbar - Mobile only (hamburger) / Desktop (search + profile) */}
+        {isMobile ? (
+          <Topbar onMobileMenuToggle={() => setMobileNavOpen(true)} />
+        ) : (
+          <DesktopTopbar />
+        )}
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10">
           <Outlet />
         </main>
       </div>

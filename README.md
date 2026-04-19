@@ -94,6 +94,11 @@ hostbox domains add example.com  # Add a custom domain
 hostbox env set API_KEY=secret   # Set environment variable
 ```
 
+### Copilot CLI + Stitch MCP
+
+The repository includes a local Stitch MCP proxy for Copilot CLI.
+Set `STITCH_API_KEY` in your local `.env` (or export it in your shell), then start Copilot CLI from the repo root.
+
 ## Self-Hosting
 
 See [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) for detailed self-hosting instructions including:

@@ -55,11 +55,45 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          dim: "hsl(var(--surface-dim))",
+          bright: "hsl(var(--surface-bright))",
+          "container-lowest": "hsl(var(--surface-container-lowest))",
+          "container-low": "hsl(var(--surface-container-low))",
+          "container": "hsl(var(--surface-container))",
+          "container-high": "hsl(var(--surface-container-high))",
+          "container-highest": "hsl(var(--surface-container-highest))",
+          variant: "hsl(var(--surface-variant))",
+        },
+        "on-surface": {
+          DEFAULT: "hsl(var(--on-surface))",
+          variant: "hsl(var(--on-surface-variant))",
+        },
+        outline: {
+          DEFAULT: "hsl(var(--outline))",
+          variant: "hsl(var(--outline-variant))",
+        },
+        "primary-container": {
+          DEFAULT: "hsl(var(--primary-container))",
+          foreground: "hsl(var(--on-primary-container))",
+        },
+        "secondary-container": {
+          DEFAULT: "hsl(var(--secondary-container))",
+          foreground: "hsl(var(--on-secondary-container))",
+        },
+        error: {
+          DEFAULT: "hsl(var(--error))",
+          container: "hsl(var(--error-container))",
+          foreground: "hsl(var(--on-error))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "0.75rem",
+        "2xl": "1rem",
       },
       fontFamily: {
         sans: [
@@ -75,6 +109,9 @@ const config: Config = {
           "SFMono-Regular",
           "monospace",
         ],
+        headline: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
+        body: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        label: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

@@ -89,6 +89,15 @@ func (r *EnvVarRepository) ListByProject(ctx context.Context, projectID string) 
 	return envVars, rows.Err()
 }
 
+func (r *EnvVarRepository) CountByProject(ctx context.Context, projectID string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM env_vars WHERE project_id = ?`, projectID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count env vars: %w", err)
+	}
+	return count, nil
+}
+
 func (r *EnvVarRepository) ListByProjectAndScope(ctx context.Context, projectID string, scope string) ([]models.EnvVar, error) {
 	rows, err := r.db.QueryContext(ctx,
 		envVarSelectSQL+` WHERE project_id = ? AND (scope = ? OR scope = 'all') ORDER BY key ASC`,

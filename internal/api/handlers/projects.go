@@ -20,6 +20,8 @@ type ProjectHandler struct {
 	projectRepo    *repository.ProjectRepository
 	deploymentRepo *repository.DeploymentRepository
 	domainRepo     *repository.DomainRepository
+	envVarRepo     *repository.EnvVarRepository
+	notificationRepo *repository.NotificationRepository
 	activityRepo   *repository.ActivityRepository
 	config         struct {
 		PlatformDomain  string
@@ -32,6 +34,8 @@ func NewProjectHandler(
 	projectRepo *repository.ProjectRepository,
 	deploymentRepo *repository.DeploymentRepository,
 	domainRepo *repository.DomainRepository,
+	envVarRepo *repository.EnvVarRepository,
+	notificationRepo *repository.NotificationRepository,
 	activityRepo *repository.ActivityRepository,
 	platformDomain string,
 	dashboardDomain string,
@@ -41,6 +45,8 @@ func NewProjectHandler(
 		projectRepo:    projectRepo,
 		deploymentRepo: deploymentRepo,
 		domainRepo:     domainRepo,
+		envVarRepo:     envVarRepo,
+		notificationRepo: notificationRepo,
 		activityRepo:   activityRepo,
 		config: struct {
 			PlatformDomain  string
@@ -98,7 +104,7 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	h.logActivity(c, &user.ID, "project.created", "project", &project.ID)
 
 	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"project": toProjectResponse(project),
+		"project": toProjectResponse(project, projectStatus(nil)),
 	})
 }
 
@@ -120,7 +126,12 @@ func (h *ProjectHandler) List(c echo.Context) error {
 
 	data := make([]dto.ProjectResponse, len(projects))
 	for i, p := range projects {
-		data[i] = toProjectResponse(&p)
+		latestDeployment, err := h.deploymentRepo.GetLatestByProjectAndBranch(c.Request().Context(), p.ID, p.ProductionBranch)
+		if err != nil && err != sql.ErrNoRows {
+			return apperrors.NewInternal(err)
+		}
+
+		data[i] = toProjectResponse(&p, projectStatus(latestDeployment))
 	}
 
 	return c.JSON(http.StatusOK, dto.ProjectListResponse{
@@ -145,20 +156,39 @@ func (h *ProjectHandler) Get(c echo.Context) error {
 		return apperrors.NewInternal(err)
 	}
 
+	stats, err := h.deploymentRepo.SummarizeByProject(c.Request().Context(), project.ID)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	envVarsCount, err := h.envVarRepo.CountByProject(c.Request().Context(), project.ID)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
+	notificationsCount, err := h.notificationRepo.CountByProject(c.Request().Context(), project.ID)
+	if err != nil {
+		return apperrors.NewInternal(err)
+	}
+
 	domainData := make([]dto.DomainResponse, len(domains))
 	for i, d := range domains {
 		domainData[i] = toDomainResponse(&d)
 	}
 
-	var latestResp interface{}
+	var latestResp *dto.DeploymentResponse
 	if latestDeployment != nil {
-		latestResp = toDeploymentResponse(latestDeployment)
+		resp := toDeploymentResponse(latestDeployment)
+		latestResp = &resp
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"project":           toProjectResponse(project),
-		"latest_deployment": latestResp,
-		"domains":           domainData,
+	return c.JSON(http.StatusOK, dto.ProjectDetailResponse{
+		Project:            toProjectResponse(project, projectStatus(latestDeployment)),
+		LatestDeployment:   latestResp,
+		Domains:            domainData,
+		Stats:              toProjectStatsResponse(stats),
+		EnvVarsCount:       envVarsCount,
+		NotificationsCount: notificationsCount,
 	})
 }
 
@@ -215,8 +245,13 @@ func (h *ProjectHandler) Update(c echo.Context) error {
 	user := middleware.GetUser(c)
 	h.logActivity(c, &user.ID, "project.updated", "project", &project.ID)
 
+	latestDeployment, err := h.deploymentRepo.GetLatestByProjectAndBranch(c.Request().Context(), project.ID, project.ProductionBranch)
+	if err != nil && err != sql.ErrNoRows {
+		return apperrors.NewInternal(err)
+	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"project": toProjectResponse(project),
+		"project": toProjectResponse(project, projectStatus(latestDeployment)),
 	})
 }
 
@@ -272,7 +307,7 @@ func (h *ProjectHandler) validateProjectSlug(slug string) error {
 	return nil
 }
 
-func toProjectResponse(p *models.Project) dto.ProjectResponse {
+func toProjectResponse(p *models.Project, status string) dto.ProjectResponse {
 	resp := dto.ProjectResponse{
 		ID:                   p.ID,
 		OwnerID:              p.OwnerID,
@@ -289,8 +324,40 @@ func toProjectResponse(p *models.Project) dto.ProjectResponse {
 		NodeVersion:          p.NodeVersion,
 		AutoDeploy:           p.AutoDeploy,
 		PreviewDeployments:   p.PreviewDeployments,
+		Status:               status,
 		CreatedAt:            p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:            p.UpdatedAt.Format(time.RFC3339),
 	}
 	return resp
+}
+
+func toProjectStatsResponse(summary repository.ProjectDeploymentSummary) dto.ProjectStatsResponse {
+	resp := dto.ProjectStatsResponse{
+		TotalDeployments:   summary.TotalDeployments,
+		SuccessfulBuilds:   summary.SuccessfulBuilds,
+		FailedBuilds:       summary.FailedBuilds,
+		AverageBuildTimeMs: summary.AverageBuildDurationMs,
+	}
+	if summary.LastDeployAt != nil {
+		lastDeployAt := summary.LastDeployAt.Format(time.RFC3339)
+		resp.LastDeployAt = &lastDeployAt
+	}
+	return resp
+}
+
+func projectStatus(latestDeployment *models.Deployment) string {
+	if latestDeployment == nil {
+		return "stopped"
+	}
+
+	switch latestDeployment.Status {
+	case models.DeploymentStatusReady:
+		return "healthy"
+	case models.DeploymentStatusQueued, models.DeploymentStatusBuilding:
+		return "building"
+	case models.DeploymentStatusFailed, models.DeploymentStatusCancelled:
+		return "failed"
+	default:
+		return "stopped"
+	}
 }

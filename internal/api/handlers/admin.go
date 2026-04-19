@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -120,8 +121,75 @@ func (h *AdminHandler) Activity(c echo.Context) error {
 	}
 
 	data := make([]dto.ActivityLogResponse, len(entries))
+	userNames := make(map[string]*string)
+	projectNames := make(map[string]*string)
+	deploymentProjects := make(map[string]*string)
+
 	for i, e := range entries {
-		data[i] = toActivityResponse(&e)
+		var userName *string
+		if e.UserID != nil {
+			if cached, ok := userNames[*e.UserID]; ok {
+				userName = cached
+			} else {
+				user, err := h.userRepo.GetByID(c.Request().Context(), *e.UserID)
+				if err != nil && err != sql.ErrNoRows {
+					return apperrors.NewInternal(err)
+				}
+				if err == nil && user.DisplayName != nil {
+					userName = user.DisplayName
+				}
+				userNames[*e.UserID] = userName
+			}
+		}
+
+		var projectName *string
+		if e.ResourceID != nil {
+			switch e.ResourceType {
+			case "project", "project_env", "notification":
+				if cached, ok := projectNames[*e.ResourceID]; ok {
+					projectName = cached
+				} else {
+					project, err := h.projectRepo.GetByID(c.Request().Context(), *e.ResourceID)
+					if err != nil && err != sql.ErrNoRows {
+						return apperrors.NewInternal(err)
+					}
+					if err == nil {
+						projectName = &project.Name
+					}
+					projectNames[*e.ResourceID] = projectName
+				}
+			case "deployment":
+				var projectID *string
+				if cached, ok := deploymentProjects[*e.ResourceID]; ok {
+					projectID = cached
+				} else {
+					deployment, err := h.deploymentRepo.GetByID(c.Request().Context(), *e.ResourceID)
+					if err != nil && err != sql.ErrNoRows {
+						return apperrors.NewInternal(err)
+					}
+					if err == nil {
+						projectID = &deployment.ProjectID
+					}
+					deploymentProjects[*e.ResourceID] = projectID
+				}
+				if projectID != nil {
+					if cached, ok := projectNames[*projectID]; ok {
+						projectName = cached
+					} else {
+						project, err := h.projectRepo.GetByID(c.Request().Context(), *projectID)
+						if err != nil && err != sql.ErrNoRows {
+							return apperrors.NewInternal(err)
+						}
+						if err == nil {
+							projectName = &project.Name
+						}
+						projectNames[*projectID] = projectName
+					}
+				}
+			}
+		}
+
+		data[i] = toActivityResponse(&e, userName, projectName)
 	}
 
 	return c.JSON(http.StatusOK, dto.ActivityListResponse{
@@ -280,13 +348,15 @@ func (h *AdminHandler) loadSettings(ctx context.Context) (map[string]interface{}
 	}, nil
 }
 
-func toActivityResponse(a *models.ActivityLog) dto.ActivityLogResponse {
+func toActivityResponse(a *models.ActivityLog, userName, projectName *string) dto.ActivityLogResponse {
 	resp := dto.ActivityLogResponse{
 		ID:           a.ID,
 		UserID:       a.UserID,
+		UserName:     userName,
 		Action:       a.Action,
 		ResourceType: a.ResourceType,
 		ResourceID:   a.ResourceID,
+		ProjectName:  projectName,
 		Metadata:     a.Metadata,
 		CreatedAt:    a.CreatedAt.Format(time.RFC3339),
 	}

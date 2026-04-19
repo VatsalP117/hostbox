@@ -5,6 +5,8 @@ export type DeploymentStatus =
   | "failed"
   | "cancelled";
 
+export type ProjectStatus = "healthy" | "failed" | "building" | "stopped";
+
 export type EnvVarScope = "all" | "production" | "preview";
 
 export type NotificationChannel = "discord" | "slack" | "webhook";
@@ -78,8 +80,17 @@ export interface Project {
   node_version: string;
   auto_deploy: boolean;
   preview_deployments: boolean;
+  status?: ProjectStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProjectStats {
+  total_deployments: number;
+  successful_builds: number;
+  failed_builds: number;
+  average_build_time_ms: number | null;
+  last_deploy_at: string | null;
 }
 
 export interface Deployment {
@@ -166,9 +177,11 @@ export interface Session {
 export interface Activity {
   id: number;
   user_id: string | null;
+  user_name?: string | null;
   action: string;
   resource_type: string;
   resource_id: string | null;
+  project_name?: string | null;
   metadata: string | null;
   created_at: string;
 }

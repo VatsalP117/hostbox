@@ -14,6 +14,8 @@ export const routes = {
   deployment: (projectId: string, deploymentId: string) =>
     `/projects/${projectId}/deployments/${deploymentId}`,
   admin: "/admin",
+  adminTab: (tab: "overview" | "users" | "activity" | "settings") =>
+    `/admin?tab=${tab}`,
   profile: "/profile",
 } as const;
 

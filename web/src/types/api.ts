@@ -7,6 +7,7 @@ import type {
   NotificationConfig,
   GitHubRepo,
   GitHubInstallation,
+  ProjectStats,
   SystemStats,
   PlatformSettings,
   Activity,
@@ -153,6 +154,9 @@ export interface ProjectDetailResponse {
   project: Project;
   latest_deployment: Deployment | null;
   domains: Domain[];
+  stats: ProjectStats;
+  env_vars_count: number;
+  notifications_count: number;
 }
 
 // ─── Deployments ─────────────────────────────────────

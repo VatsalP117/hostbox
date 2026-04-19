@@ -24,6 +24,14 @@ type DeploymentHealthSummary struct {
 	LastFailureAt          *time.Time
 }
 
+type ProjectDeploymentSummary struct {
+	TotalDeployments       int64
+	SuccessfulBuilds       int64
+	FailedBuilds           int64
+	AverageBuildDurationMs *int64
+	LastDeployAt           *time.Time
+}
+
 func NewDeploymentRepository(db *sql.DB) *DeploymentRepository {
 	return &DeploymentRepository{db: db}
 }
@@ -150,6 +158,13 @@ func (r *DeploymentRepository) GetLatestByProjectAndBranch(ctx context.Context, 
 	return scanDeployment(row)
 }
 
+func (r *DeploymentRepository) GetLatestByProject(ctx context.Context, projectID string) (*models.Deployment, error) {
+	row := r.db.QueryRowContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? ORDER BY d.created_at DESC, d.rowid DESC LIMIT 1`,
+		projectID)
+	return scanDeployment(row)
+}
+
 func (r *DeploymentRepository) GetActiveByProjectAndBranch(ctx context.Context, projectID, branch string) (*models.Deployment, error) {
 	row := r.db.QueryRowContext(ctx,
 		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status = 'ready' ORDER BY d.created_at DESC, d.rowid DESC LIMIT 1`,
@@ -190,6 +205,48 @@ func (r *DeploymentRepository) CountByStatuses(ctx context.Context, statuses ...
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *DeploymentRepository) SummarizeByProject(ctx context.Context, projectID string) (ProjectDeploymentSummary, error) {
+	var (
+		summary     ProjectDeploymentSummary
+		avgDuration sql.NullFloat64
+		lastDeploy  sql.NullString
+	)
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END), 0) AS successful,
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+			AVG(CASE WHEN build_duration_ms IS NOT NULL THEN build_duration_ms END) AS avg_build_duration_ms,
+			MAX(COALESCE(completed_at, created_at)) AS last_deploy_at
+		FROM deployments
+		WHERE project_id = ?`,
+		projectID,
+	).Scan(
+		&summary.TotalDeployments,
+		&summary.SuccessfulBuilds,
+		&summary.FailedBuilds,
+		&avgDuration,
+		&lastDeploy,
+	)
+	if err != nil {
+		return ProjectDeploymentSummary{}, fmt.Errorf("summarize deployments for project %s: %w", projectID, err)
+	}
+
+	if avgDuration.Valid {
+		v := int64(avgDuration.Float64 + 0.5)
+		summary.AverageBuildDurationMs = &v
+	}
+	if lastDeploy.Valid {
+		t, err := time.Parse(time.RFC3339, lastDeploy.String)
+		if err == nil {
+			summary.LastDeployAt = &t
+		}
+	}
+
+	return summary, nil
 }
 
 func (r *DeploymentRepository) SummarizeSince(ctx context.Context, since time.Time) (DeploymentHealthSummary, error) {

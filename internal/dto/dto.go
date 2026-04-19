@@ -212,6 +212,7 @@ type ProjectResponse struct {
 	NodeVersion          string  `json:"node_version"`
 	AutoDeploy           bool    `json:"auto_deploy"`
 	PreviewDeployments   bool    `json:"preview_deployments"`
+	Status               string  `json:"status"`
 	CreatedAt            string  `json:"created_at"`
 	UpdatedAt            string  `json:"updated_at"`
 }
@@ -284,12 +285,31 @@ type NotificationConfigResponse struct {
 	CreatedAt  string  `json:"created_at"`
 }
 
+type ProjectStatsResponse struct {
+	TotalDeployments   int64  `json:"total_deployments"`
+	SuccessfulBuilds   int64  `json:"successful_builds"`
+	FailedBuilds       int64  `json:"failed_builds"`
+	AverageBuildTimeMs *int64 `json:"average_build_time_ms,omitempty"`
+	LastDeployAt       *string `json:"last_deploy_at,omitempty"`
+}
+
+type ProjectDetailResponse struct {
+	Project            ProjectResponse      `json:"project"`
+	LatestDeployment   *DeploymentResponse  `json:"latest_deployment"`
+	Domains            []DomainResponse     `json:"domains"`
+	Stats              ProjectStatsResponse `json:"stats"`
+	EnvVarsCount       int64                `json:"env_vars_count"`
+	NotificationsCount int64                `json:"notifications_count"`
+}
+
 type ActivityLogResponse struct {
 	ID           int64   `json:"id"`
 	UserID       *string `json:"user_id,omitempty"`
+	UserName     *string `json:"user_name,omitempty"`
 	Action       string  `json:"action"`
 	ResourceType string  `json:"resource_type"`
 	ResourceID   *string `json:"resource_id,omitempty"`
+	ProjectName  *string `json:"project_name,omitempty"`
 	Metadata     *string `json:"metadata,omitempty"`
 	CreatedAt    string  `json:"created_at"`
 }

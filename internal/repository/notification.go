@@ -87,6 +87,15 @@ func (r *NotificationRepository) ListByProject(ctx context.Context, projectID st
 	return configs, rows.Err()
 }
 
+func (r *NotificationRepository) CountByProject(ctx context.Context, projectID string) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notification_configs WHERE project_id = ?`, projectID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count notification configs: %w", err)
+	}
+	return count, nil
+}
+
 func (r *NotificationRepository) ListGlobal(ctx context.Context) ([]models.NotificationConfig, error) {
 	rows, err := r.db.QueryContext(ctx,
 		notifSelectSQL+` WHERE project_id IS NULL ORDER BY created_at DESC`)

@@ -112,6 +112,8 @@ func setupTestEnv(t *testing.T) *testEnv {
 		repos.Project,
 		repos.Deployment,
 		repos.Domain,
+		repos.EnvVar,
+		repos.Notification,
 		repos.Activity,
 		cfg.PlatformDomain,
 		cfg.DashboardDomain,

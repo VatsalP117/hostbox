@@ -9,11 +9,22 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { routes } from "@/lib/constants";
-import { LayoutDashboard, FolderKanban, Plus, Shield, User } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Plus,
+  Shield,
+  User,
+  Users,
+  Activity,
+  Settings,
+} from "lucide-react";
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -53,10 +64,26 @@ export function CommandPalette() {
             <User className="mr-2 h-4 w-4" />
             Profile
           </CommandItem>
-          <CommandItem onSelect={() => runCommand(routes.admin)}>
-            <Shield className="mr-2 h-4 w-4" />
-            Admin
-          </CommandItem>
+          {user?.is_admin && (
+            <>
+              <CommandItem onSelect={() => runCommand(routes.adminTab("overview"))}>
+                <Shield className="mr-2 h-4 w-4" />
+                System
+              </CommandItem>
+              <CommandItem onSelect={() => runCommand(routes.adminTab("users"))}>
+                <Users className="mr-2 h-4 w-4" />
+                Users
+              </CommandItem>
+              <CommandItem onSelect={() => runCommand(routes.adminTab("activity"))}>
+                <Activity className="mr-2 h-4 w-4" />
+                Activity
+              </CommandItem>
+              <CommandItem onSelect={() => runCommand(routes.adminTab("settings"))}>
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </CommandItem>
+            </>
+          )}
         </CommandGroup>
       </CommandList>
     </CommandDialog>
