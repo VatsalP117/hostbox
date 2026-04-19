@@ -2,6 +2,7 @@ package detect
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,11 +25,14 @@ type PackageJSON struct {
 	Name            string            `json:"name"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
+	Scripts         map[string]string `json:"scripts"`
 	Workspaces      json.RawMessage   `json:"workspaces"`
 	Engines         struct {
 		Node string `json:"node"`
 	} `json:"engines"`
 }
+
+var errFrameworkNotDetected = errors.New("framework not detected")
 
 // knownFrameworks is checked in priority order (first match wins).
 var knownFrameworks = []struct {
@@ -122,46 +126,35 @@ func DetectFramework(sourceDir string) (Framework, *PackageJSON, error) {
 		}, nil, nil
 	}
 
-	pkgPath := filepath.Join(sourceDir, "package.json")
-	data, err := os.ReadFile(pkgPath)
+	pkg, err := readPackageJSON(sourceDir)
 	if err != nil {
 		// No package.json → check for index.html (plain static site)
-		if _, err2 := os.Stat(filepath.Join(sourceDir, "index.html")); err2 == nil {
-			return Framework{
-				Name:            "static",
-				DisplayName:     "Static HTML",
-				BuildCommand:    "",
-				OutputDirectory: ".",
-				ServingMode:     "static",
-			}, nil, nil
+		if errors.Is(err, os.ErrNotExist) {
+			if _, err2 := os.Stat(filepath.Join(sourceDir, "index.html")); err2 == nil {
+				return Framework{
+					Name:            "static",
+					DisplayName:     "Static HTML",
+					BuildCommand:    "",
+					OutputDirectory: ".",
+					ServingMode:     "static",
+				}, nil, nil
+			}
+			return Framework{}, nil, fmt.Errorf("no package.json or index.html found: %w", err)
 		}
-		return Framework{}, nil, fmt.Errorf("no package.json or index.html found: %w", err)
+		return Framework{}, nil, err
 	}
 
-	var pkg PackageJSON
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return Framework{}, nil, fmt.Errorf("invalid package.json: %w", err)
+	if fw, err := detectKnownFramework(sourceDir, pkg); err == nil {
+		return fw, pkg, nil
+	} else if !errors.Is(err, errFrameworkNotDetected) {
+		return Framework{}, nil, err
 	}
 
-	// Merge deps + devDeps for lookup
-	allDeps := make(map[string]string)
-	for k, v := range pkg.Dependencies {
-		allDeps[k] = v
-	}
-	for k, v := range pkg.DevDependencies {
-		allDeps[k] = v
-	}
-
-	// Check known frameworks in priority order
-	for _, kf := range knownFrameworks {
-		if kf.DevDep {
-			if _, ok := pkg.DevDependencies[kf.Dep]; ok {
-				return kf.Framework, &pkg, nil
-			}
-		} else {
-			if _, ok := allDeps[kf.Dep]; ok {
-				return kf.Framework, &pkg, nil
-			}
+	if IsWorkspaceProject(sourceDir, pkg) {
+		if fw, err := detectWorkspaceFramework(sourceDir, pkg); err == nil {
+			return fw, pkg, nil
+		} else if !errors.Is(err, errFrameworkNotDetected) {
+			return Framework{}, nil, err
 		}
 	}
 
@@ -172,7 +165,168 @@ func DetectFramework(sourceDir string) (Framework, *PackageJSON, error) {
 		BuildCommand:    "npm run build",
 		OutputDirectory: "dist",
 		ServingMode:     "spa",
-	}, &pkg, nil
+	}, pkg, nil
+}
+
+func readPackageJSON(dir string) (*PackageJSON, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
+	if err != nil {
+		return nil, err
+	}
+
+	var pkg PackageJSON
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return nil, fmt.Errorf("invalid package.json: %w", err)
+	}
+
+	return &pkg, nil
+}
+
+func detectKnownFramework(sourceDir string, pkg *PackageJSON) (Framework, error) {
+	allDeps := make(map[string]string)
+	for k, v := range pkg.Dependencies {
+		allDeps[k] = v
+	}
+	for k, v := range pkg.DevDependencies {
+		allDeps[k] = v
+	}
+
+	for _, kf := range knownFrameworks {
+		if kf.DevDep {
+			if _, ok := pkg.DevDependencies[kf.Dep]; ok {
+				return finalizeDetectedFramework(sourceDir, pkg, kf.Framework)
+			}
+		} else {
+			if _, ok := allDeps[kf.Dep]; ok {
+				return finalizeDetectedFramework(sourceDir, pkg, kf.Framework)
+			}
+		}
+	}
+
+	return Framework{}, errFrameworkNotDetected
+}
+
+func detectWorkspaceFramework(sourceDir string, rootPkg *PackageJSON) (Framework, error) {
+	type candidate struct {
+		relDir string
+		pkg    *PackageJSON
+		fw     Framework
+	}
+
+	var candidates []candidate
+
+	err := filepath.WalkDir(sourceDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if name == ".git" || name == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() != "package.json" {
+			return nil
+		}
+
+		dir := filepath.Dir(path)
+		if dir == sourceDir {
+			return nil
+		}
+
+		pkg, err := readPackageJSON(dir)
+		if err != nil {
+			return err
+		}
+		fw, err := detectKnownFramework(dir, pkg)
+		if errors.Is(err, errFrameworkNotDetected) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		relDir, err := filepath.Rel(sourceDir, dir)
+		if err != nil {
+			return err
+		}
+
+		candidates = append(candidates, candidate{
+			relDir: filepath.ToSlash(relDir),
+			pkg:    pkg,
+			fw:     fw,
+		})
+		return nil
+	})
+	if err != nil {
+		return Framework{}, err
+	}
+
+	if len(candidates) == 0 {
+		return Framework{}, errFrameworkNotDetected
+	}
+	if len(candidates) > 1 {
+		paths := make([]string, 0, len(candidates))
+		for _, c := range candidates {
+			paths = append(paths, c.relDir)
+		}
+		return Framework{}, fmt.Errorf("multiple workspace apps detected (%s); set the project root directory explicitly", strings.Join(paths, ", "))
+	}
+
+	selected := candidates[0]
+	fw := selected.fw
+	fw.DisplayName = fmt.Sprintf("%s (%s)", fw.DisplayName, selected.relDir)
+	fw.OutputDirectory = filepath.ToSlash(filepath.Join(selected.relDir, fw.OutputDirectory))
+
+	if rootPkg != nil && rootPkg.Scripts["build"] != "" {
+		fw.BuildCommand = "npm run build"
+	}
+
+	return fw, nil
+}
+
+func finalizeDetectedFramework(sourceDir string, pkg *PackageJSON, fw Framework) (Framework, error) {
+	if fw.Name != "nextjs" {
+		return fw, nil
+	}
+
+	nextOutput := detectNextOutputMode(sourceDir)
+	buildScript := ""
+	if pkg != nil {
+		buildScript = pkg.Scripts["build"]
+	}
+
+	if nextOutput == "standalone" {
+		return Framework{}, fmt.Errorf("Next.js standalone output is not supported for static deployment; use output: \"export\" or configure custom build/output settings")
+	}
+	if nextOutput == "export" || strings.Contains(buildScript, "next export") {
+		fw.OutputDirectory = "out"
+		return fw, nil
+	}
+
+	return Framework{}, fmt.Errorf("Next.js projects must produce a static export (out/); configure output: \"export\" in next.config or set custom build/output settings")
+}
+
+func detectNextOutputMode(sourceDir string) string {
+	matches, _ := filepath.Glob(filepath.Join(sourceDir, "next.config.*"))
+	if len(matches) == 0 {
+		return ""
+	}
+
+	re := regexp.MustCompile(`output\s*:\s*["'](standalone|export)["']`)
+	for _, match := range matches {
+		data, err := os.ReadFile(match)
+		if err != nil {
+			continue
+		}
+		found := re.FindStringSubmatch(string(data))
+		if len(found) == 2 {
+			return found[1]
+		}
+	}
+
+	return ""
 }
 
 // isHugoProject checks for Hugo config files.

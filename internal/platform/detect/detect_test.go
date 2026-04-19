@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -13,7 +14,11 @@ import (
 
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
-	err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
+	err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(dir, name), []byte(content), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,6 +27,7 @@ func writeFile(t *testing.T, dir, name, content string) {
 func TestDetectFramework_NextJS(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "package.json", `{"dependencies":{"next":"14.0.0","react":"18.0.0"}}`)
+	writeFile(t, dir, "next.config.js", `module.exports = { output: "export" }`)
 
 	fw, pkg, err := DetectFramework(dir)
 	if err != nil {
@@ -233,6 +239,7 @@ func TestDetectFramework_NextJSPriorityOverReact(t *testing.T) {
 	// Next.js projects also have react — Next should be detected, not CRA
 	dir := t.TempDir()
 	writeFile(t, dir, "package.json", `{"dependencies":{"next":"14.0.0","react":"18.0.0","react-scripts":"5.0.0"}}`)
+	writeFile(t, dir, "next.config.js", `module.exports = { output: "export" }`)
 
 	fw, _, err := DetectFramework(dir)
 	if err != nil {
@@ -240,6 +247,77 @@ func TestDetectFramework_NextJSPriorityOverReact(t *testing.T) {
 	}
 	if fw.Name != "nextjs" {
 		t.Errorf("expected nextjs (higher priority), got %s", fw.Name)
+	}
+}
+
+func TestDetectFramework_NextJSStandaloneUnsupported(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{"dependencies":{"next":"16.0.0","react":"19.0.0"}}`)
+	writeFile(t, dir, "next.config.ts", `export default { output: "standalone" }`)
+
+	_, _, err := DetectFramework(dir)
+	if err == nil {
+		t.Fatal("expected standalone Next.js to be rejected")
+	}
+	if !strings.Contains(err.Error(), `output: "export"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDetectFramework_WorkspaceNextExport(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{
+		"private": true,
+		"scripts": {"build": "turbo build"},
+		"devDependencies": {"turbo": "^2.0.0"}
+	}`)
+	writeFile(t, dir, "pnpm-workspace.yaml", "packages:\n  - apps/*\n")
+	writeFile(t, dir, "apps/web/package.json", `{
+		"name": "web",
+		"scripts": {"build": "next build"},
+		"dependencies": {"next": "16.0.0", "react": "19.0.0"}
+	}`)
+	writeFile(t, dir, "apps/web/next.config.ts", `export default { output: "export" }`)
+
+	fw, pkg, err := DetectFramework(dir)
+	if err != nil {
+		t.Fatalf("DetectFramework() error: %v", err)
+	}
+	if pkg == nil {
+		t.Fatal("expected root package.json to be returned")
+	}
+	if fw.Name != "nextjs" {
+		t.Fatalf("expected nextjs, got %s", fw.Name)
+	}
+	if fw.BuildCommand != "npm run build" {
+		t.Fatalf("expected root build command, got %q", fw.BuildCommand)
+	}
+	if fw.OutputDirectory != "apps/web/out" {
+		t.Fatalf("expected workspace output path, got %q", fw.OutputDirectory)
+	}
+}
+
+func TestDetectFramework_WorkspaceNextStandaloneUnsupported(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{
+		"private": true,
+		"scripts": {"build": "turbo build"},
+		"devDependencies": {"turbo": "^2.0.0"}
+	}`)
+	writeFile(t, dir, "pnpm-workspace.yaml", "packages:\n  - apps/*\n")
+	writeFile(t, dir, "apps/web/package.json", `{
+		"name": "web",
+		"scripts": {"build": "next build"},
+		"dependencies": {"next": "16.0.0", "react": "19.0.0"}
+	}`)
+	writeFile(t, dir, "apps/web/next.config.ts", `export default { output: "standalone" }`)
+
+	_, _, err := DetectFramework(dir)
+	if err == nil {
+		t.Fatal("expected standalone workspace app to be rejected")
+	}
+	if !strings.Contains(err.Error(), "standalone") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
