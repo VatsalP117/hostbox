@@ -50,6 +50,14 @@ git fetch --depth 1 origin "${HOSTBOX_BRANCH}"
 git checkout -B "${HOSTBOX_BRANCH}" "origin/${HOSTBOX_BRANCH}"
 ok "Source updated"
 
+mkdir -p "${HOSTBOX_DIR}"/{data/backups,deployments,logs,cache,tmp}
+chown -R 1000:1000 \
+    "${HOSTBOX_DIR}/data" \
+    "${HOSTBOX_DIR}/deployments" \
+    "${HOSTBOX_DIR}/logs" \
+    "${HOSTBOX_DIR}/cache" \
+    "${HOSTBOX_DIR}/tmp"
+
 if [ "${RESET_DATA}" -eq 1 ]; then
     warn "Resetting runtime data under ${HOSTBOX_DIR}"
     docker compose down --remove-orphans || true

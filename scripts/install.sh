@@ -94,6 +94,12 @@ install_prerequisites() {
 setup_directory() {
     info "Setting up ${HOSTBOX_DIR}..."
     mkdir -p "${HOSTBOX_DIR}"/{data/backups,deployments,logs,cache,tmp}
+    chown -R 1000:1000 \
+        "${HOSTBOX_DIR}/data" \
+        "${HOSTBOX_DIR}/deployments" \
+        "${HOSTBOX_DIR}/logs" \
+        "${HOSTBOX_DIR}/cache" \
+        "${HOSTBOX_DIR}/tmp"
     ok "Directory structure created"
 }
 
@@ -111,10 +117,10 @@ download_source() {
 
     local tmpdir
     tmpdir="$(mktemp -d)"
-    trap 'rm -rf "${tmpdir}"' RETURN
 
     git clone --depth 1 --branch "${branch}" "${repo_url}" "${tmpdir}/repo"
     cp -a "${tmpdir}/repo/." "${HOSTBOX_DIR}/"
+    rm -rf "${tmpdir}"
     ok "Hostbox source downloaded"
 }
 

@@ -58,9 +58,10 @@ It will:
 2. ask for your root domain, dashboard host, ACME email, and optional DNS-provider credentials
 3. clone Hostbox source into `/opt/hostbox`
 4. create `/opt/hostbox/{data,deployments,logs,cache,tmp}`
-5. generate secrets and a `.env`
-6. detect the Docker socket group and wire it into compose so build containers can start
-7. build and start Hostbox locally from source
+5. set runtime directory ownership for the Hostbox container user
+6. generate secrets and a `.env`
+7. detect the Docker socket group and wire it into compose so build containers can start
+8. build and start Hostbox locally from source
 
 After the install finishes, open `https://hostbox.example.com` and create the first admin account.
 
@@ -102,6 +103,7 @@ Use this if you want to review everything yourself.
 git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
 cd /opt/hostbox
 sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
+sudo chown -R 1000:1000 /opt/hostbox/data /opt/hostbox/deployments /opt/hostbox/logs /opt/hostbox/cache /opt/hostbox/tmp
 ```
 
 ### 2. Create secrets and detect the Docker socket group
@@ -199,6 +201,8 @@ Hostbox creates Docker build containers through the **host Docker daemon**. That
 2. valid on the VM host filesystem
 
 That is why Docker installs should use `/opt/hostbox/...` for database, logs, deployments, cache, and clone paths.
+
+The runtime directories also need to be writable by the Hostbox container user (`uid 1000`), which is why the installer and update script chown those directories during setup.
 
 ### DNS provider credentials
 
@@ -353,6 +357,23 @@ On Linux, `DOCKER_GID` in `.env` should match the socket's group ID on the host.
 
 ```bash
 docker compose up -d
+```
+
+### Hostbox container restarts with `unable to open database file`
+
+If Hostbox starts and immediately restarts with errors like:
+
+```text
+failed to open database
+apply pragmas: exec "PRAGMA journal_mode = WAL": unable to open database file
+```
+
+the runtime directories on the host are usually owned by `root` instead of the Hostbox container user. Fix ownership and restart:
+
+```bash
+sudo chown -R 1000:1000 /opt/hostbox/data /opt/hostbox/deployments /opt/hostbox/logs /opt/hostbox/cache /opt/hostbox/tmp
+cd /opt/hostbox
+docker compose up -d --remove-orphans
 ```
 
 ### Installer fails with registry `denied`
