@@ -57,26 +57,65 @@ It will:
 1. install Docker if needed
 2. ask for your root domain, dashboard host, ACME email, and optional DNS-provider credentials
 3. clone Hostbox source into `/opt/hostbox`
-4. generate secrets and a `.env`
-5. detect the Docker socket group and wire it into compose so build containers can start
-6. build and start Hostbox locally from source
+4. create `/opt/hostbox/{data,deployments,logs,cache,tmp}`
+5. generate secrets and a `.env`
+6. detect the Docker socket group and wire it into compose so build containers can start
+7. build and start Hostbox locally from source
 
 After the install finishes, open `https://hostbox.example.com` and create the first admin account.
+
+### Fresh install on a VM that already has the right DNS records
+
+If DNS already points at this VM and you just want to replace an older or broken Hostbox install, you do **not** need to change DNS. The IP address stays the same, so the records can stay the same too.
+
+For a testing VM where Hostbox data is disposable:
+
+```bash
+sudo systemctl stop caddy 2>/dev/null || true
+cd /opt/hostbox 2>/dev/null && sudo docker compose down --remove-orphans || true
+sudo rm -rf /opt/hostbox
+curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/install.sh | sudo bash
+```
+
+### What the installer puts on disk
+
+Hostbox now uses **host-visible absolute paths** for all build bind mounts. After install, these paths should exist:
+
+```text
+/opt/hostbox/data
+/opt/hostbox/data/backups
+/opt/hostbox/deployments
+/opt/hostbox/logs
+/opt/hostbox/cache
+/opt/hostbox/tmp
+```
+
+The generated `.env` should point at those same paths.
 
 ## Manual install
 
 Use this if you want to review everything yourself.
 
+### 1. Clone the source
+
 ```bash
 git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
 cd /opt/hostbox
 sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
+```
 
+### 2. Create secrets and detect the Docker socket group
+
+```bash
 JWT_SECRET="$(openssl rand -hex 32)"
 ENCRYPTION_KEY="$(openssl rand -hex 32)"
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 DOCKER_GID="$(stat -c '%g' /var/run/docker.sock)"
+```
 
+### 3. Create `.env`
+
+```bash
 cat > .env <<EOF
 PLATFORM_DOMAIN=example.com
 DASHBOARD_DOMAIN=hostbox.example.com
@@ -101,17 +140,27 @@ ACME_EMAIL=admin@example.com
 DNS_PROVIDER=none
 
 LOG_LEVEL=info
+LOG_FORMAT=json
+BUILD_MEMORY_MB=1024
 EOF
-
-docker compose up -d --build
 ```
 
-Then verify the API from inside the container:
+### 4. Build and start Hostbox
+
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+### 5. Verify the API
 
 ```bash
 docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/health
 docker compose exec -T hostbox wget --no-verbose --tries=1 -O- http://127.0.0.1:8080/api/v1/setup/status
 ```
+
+### 6. Open the dashboard
+
+Visit `https://hostbox.example.com`.
 
 ## Configuration
 
@@ -141,6 +190,15 @@ Hostbox reads runtime configuration from `.env`.
 | `GITHUB_APP_SLUG` | No | Required only for GitHub App deployments. |
 | `GITHUB_APP_PEM` | No | Required only for GitHub App deployments. |
 | `GITHUB_WEBHOOK_SECRET` | No | Required only for GitHub App deployments. |
+
+### Why the path variables matter
+
+Hostbox creates Docker build containers through the **host Docker daemon**. That means the source paths used for bind mounts must be:
+
+1. absolute
+2. valid on the VM host filesystem
+
+That is why Docker installs should use `/opt/hostbox/...` for database, logs, deployments, cache, and clone paths.
 
 ### DNS provider credentials
 
@@ -208,14 +266,39 @@ docker compose logs -f caddy
 
 ### Update
 
+For normal updates:
+
 ```bash
 bash scripts/update.sh
 ```
 
-During testing, if you want a rebuild from current `main` and you do not care about preserving Hostbox's runtime data:
+During testing, if you want to rebuild from current `main` and do **not** care about preserving Hostbox runtime data:
 
 ```bash
 bash scripts/update.sh --fresh
+```
+
+That fresh update will:
+
+1. stop current Hostbox containers
+2. update the checkout to current `main`
+3. remove the SQLite database and runtime artifacts
+4. rebuild everything from source
+5. start a clean Hostbox on the same VM and IP
+
+### Replace an older manual install with a clean one
+
+If your VM already has an old `/opt/hostbox` checkout and you just want to start over:
+
+```bash
+cd /opt/hostbox 2>/dev/null && sudo docker compose down --remove-orphans || true
+sudo rm -rf /opt/hostbox
+git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
+cd /opt/hostbox
+sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
+cp .env.production.example .env
+# edit .env
+docker compose up -d --build --remove-orphans
 ```
 
 ### Stop
@@ -226,7 +309,7 @@ docker compose down
 
 ### Backups
 
-Backups are written under `/app/data/backups` inside the container, which maps to the `hostbox_data` volume.
+Backups are written under `/opt/hostbox/data/backups` on the VM.
 
 ```bash
 docker compose exec -T hostbox hostbox-cli admin backup
@@ -272,6 +355,23 @@ On Linux, `DOCKER_GID` in `.env` should match the socket's group ID on the host.
 docker compose up -d
 ```
 
+### Installer fails with registry `denied`
+
+Current Hostbox installs do **not** need `docker compose pull` from GHCR anymore. The installer now clones the source and builds locally with:
+
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+If you hit a GHCR pull error, you are almost certainly running an older installer or an older local checkout. Update the source and rerun the current installer or:
+
+```bash
+cd /opt/hostbox
+git fetch --depth 1 origin main
+git checkout -B main origin/main
+bash scripts/update.sh --fresh
+```
+
 ### Builds fail with exit code 137
 
 If install or build logs end with `command exited with code 137`, Docker killed the build container. Increase the build memory limit in `.env`, then restart Hostbox:
@@ -292,6 +392,23 @@ Hostbox passes clone, artifact, and log directories to Docker as bind-mount sour
 - When you run Hostbox inside Docker and point it at the host Docker socket, those paths must be valid on the Docker daemon host, not just inside the Hostbox container.
 
 For Docker installs, mount the host directories into the Hostbox and Caddy containers at the same absolute paths you configure in `.env`.
+
+### Build fails with `EACCES` on `/app/src/_tmp_*`
+
+If a Node package manager fails with an error like:
+
+```text
+EACCES: permission denied, open '/app/src/_tmp_...'
+```
+
+you are likely running an older Hostbox build-container configuration. Current `main` keeps the hardened container model but restores the narrow capabilities needed for package managers to write temp files into the checked-out source directory.
+
+Update Hostbox on the VM:
+
+```bash
+cd /opt/hostbox
+bash scripts/update.sh --fresh
+```
 
 ### TLS or certificate issues
 
