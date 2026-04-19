@@ -34,7 +34,8 @@ curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/scripts/ins
 This will:
 1. Install Docker (if needed)
 2. Prompt for your domain and email
-3. Generate secrets and start Hostbox
+3. Clone Hostbox source into `/opt/hostbox`
+4. Generate secrets and start Hostbox with a local Docker build
 
 ### Manual Install
 
@@ -42,11 +43,12 @@ This will:
 # Clone and configure
 git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
 cd /opt/hostbox
+mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
 cp .env.production.example .env
 # Edit .env with your domain, email, and secrets
 
 # Start
-docker compose up -d
+docker compose up -d --build
 ```
 
 ### Access Dashboard

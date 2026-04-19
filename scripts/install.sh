@@ -97,13 +97,25 @@ setup_directory() {
     ok "Directory structure created"
 }
 
-download_files() {
-    info "Downloading configuration files..."
-    local branch="main"
-    local base="https://raw.githubusercontent.com/${REPO}/${branch}"
+download_source() {
+    info "Downloading Hostbox source..."
+    local branch="${HOSTBOX_BRANCH:-main}"
+    local repo_url="https://github.com/${REPO}.git"
 
-    curl -fsSL "${base}/docker-compose.yml" -o "${HOSTBOX_DIR}/docker-compose.yml"
-    ok "docker-compose.yml downloaded"
+    if [ -d "${HOSTBOX_DIR}/.git" ]; then
+        git -C "${HOSTBOX_DIR}" fetch --depth 1 origin "${branch}"
+        git -C "${HOSTBOX_DIR}" checkout -B "${branch}" "origin/${branch}"
+        ok "Hostbox source updated"
+        return
+    fi
+
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "${tmpdir}"' RETURN
+
+    git clone --depth 1 --branch "${branch}" "${repo_url}" "${tmpdir}/repo"
+    cp -a "${tmpdir}/repo/." "${HOSTBOX_DIR}/"
+    ok "Hostbox source downloaded"
 }
 
 configure() {
@@ -200,8 +212,7 @@ EOF
 start_hostbox() {
     info "Starting Hostbox..."
     cd "${HOSTBOX_DIR}"
-    docker compose pull -q
-    docker compose up -d
+    docker compose up -d --build --remove-orphans
     ok "Containers started"
 }
 
@@ -261,7 +272,8 @@ print_success() {
     echo -e "  ${YELLOW}Useful Commands:${NC}"
     echo -e "    Logs:    cd ${HOSTBOX_DIR} && docker compose logs -f"
     echo -e "    Stop:    cd ${HOSTBOX_DIR} && docker compose down"
-    echo -e "    Update:  cd ${HOSTBOX_DIR} && docker compose pull && docker compose up -d"
+    echo -e "    Update:  cd ${HOSTBOX_DIR} && bash scripts/update.sh"
+    echo -e "    Fresh:   cd ${HOSTBOX_DIR} && bash scripts/update.sh --fresh"
     echo -e "    Backup:  hostbox admin backup"
     echo ""
 }
@@ -276,7 +288,7 @@ main() {
     check_prerequisites
     detect_docker_gid
     setup_directory
-    download_files
+    download_source
     configure
     generate_secrets
     generate_env

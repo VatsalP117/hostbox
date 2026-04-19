@@ -56,9 +56,10 @@ It will:
 
 1. install Docker if needed
 2. ask for your root domain, dashboard host, ACME email, and optional DNS-provider credentials
-3. generate secrets and a `.env`
-4. detect the Docker socket group and wire it into compose so build containers can start
-5. start Hostbox and print the dashboard URL
+3. clone Hostbox source into `/opt/hostbox`
+4. generate secrets and a `.env`
+5. detect the Docker socket group and wire it into compose so build containers can start
+6. build and start Hostbox locally from source
 
 After the install finishes, open `https://hostbox.example.com` and create the first admin account.
 
@@ -67,10 +68,9 @@ After the install finishes, open `https://hostbox.example.com` and create the fi
 Use this if you want to review everything yourself.
 
 ```bash
-sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
+git clone https://github.com/VatsalP117/hostbox.git /opt/hostbox
 cd /opt/hostbox
-
-curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/docker-compose.yml -o docker-compose.yml
+sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
 
 JWT_SECRET="$(openssl rand -hex 32)"
 ENCRYPTION_KEY="$(openssl rand -hex 32)"
@@ -103,7 +103,7 @@ DNS_PROVIDER=none
 LOG_LEVEL=info
 EOF
 
-docker compose up -d
+docker compose up -d --build
 ```
 
 Then verify the API from inside the container:
@@ -209,8 +209,13 @@ docker compose logs -f caddy
 ### Update
 
 ```bash
-docker compose pull
-docker compose up -d --remove-orphans
+bash scripts/update.sh
+```
+
+During testing, if you want a rebuild from current `main` and you do not care about preserving Hostbox's runtime data:
+
+```bash
+bash scripts/update.sh --fresh
 ```
 
 ### Stop
