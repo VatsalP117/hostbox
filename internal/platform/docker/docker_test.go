@@ -1,6 +1,10 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -72,6 +76,58 @@ func TestWrapBuildCommandSetsBuildToolShims(t *testing.T) {
 	}
 }
 
+func TestExtractTarStripsCopiedRootDirectory(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	writeTarDir(t, tw, "out")
+	writeTarFile(t, tw, "out/index.html", "<html>ok</html>")
+	writeTarDir(t, tw, "out/assets")
+	writeTarFile(t, tw, "out/assets/app.js", "console.log('ok');")
+
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+
+	destDir := t.TempDir()
+	size, err := extractTar(bytes.NewReader(buf.Bytes()), destDir, "out")
+	if err != nil {
+		t.Fatalf("extract tar: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(destDir, "index.html")); err != nil {
+		t.Fatalf("expected index.html at artifact root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "assets", "app.js")); err != nil {
+		t.Fatalf("expected nested asset at artifact root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "out")); !os.IsNotExist(err) {
+		t.Fatalf("expected copied root directory to be stripped, got err=%v", err)
+	}
+
+	wantSize := int64(len("<html>ok</html>") + len("console.log('ok');"))
+	if size != wantSize {
+		t.Fatalf("extracted size = %d, want %d", size, wantSize)
+	}
+}
+
+func TestExtractTarRejectsPathTraversal(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	writeTarFile(t, tw, "../escape.txt", "bad")
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+
+	if _, err := extractTar(bytes.NewReader(buf.Bytes()), t.TempDir(), ""); err == nil {
+		t.Fatal("expected traversal error")
+	}
+}
+
 func findMount(t *testing.T, mounts []mount.Mount, target string) mount.Mount {
 	t.Helper()
 
@@ -83,4 +139,32 @@ func findMount(t *testing.T, mounts []mount.Mount, target string) mount.Mount {
 
 	t.Fatalf("mount with target %s not found", target)
 	return mount.Mount{}
+}
+
+func writeTarDir(t *testing.T, tw *tar.Writer, name string) {
+	t.Helper()
+
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     name,
+		Typeflag: tar.TypeDir,
+		Mode:     0755,
+	}); err != nil {
+		t.Fatalf("write tar dir %s: %v", name, err)
+	}
+}
+
+func writeTarFile(t *testing.T, tw *tar.Writer, name, contents string) {
+	t.Helper()
+
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     name,
+		Typeflag: tar.TypeReg,
+		Mode:     0644,
+		Size:     int64(len(contents)),
+	}); err != nil {
+		t.Fatalf("write tar file header %s: %v", name, err)
+	}
+	if _, err := tw.Write([]byte(contents)); err != nil {
+		t.Fatalf("write tar file body %s: %v", name, err)
+	}
 }

@@ -214,11 +214,12 @@ func (c *Client) CopyFromContainer(ctx context.Context, containerID, srcPath, de
 	}
 	defer reader.Close()
 
-	if err := extractTar(reader, destPath); err != nil {
+	size, err := extractTar(reader, destPath, stat.Name)
+	if err != nil {
 		return 0, fmt.Errorf("extract tar to %s: %w", destPath, err)
 	}
 
-	return stat.Size, nil
+	return size, nil
 }
 
 // RemoveVolume removes a named Docker volume.
@@ -251,43 +252,72 @@ func (c *Client) ensureImage(ctx context.Context, img string) error {
 	return nil
 }
 
-func extractTar(reader io.Reader, destDir string) error {
+func extractTar(reader io.Reader, destDir, stripRoot string) (int64, error) {
 	tr := tar.NewReader(reader)
+	baseDir := filepath.Clean(destDir)
+	stripRoot = strings.Trim(strings.TrimPrefix(filepath.ToSlash(stripRoot), "./"), "/")
+	var totalSize int64
+
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
+			return 0, err
 		}
 
-		target := filepath.Join(destDir, header.Name)
+		name := strings.Trim(strings.TrimPrefix(filepath.ToSlash(header.Name), "./"), "/")
+		if stripRoot != "" {
+			switch {
+			case name == stripRoot:
+				continue
+			case strings.HasPrefix(name, stripRoot+"/"):
+				name = strings.TrimPrefix(name, stripRoot+"/")
+			}
+		}
+		if name == "" {
+			continue
+		}
+
+		target := filepath.Join(baseDir, filepath.FromSlash(name))
 
 		// Prevent path traversal
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(destDir)) {
-			return fmt.Errorf("invalid tar entry: %s", header.Name)
+		if !isWithinBaseDir(baseDir, target) {
+			return 0, fmt.Errorf("invalid tar entry: %s", header.Name)
 		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
+				return 0, err
 			}
-		case tar.TypeReg:
+		case tar.TypeReg, tar.TypeRegA:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
+				return 0, err
 			}
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
-				return err
+				return 0, err
 			}
-			if _, err := io.Copy(f, tr); err != nil {
+			written, err := io.Copy(f, tr)
+			if err != nil {
 				f.Close()
-				return err
+				return 0, err
 			}
 			f.Close()
+			totalSize += written
 		}
 	}
-	return nil
+
+	return totalSize, nil
+}
+
+func isWithinBaseDir(baseDir, target string) bool {
+	rel, err := filepath.Rel(baseDir, target)
+	if err != nil {
+		return false
+	}
+
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
