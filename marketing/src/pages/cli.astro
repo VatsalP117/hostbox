@@ -1,0 +1,232 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Hostbox | Sovereign CLI" description="Absolute control from your terminal. Deploy, monitor, and scale with a single binary.">
+  <section class="pt-24 pb-12 px-6 flex-grow flex flex-col gap-12 max-w-3xl mx-auto">
+    <!-- Hero Section & Install Guide -->
+    <section class="flex flex-col gap-8">
+      <div class="space-y-2">
+        <span class="font-label text-[0.6875rem] uppercase tracking-widest text-primary">Deployment Sovereign</span>
+        <h1 class="font-headline text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+          Command the<br/>Sovereign Cloud.
+        </h1>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Absolute control from your terminal. Manage deployments, domains, and environments with precision and zero friction.</p>
+      </div>
+
+      <!-- Install Terminal -->
+      <div class="terminal-window relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-primary/10 to-transparent pointer-events-none"></div>
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+          </div>
+          <span class="font-label text-[10px] text-outline tracking-widest">bash — install</span>
+          <div class="w-10"></div>
+        </div>
+        <div class="p-4 font-label text-sm text-primary">
+          <span class="text-outline">$</span> curl -fsSL https://hostbox.sh/cli | bash
+        </div>
+      </div>
+      <p class="font-label text-[10px] text-outline -mt-6 ml-1">Requires Node.js 18+</p>
+    </section>
+
+    <!-- Core Commands -->
+    <section class="space-y-6">
+      <div class="flex justify-between items-end">
+        <h2 class="font-headline text-2xl md:text-3xl font-bold text-white tracking-tight">Core Commands</h2>
+        <span class="font-label text-[0.6875rem] text-outline">v2.4.0-STABLE</span>
+      </div>
+      <p class="text-on-surface-variant text-sm -mt-2">The tools you need, mapped directly to your workflow.</p>
+
+      <div class="grid grid-cols-1 gap-3">
+        <!-- deploy -->
+        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+          <div class="flex justify-between items-start mb-3">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-primary text-2xl" data-icon="rocket_launch">rocket_launch</span>
+              <span>
+                <code class="text-primary font-label text-sm block">hbx deploy --prod</code>
+                <span class="font-label text-[10px] text-outline uppercase tracking-wider">deploy</span>
+              </span>
+            </div>
+          </div>
+          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
+            <div class="text-on-surface-variant">Building...</div>
+            <div class="text-on-surface-variant">Uploading artifacts (42MB)...</div>
+            <div class="text-primary mt-1">✓ Deployment ready: https://app.sovereign.sh</div>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-3">Deploys the current directory. Automatically detects framework and configuration.</p>
+        </div>
+
+        <!-- status -->
+        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="query_stats">query_stats</span>
+            <div>
+              <code class="text-primary font-label text-sm">hbx status</code>
+              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">status</span>
+            </div>
+          </div>
+          <p class="text-xs text-on-surface-variant">Check health and current deployment state.</p>
+          <div class="mt-3 bg-surface-container-lowest rounded-lg p-3 font-label text-[11px]">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+              <span class="text-primary">Production: Healthy</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- logs -->
+        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="receipt_long">receipt_long</span>
+            <div>
+              <code class="text-primary font-label text-sm">hbx logs -f</code>
+              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">logs</span>
+            </div>
+          </div>
+          <p class="text-xs text-on-surface-variant">Stream live application and infrastructure logs.</p>
+        </div>
+
+        <!-- env -->
+        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="vpn_key">vpn_key</span>
+            <div>
+              <code class="text-primary font-label text-sm">hbx env pull</code>
+              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">env</span>
+            </div>
+          </div>
+          <p class="text-xs text-on-surface-variant">Manage secrets and environment variables securely.</p>
+        </div>
+
+        <!-- rollback -->
+        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="history">history</span>
+            <div>
+              <code class="text-primary font-label text-sm">hbx rollback</code>
+              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">rollback</span>
+            </div>
+          </div>
+          <p class="text-xs text-on-surface-variant">Instantly revert to a previous healthy state.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dual Interface -->
+    <section class="space-y-8">
+      <div>
+        <h2 class="font-headline text-2xl md:text-3xl font-bold text-white">One Core. Two Interfaces.</h2>
+        <p class="text-on-surface-variant text-sm mt-2 max-w-lg leading-relaxed">
+          Whether you prefer the visual overview of a dashboard or the speed of a terminal, you sacrifice nothing. Both interfaces command the exact same sovereign infrastructure API.
+        </p>
+      </div>
+      <div class="flex items-center gap-4 text-sm font-label">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+          <span class="text-on-surface-variant">100% feature parity</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+          <span class="text-on-surface-variant">Shared auth state</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
+          <span class="text-on-surface-variant">Real-time sync</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Web GUI Card -->
+        <div class="bg-surface-container-low rounded-xl border border-outline-variant/10 p-6 hover:border-primary/20 transition-all">
+          <span class="material-symbols-outlined text-primary text-2xl mb-3 block" data-icon="dashboard">dashboard</span>
+          <h3 class="font-headline text-lg font-bold text-white mb-2">Web GUI</h3>
+          <p class="text-on-surface-variant text-sm">Visual overview of all deployments, logs, and domains.</p>
+        </div>
+        <!-- Terminal Card -->
+        <div class="bg-surface-container-low rounded-xl border border-primary/20 p-6">
+          <span class="material-symbols-outlined text-primary text-2xl mb-3 block" data-icon="terminal">terminal</span>
+          <h3 class="font-headline text-lg font-bold text-white mb-2">Terminal</h3>
+          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] mt-3 leading-relaxed">
+            <div class="text-primary">$ hbx status</div>
+            <div class="text-on-surface-variant mt-1">[ok] all systems go</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-time Stream Preview -->
+    <section class="space-y-6">
+      <h2 class="font-headline text-2xl md:text-3xl font-bold text-white tracking-tight">Real-time Stream</h2>
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+          </div>
+          <div class="font-label text-[10px] text-outline tracking-widest uppercase">hostbox-logs --follow</div>
+          <div class="w-10"></div>
+        </div>
+        <div class="p-4 font-label text-[11px] leading-relaxed h-64 overflow-y-auto custom-scrollbar">
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:01</span>
+            <span class="text-[#89DDFF]">[SYS]</span>
+            <span class="text-on-surface-variant">Initializing build environment...</span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:03</span>
+            <span class="text-[#C3E88D]">[OK]</span>
+            <span class="text-on-surface-variant">Docker layer cache hit for <span class="text-primary">node:20-alpine</span></span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:05</span>
+            <span class="text-primary-container">[INFO]</span>
+            <span class="text-on-surface-variant">Compiling assets with <span class="italic">esbuild</span>...</span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:08</span>
+            <span class="text-[#FFCB6B]">[WARN]</span>
+            <span class="text-on-surface-variant">Large bundle detected in <span class="text-tertiary">/vendor/core.js</span></span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:10</span>
+            <span class="text-[#C3E88D]">[OK]</span>
+            <span class="text-on-surface-variant">Build completed in 8.42s</span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:11</span>
+            <span class="text-[#89DDFF]">[SYS]</span>
+            <span class="text-on-surface-variant">Streaming image to <span class="text-primary">us-east-1</span> (Edge)</span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:14</span>
+            <span class="text-primary-container">[INFO]</span>
+            <span class="text-on-surface-variant">Health check status: <span class="text-[#C3E88D]">PASS</span></span>
+          </div>
+          <div class="flex gap-3 mb-1">
+            <span class="text-outline shrink-0">14:02:15</span>
+            <span class="text-primary">[LIVE]</span>
+            <span class="text-white font-bold underline decoration-primary/50">https://sovereign-app-v2.hb.app</span>
+          </div>
+          <div class="flex gap-2 mt-2 animate-pulse">
+            <span class="text-primary">_</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="mt-4 pb-8">
+      <a class="w-full bg-primary text-on-primary font-headline font-bold py-4 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(173,198,255,0.2)] active:scale-[0.98] transition-transform" href="https://github.com/VatsalP117/hostbox/tree/main/docs" target="_blank" rel="noopener noreferrer">
+        Deep dive into the docs
+        <span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span>
+      </a>
+      <p class="text-center text-[10px] font-label text-outline mt-4 tracking-tighter uppercase">Comprehensive guides for API, CLI, and Edge deployment.</p>
+    </section>
+  </section>
+</Layout>

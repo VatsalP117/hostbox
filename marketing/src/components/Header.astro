@@ -1,0 +1,26 @@
+---
+const currentPath = Astro.url.pathname;
+---
+
+<header class="fixed top-0 w-full z-50 bg-[#131313]/80 backdrop-blur-xl border-b border-[#434655]/15 shadow-2xl shadow-black/40">
+  <div class="flex justify-between items-center max-w-[1400px] mx-auto px-6 h-16">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-primary text-2xl" data-icon="terminal">terminal</span>
+      <a class="text-2xl font-black tracking-tighter text-white font-headline" href="/">Hostbox</a>
+    </div>
+    <div class="flex items-center gap-6">
+      <nav class="hidden md:flex items-center gap-8 font-headline text-sm font-medium tracking-tight">
+        <a class:list={[
+          currentPath === '/features/' || currentPath === '/features' ? 'text-primary border-b-2 border-primary pb-1' : 'text-outline-variant hover:text-white transition-colors'
+        ]} href="/features">Features</a>
+        <a class:list={[
+          currentPath === '/cli/' || currentPath === '/cli' ? 'text-primary border-b-2 border-primary pb-1' : 'text-outline-variant hover:text-white transition-colors'
+        ]} href="/cli">CLI</a>
+        <a class="text-outline-variant hover:text-white transition-colors" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">Docs</a>
+      </nav>
+      <a class="bg-surface-container/50 hover:bg-surface-container transition-all duration-300 px-4 py-2 rounded-xl text-white font-headline text-sm font-medium flex items-center gap-2 active:scale-95" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>

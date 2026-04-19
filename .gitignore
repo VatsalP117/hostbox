@@ -10,6 +10,8 @@
 # Web
 web/dist/
 web/node_modules/
+marketing/dist/
+marketing/node_modules/
 
 # IDE
 .idea/

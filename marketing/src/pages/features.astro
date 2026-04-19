@@ -1,0 +1,238 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Hostbox | Sovereign Architecture" description="A comprehensive suite of deployment tools designed for precision and autonomy. No magic, just solid infrastructure primitives exposed cleanly.">
+  <!-- Hero -->
+  <section class="pt-28 pb-20 px-6 max-w-[1400px] mx-auto">
+    <div class="mb-4">
+      <span class="font-label text-[0.6875rem] uppercase tracking-widest text-primary border border-primary/20 px-3 py-1 rounded-full">Platform Architecture</span>
+    </div>
+    <h1 class="font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 max-w-2xl">
+      Engineered for <span class="text-primary">Sovereign Control.</span>
+    </h1>
+    <p class="text-on-surface-variant text-lg max-w-xl leading-relaxed">
+      A comprehensive suite of deployment tools designed for precision and autonomy. No magic, just solid infrastructure primitives exposed cleanly.
+    </p>
+  </section>
+
+  <!-- Feature: Git-Push Deployments -->
+  <section class="px-6 pb-20 max-w-[1400px] mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Git-Push Deployments (Large) -->
+      <div class="md:col-span-2 bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 hover:border-primary/20 transition-all duration-500">
+        <div class="grid md:grid-cols-2 gap-8 items-center">
+          <div>
+            <span class="material-symbols-outlined text-primary text-4xl mb-4" data-icon="deployed_code">deployed_code</span>
+            <h3 class="font-headline text-xl font-bold mb-2">Git-Push Deployments</h3>
+            <p class="text-on-surface-variant text-sm leading-relaxed mb-4">Push to main, and we handle the rest. Automated build pipelines triggered by webhooks, with isolated PR preview environments.</p>
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <div class="terminal-dot"></div>
+                  <div class="terminal-dot"></div>
+                  <div class="terminal-dot"></div>
+                </div>
+                <span class="font-label text-[10px] text-outline-variant uppercase tracking-widest ml-4">bash</span>
+                <div class="w-10"></div>
+              </div>
+              <div class="p-4 font-label text-sm">
+                <span class="text-outline">~$</span> <span class="text-on-surface-variant">git push origin main</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <!-- Framework Detection -->
+            <div class="mb-8">
+              <span class="material-symbols-outlined text-primary text-3xl mb-3 block" data-icon="search_insights">search_insights</span>
+              <h4 class="font-headline text-lg font-bold mb-2">Zero-Config Framework Detection</h4>
+              <p class="text-on-surface-variant text-sm leading-relaxed">Intelligent heuristic analysis automatically detects your framework and injects optimal build steps.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-4">
+              {['Next.js', 'SvelteKit', 'Nuxt', 'Astro', 'Vite', 'Hugo'].map((fw) => (
+                <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">{fw}</span>
+              ))}
+            </div>
+
+            <div class="mt-8">
+              <span class="material-symbols-outlined text-primary text-3xl mb-3 block" data-icon="lock">lock</span>
+              <h4 class="font-headline text-lg font-bold mb-2">Automatic HTTPS</h4>
+              <p class="text-on-surface-variant text-sm leading-relaxed">Every deployment is automatically provisioned with a Let's Encrypt certificate via Caddy, ensuring end-to-end encryption with zero configuration.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Domains -->
+      <div class="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 hover:border-primary/20 transition-all duration-500">
+        <span class="material-symbols-outlined text-primary text-3xl mb-4" data-icon="language">language</span>
+        <h3 class="font-headline text-lg font-bold mb-2">Custom Domains</h3>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Map any domain to your projects effortlessly. Full support for apex domains, wildcards, and automatic SSL generation.</p>
+      </div>
+
+      <!-- Preview Deployments -->
+      <div class="bg-surface-container-low rounded-xl p-8 border border-outline-variant/5 hover:border-primary/20 transition-all duration-500">
+        <span class="material-symbols-outlined text-primary text-3xl mb-4" data-icon="preview">preview</span>
+        <h3 class="font-headline text-lg font-bold mb-2">Preview Deployments</h3>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Unique, branch-stable URLs generated for every pull request. Test changes in a production-like environment before merging.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Real-Time Observability -->
+  <section class="px-6 py-20 max-w-[1400px] mx-auto">
+    <div class="text-center mb-12">
+      <span class="font-label text-[10px] uppercase tracking-[0.3em] text-outline block mb-4">Real-Time Observability</span>
+      <h2 class="font-headline text-3xl md:text-4xl font-bold text-white">Watch it happen.</h2>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Build Logs -->
+      <div>
+        <div class="flex items-center gap-3 mb-4">
+          <span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+          <h3 class="font-headline text-lg font-bold">Build Logs Streaming</h3>
+        </div>
+        <p class="text-on-surface-variant text-sm mb-6">Watch your builds progress in real-time via Server-Sent Events. No polling, no lag.</p>
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <div class="terminal-dot"></div>
+              <div class="terminal-dot"></div>
+              <div class="terminal-dot"></div>
+            </div>
+            <span class="font-label text-[10px] text-outline-variant uppercase tracking-widest ml-4">build.log</span>
+            <div class="w-10"></div>
+          </div>
+          <div class="p-4 font-label text-[11px] leading-relaxed">
+            <div class="text-on-surface-variant mb-1"><span class="text-primary">&gt;</span> Preparing build environment...</div>
+            <div class="text-on-surface-variant mb-1"><span class="text-primary">&gt;</span> Cloning repository (branch: main)...</div>
+            <div class="text-on-surface-variant mb-1"><span class="text-primary">&gt;</span> Detected package.json</div>
+            <div class="text-on-surface-variant mb-1"><span class="text-primary">&gt;</span> Framework identified: Next.js</div>
+            <div class="text-on-surface-variant mb-1"><span class="text-primary">&gt;</span> Installing dependencies...</div>
+            <div class="text-[#C3E88D] mb-1"><span class="text-primary">&gt;</span> Build successful! Deploying artifact...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rollbacks & Env -->
+      <div class="space-y-6">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-primary" data-icon="history">history</span>
+            <h3 class="font-headline text-lg font-bold">Artifact Rollbacks</h3>
+          </div>
+          <p class="text-on-surface-variant text-sm mb-4">Instant, one-click rollbacks to previous deployments. Immutable build artifacts let you revert state in milliseconds.</p>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-primary" data-icon="vpn_key">vpn_key</span>
+            <h3 class="font-headline text-lg font-bold">Encrypted Variables</h3>
+          </div>
+          <p class="text-on-surface-variant text-sm mb-4">Environment variables are encrypted at rest using AES-256-GCM. Decrypted only at runtime within the isolated execution context.</p>
+          <div class="flex flex-wrap gap-2">
+            <div class="bg-surface-container-lowest px-4 py-2 rounded font-label text-[10px] text-primary/50 whitespace-nowrap border border-outline-variant/10">APP_SECRET=********</div>
+            <div class="bg-surface-container-lowest px-4 py-2 rounded font-label text-[10px] text-primary/50 whitespace-nowrap border border-outline-variant/10">DB_PASSWORD=********</div>
+            <div class="bg-surface-container-lowest px-4 py-2 rounded font-label text-[10px] text-primary/50 whitespace-nowrap border border-outline-variant/10">API_KEY=********</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-primary" data-icon="notifications_active">notifications_active</span>
+            <h3 class="font-headline text-lg font-bold">Webhook Notifications</h3>
+          </div>
+          <p class="text-on-surface-variant text-sm">Integrate with Discord, Slack, or any custom endpoint. Get notified immediately on build success, failure, or deployment state changes.</p>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-primary" data-icon="dashboard">dashboard</span>
+            <h3 class="font-headline text-lg font-bold">Unified CLI &amp; Dash</h3>
+          </div>
+          <p class="text-on-surface-variant text-sm">Everything you can do in the dashboard is available via the CLI. Manage your infrastructure entirely from your terminal if you prefer.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section class="px-6 py-20 max-w-[1400px] mx-auto">
+    <h2 class="font-headline text-3xl font-bold mb-4">The Strategic Choice</h2>
+    <p class="text-on-surface-variant mb-12">Performance vs. Complexity: Why architects choose Hostbox.</p>
+    <div class="overflow-x-auto rounded-xl border border-outline-variant/10">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-surface-container-high">
+            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Metric</th>
+            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest text-primary border-b border-outline-variant/10">Hostbox</th>
+            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Vercel</th>
+            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Coolify</th>
+          </tr>
+        </thead>
+        <tbody class="text-sm font-body">
+          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
+            <td class="p-6 font-medium text-on-surface">Licensing / Cost</td>
+            <td class="p-6 text-primary">Self-Hosted (Free)</td>
+            <td class="p-6 text-on-surface-variant">Proprietary ($$$)</td>
+            <td class="p-6 text-on-surface-variant">Open Source (Free)</td>
+          </tr>
+          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
+            <td class="p-6 font-medium text-on-surface">RAM Overhead</td>
+            <td class="p-6 text-primary">&lt; 50MB</td>
+            <td class="p-6 text-on-surface-variant">Managed-Only</td>
+            <td class="p-6 text-on-surface-variant">~1.2GB (Docker-heavy)</td>
+          </tr>
+          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
+            <td class="p-6 font-medium text-on-surface">Primary Focus</td>
+            <td class="p-6 text-primary">Frontend / Static</td>
+            <td class="p-6 text-on-surface-variant">Full Stack / Edge</td>
+            <td class="p-6 text-on-surface-variant">Generic PaaS</td>
+          </tr>
+          <tr class="hover:bg-white/5 transition-colors">
+            <td class="p-6 font-medium text-on-surface">Database Req.</td>
+            <td class="p-6 text-primary">None (SQLite built-in)</td>
+            <td class="p-6 text-on-surface-variant">Cloud Managed</td>
+            <td class="p-6 text-on-surface-variant">Postgres External</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Security + CTA -->
+  <section class="px-6 py-20 max-w-[1400px] mx-auto">
+    <div class="grid md:grid-cols-2 gap-8 items-stretch">
+      <div class="bg-surface-container-low rounded-xl p-10 border border-outline-variant/10 relative overflow-hidden group">
+        <div class="absolute -right-4 -bottom-4 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-all"></div>
+        <h3 class="font-headline text-2xl font-bold mb-4 flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary" data-icon="verified_user">verified_user</span>
+          Hardened Security
+        </h3>
+        <p class="text-on-surface-variant leading-relaxed">
+          Hostbox treats security as a foundational layer, not an afterthought. Every deployment is served through an integrated Caddy server instance, providing automatic HTTPS via Let's Encrypt out of the box.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">AES-256 Encryption</span>
+          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">Caddy HTTPS</span>
+          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">mTLS Ready</span>
+        </div>
+      </div>
+      <div class="bg-primary text-on-primary rounded-xl p-10 flex flex-col justify-center items-center text-center">
+        <h3 class="font-headline text-2xl font-extrabold mb-4">Ready to Reclaim Control?</h3>
+        <p class="text-on-primary/80 mb-8 max-w-sm">
+          Join developers deploying sovereign infrastructure with Hostbox.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 w-full justify-center">
+          <a class="bg-on-primary text-primary px-8 py-3 rounded-xl font-headline font-bold hover:bg-on-primary/90 transition-all inline-block text-center" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md" target="_blank" rel="noopener noreferrer">
+            Get Started
+          </a>
+          <a class="border border-on-primary/30 text-on-primary px-8 py-3 rounded-xl font-headline font-bold hover:bg-on-primary/10 transition-all inline-block text-center" href="https://github.com/VatsalP117/hostbox/tree/main/docs" target="_blank" rel="noopener noreferrer">
+            Read the Docs
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
