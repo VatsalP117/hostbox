@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // Framework holds the detected build configuration for a project.
@@ -23,6 +24,7 @@ type PackageJSON struct {
 	Name            string            `json:"name"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
+	Workspaces      json.RawMessage   `json:"workspaces"`
 	Engines         struct {
 		Node string `json:"node"`
 	} `json:"engines"`
@@ -214,4 +216,34 @@ func ApplyOverrides(fw Framework, buildCmd, installCmd, outputDir string) Framew
 		fw.OutputDirectory = outputDir
 	}
 	return fw
+}
+
+// AdaptCommandForPackageManager rewrites npm script commands to match the detected package manager.
+func AdaptCommandForPackageManager(cmd, packageManager string) string {
+	cmd = strings.TrimSpace(cmd)
+	script, ok := strings.CutPrefix(cmd, "npm run ")
+	if !ok {
+		return cmd
+	}
+
+	switch packageManager {
+	case "pnpm":
+		return "pnpm run " + script
+	case "yarn":
+		return "yarn run " + script
+	case "bun":
+		return "bun run " + script
+	default:
+		return cmd
+	}
+}
+
+// IsWorkspaceProject reports whether the project is a JavaScript workspace/monorepo root.
+func IsWorkspaceProject(sourceDir string, pkg *PackageJSON) bool {
+	if pkg != nil && len(pkg.Workspaces) > 0 && string(pkg.Workspaces) != "null" {
+		return true
+	}
+
+	_, err := os.Stat(filepath.Join(sourceDir, "pnpm-workspace.yaml"))
+	return err == nil
 }

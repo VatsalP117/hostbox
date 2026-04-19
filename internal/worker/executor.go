@@ -165,32 +165,38 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	}
 
 	// Apply project-level overrides
-	buildCmd := ""
+	buildCmdOverride := ""
 	if project.BuildCommand != nil {
-		buildCmd = *project.BuildCommand
+		buildCmdOverride = *project.BuildCommand
 	}
 	outputDir := ""
 	if project.OutputDirectory != nil {
 		outputDir = *project.OutputDirectory
 	}
-	fw = detect.ApplyOverrides(fw, buildCmd, "", outputDir)
+	fw = detect.ApplyOverrides(fw, buildCmdOverride, "", outputDir)
 
 	pm := detect.DetectPackageManager(sourceDir)
 	installCmd := pm.InstallCommand
 	if project.InstallCommand != nil && *project.InstallCommand != "" {
 		installCmd = *project.InstallCommand
 	}
+	buildCommand := fw.BuildCommand
+	if buildCmdOverride == "" {
+		buildCommand = detect.AdaptCommandForPackageManager(buildCommand, pm.Name)
+	}
 
 	nodeVersion := detect.DetectNodeVersion(pkg, e.cfg.DefaultNodeVersion)
 	if project.NodeVersion != "" {
 		nodeVersion = project.NodeVersion
 	}
+	memoryMB := effectiveBuildMemoryMB(e.cfg.DefaultMemoryMB, sourceDir, pkg)
 
 	logger.Infof("  Framework: %s", fw.DisplayName)
 	logger.Infof("  Node.js: %s", nodeVersion)
 	logger.Infof("  Package manager: %s", pm.Name)
-	logger.Infof("  Build command: %s", fw.BuildCommand)
+	logger.Infof("  Build command: %s", buildCommand)
 	logger.Infof("  Output directory: %s", fw.OutputDirectory)
+	logger.Infof("  Build memory: %d MB", memoryMB)
 
 	if ctx.Err() != nil {
 		e.handleFailure(ctx, deployment, project, logger, "Build cancelled")
@@ -225,7 +231,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		CacheVolume:  fmt.Sprintf("cache-%s-modules", project.ID),
 		BuildCache:   fmt.Sprintf("cache-%s-build", project.ID),
 		EnvVars:      envVars,
-		MemoryBytes:  e.cfg.DefaultMemoryMB * 1024 * 1024,
+		MemoryBytes:  memoryMB * 1024 * 1024,
 		NanoCPUs:     int64(e.cfg.DefaultCPUs * 1e9),
 		PIDLimit:     e.cfg.PIDLimit,
 	})
@@ -243,24 +249,24 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 			e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "install"})
 			logger.Infof("▶ Running: %s", installCmd)
 			if err := e.execInContainer(ctx, containerID, installCmd, logger); err != nil {
-				e.handleFailure(ctx, deployment, project, logger, "Install failed: "+err.Error())
+				e.handleFailure(ctx, deployment, project, logger, "Install failed: "+describeContainerExecError(err, memoryMB))
 				return
 			}
 		}
 
-		if fw.BuildCommand != "" {
+		if buildCommand != "" {
 			e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "build"})
-			logger.Infof("▶ Running: %s", fw.BuildCommand)
-			if err := e.execInContainer(ctx, containerID, fw.BuildCommand, logger); err != nil {
-				e.handleFailure(ctx, deployment, project, logger, "Build failed: "+err.Error())
+			logger.Infof("▶ Running: %s", buildCommand)
+			if err := e.execInContainer(ctx, containerID, buildCommand, logger); err != nil {
+				e.handleFailure(ctx, deployment, project, logger, "Build failed: "+describeContainerExecError(err, memoryMB))
 				return
 			}
 		}
 	} else if fw.Name == "hugo" {
 		e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building", "phase": "build"})
-		logger.Infof("▶ Running: %s", fw.BuildCommand)
-		if err := e.execInContainer(ctx, containerID, fw.BuildCommand, logger); err != nil {
-			e.handleFailure(ctx, deployment, project, logger, "Build failed: "+err.Error())
+		logger.Infof("▶ Running: %s", buildCommand)
+		if err := e.execInContainer(ctx, containerID, buildCommand, logger); err != nil {
+			e.handleFailure(ctx, deployment, project, logger, "Build failed: "+describeContainerExecError(err, memoryMB))
 			return
 		}
 	}
@@ -479,6 +485,28 @@ func (e *BuildExecutor) shouldInvalidateCache(project *models.Project, nodeVersi
 		return true
 	}
 	return false
+}
+
+func effectiveBuildMemoryMB(defaultMemoryMB int64, sourceDir string, pkg *detect.PackageJSON) int64 {
+	if defaultMemoryMB >= 1024 {
+		return defaultMemoryMB
+	}
+	if detect.IsWorkspaceProject(sourceDir, pkg) {
+		return 1024
+	}
+	return defaultMemoryMB
+}
+
+func describeContainerExecError(err error, memoryMB int64) string {
+	if err == nil {
+		return ""
+	}
+
+	msg := err.Error()
+	if strings.Contains(msg, "command exited with code 137") {
+		return fmt.Sprintf("%s — build container was killed, likely due to memory pressure; increase BUILD_MEMORY_MB above %d", msg, memoryMB)
+	}
+	return msg
 }
 
 func (e *BuildExecutor) invalidateCache(ctx context.Context, projectID string) {

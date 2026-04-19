@@ -3,6 +3,7 @@ package detect
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -441,5 +442,56 @@ func TestHashLockFile_MissingFile(t *testing.T) {
 	hash := HashLockFile(dir, "nonexistent.lock")
 	if hash != "" {
 		t.Errorf("expected empty hash for missing file, got %s", hash)
+	}
+}
+
+func TestAdaptCommandForPackageManager(t *testing.T) {
+	tests := []struct {
+		name     string
+		cmd      string
+		manager  string
+		expected string
+	}{
+		{name: "npm unchanged", cmd: "npm run build", manager: "npm", expected: "npm run build"},
+		{name: "pnpm build", cmd: "npm run build", manager: "pnpm", expected: "pnpm run build"},
+		{name: "yarn generate", cmd: "npm run generate", manager: "yarn", expected: "yarn run generate"},
+		{name: "bun build", cmd: "npm run build", manager: "bun", expected: "bun run build"},
+		{name: "non npm command unchanged", cmd: "hugo --minify", manager: "pnpm", expected: "hugo --minify"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AdaptCommandForPackageManager(tt.cmd, tt.manager)
+			if got != tt.expected {
+				t.Fatalf("expected %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestIsWorkspaceProject_PackageJSONWorkspaces(t *testing.T) {
+	dir := t.TempDir()
+	raw := json.RawMessage(`["apps/*", "packages/*"]`)
+	pkg := &PackageJSON{Workspaces: raw}
+
+	if !IsWorkspaceProject(dir, pkg) {
+		t.Fatal("expected workspace project to be detected from package.json")
+	}
+}
+
+func TestIsWorkspaceProject_PNPMWorkspaceFile(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "pnpm-workspace.yaml", "packages:\n  - apps/*\n")
+
+	if !IsWorkspaceProject(dir, nil) {
+		t.Fatal("expected workspace project to be detected from pnpm-workspace.yaml")
+	}
+}
+
+func TestIsWorkspaceProject_FalseForRegularPackage(t *testing.T) {
+	dir := t.TempDir()
+
+	if IsWorkspaceProject(dir, &PackageJSON{}) {
+		t.Fatal("expected regular package to not be treated as a workspace")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +91,10 @@ type BuildConfig struct {
 
 // Load reads configuration from environment variables and applies defaults.
 func Load() (*Config, error) {
+	deploymentsDir := getEnv("DEPLOYMENTS_DIR", "/app/deployments")
+	logsDir := getEnv("LOGS_DIR", "/app/logs")
+	cacheDir := getEnv("CACHE_DIR", "/cache")
+
 	cfg := &Config{
 		Host:                getEnv("HOST", "0.0.0.0"),
 		Port:                getEnvInt("PORT", 8080),
@@ -113,9 +118,9 @@ func Load() (*Config, error) {
 		EmailFrom:           getEnv("EMAIL_FROM", ""),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		LogFormat:           getEnv("LOG_FORMAT", "json"),
-		DeploymentsDir:      getEnv("DEPLOYMENTS_DIR", "/app/deployments"),
-		LogsDir:             getEnv("LOGS_DIR", "/app/logs"),
-		CacheDir:            getEnv("CACHE_DIR", "/cache"),
+		DeploymentsDir:      deploymentsDir,
+		LogsDir:             logsDir,
+		CacheDir:            cacheDir,
 		BackupDir:           getEnv("BACKUP_DIR", "/app/data/backups"),
 		CaddyAdminURL:       getEnv("CADDY_ADMIN_URL", "http://localhost:2019"),
 		CaddyAPIUpstream:    getEnv("CADDY_API_UPSTREAM", ""),
@@ -137,9 +142,9 @@ func Load() (*Config, error) {
 			MaxLogFileSizeBytes: int64(getEnvInt("MAX_LOG_FILE_SIZE", 5242880)),
 			ShutdownTimeoutSec:  getEnvInt("SHUTDOWN_TIMEOUT_SEC", 60),
 			JobChannelBuffer:    getEnvInt("JOB_CHANNEL_BUFFER", 100),
-			CloneBaseDir:        getEnv("CLONE_BASE_DIR", "/app/tmp"),
-			DeploymentBaseDir:   getEnv("DEPLOYMENT_BASE_DIR", "/app/deployments"),
-			LogBaseDir:          getEnv("LOG_BASE_DIR", "/app/logs"),
+			CloneBaseDir:        getEnv("CLONE_BASE_DIR", filepath.Join(cacheDir, "clones")),
+			DeploymentBaseDir:   getEnv("DEPLOYMENT_BASE_DIR", deploymentsDir),
+			LogBaseDir:          getEnv("LOG_BASE_DIR", logsDir),
 		},
 	}
 
@@ -155,12 +160,54 @@ func Load() (*Config, error) {
 		}
 		cfg.DNSProviderConfig = dnsProviderConfig
 	}
+	if err := cfg.normalizePaths(); err != nil {
+		return nil, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+func (c *Config) normalizePaths() error {
+	var err error
+
+	if c.DatabasePath, err = absolutePath(c.DatabasePath); err != nil {
+		return fmt.Errorf("DATABASE_PATH: %w", err)
+	}
+	if c.DeploymentsDir, err = absolutePath(c.DeploymentsDir); err != nil {
+		return fmt.Errorf("DEPLOYMENTS_DIR: %w", err)
+	}
+	if c.LogsDir, err = absolutePath(c.LogsDir); err != nil {
+		return fmt.Errorf("LOGS_DIR: %w", err)
+	}
+	if c.CacheDir, err = absolutePath(c.CacheDir); err != nil {
+		return fmt.Errorf("CACHE_DIR: %w", err)
+	}
+	if c.BackupDir, err = absolutePath(c.BackupDir); err != nil {
+		return fmt.Errorf("BACKUP_DIR: %w", err)
+	}
+	if c.Build.CloneBaseDir, err = absolutePath(c.Build.CloneBaseDir); err != nil {
+		return fmt.Errorf("CLONE_BASE_DIR: %w", err)
+	}
+	if c.Build.DeploymentBaseDir, err = absolutePath(c.Build.DeploymentBaseDir); err != nil {
+		return fmt.Errorf("DEPLOYMENT_BASE_DIR: %w", err)
+	}
+	if c.Build.LogBaseDir, err = absolutePath(c.Build.LogBaseDir); err != nil {
+		return fmt.Errorf("LOG_BASE_DIR: %w", err)
+	}
+
+	return nil
+}
+
+func absolutePath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	return filepath.Abs(path)
 }
 
 // Validate checks that all required fields are present and well-formed.

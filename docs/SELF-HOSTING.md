@@ -123,6 +123,7 @@ Hostbox reads runtime configuration from `.env`.
 | `ACME_EMAIL` | Yes | Email used for Let's Encrypt / ACME. |
 | `DNS_PROVIDER` | No | `none`, `cloudflare`, `route53`, or `digitalocean`. |
 | `LOG_LEVEL` | No | `debug`, `info`, `warn`, or `error`. |
+| `BUILD_MEMORY_MB` | No | Per-build container memory limit in MB. Increase this for large Node.js workspaces if builds are killed with exit code `137`. |
 | `GITHUB_APP_ID` | No | Required only for GitHub App deployments. |
 | `GITHUB_APP_SLUG` | No | Required only for GitHub App deployments. |
 | `GITHUB_APP_PEM` | No | Required only for GitHub App deployments. |
@@ -252,6 +253,27 @@ On Linux, `DOCKER_GID` in `.env` should match the socket's group ID on the host.
 ```bash
 docker compose up -d
 ```
+
+### Builds fail with exit code 137
+
+If install or build logs end with `command exited with code 137`, Docker killed the build container. Increase the build memory limit in `.env`, then restart Hostbox:
+
+```env
+BUILD_MEMORY_MB=1024
+```
+
+```bash
+docker compose up -d
+```
+
+### Build container bind mounts fail with `mount path must be absolute`
+
+Hostbox passes clone, artifact, and log directories to Docker as bind-mount sources. Docker requires those paths to be absolute.
+
+- When you run Hostbox directly on the VM, relative paths in `.env` are resolved from the current working directory.
+- When you run Hostbox inside Docker and point it at the host Docker socket, those paths must be valid on the Docker daemon host, not just inside the Hostbox container.
+
+For Docker installs, mount the host directories into the Hostbox and Caddy containers at the same absolute paths you configure in `.env`.
 
 ### TLS or certificate issues
 

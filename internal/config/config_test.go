@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -54,6 +55,19 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.RefreshTokenTTL != 168*time.Hour {
 		t.Errorf("RefreshTokenTTL = %v, want 168h", cfg.RefreshTokenTTL)
+	}
+	if !filepath.IsAbs(cfg.DatabasePath) {
+		t.Errorf("DatabasePath should be absolute, got %q", cfg.DatabasePath)
+	}
+	if cfg.Build.DeploymentBaseDir != cfg.DeploymentsDir {
+		t.Errorf("Build.DeploymentBaseDir = %q, want %q", cfg.Build.DeploymentBaseDir, cfg.DeploymentsDir)
+	}
+	if cfg.Build.LogBaseDir != cfg.LogsDir {
+		t.Errorf("Build.LogBaseDir = %q, want %q", cfg.Build.LogBaseDir, cfg.LogsDir)
+	}
+	expectedCloneDir := filepath.Join(cfg.CacheDir, "clones")
+	if cfg.Build.CloneBaseDir != expectedCloneDir {
+		t.Errorf("Build.CloneBaseDir = %q, want %q", cfg.Build.CloneBaseDir, expectedCloneDir)
 	}
 }
 
@@ -208,6 +222,39 @@ func TestLoadDurationConversion(t *testing.T) {
 	}
 	if cfg.AccessTokenTTL != 30*time.Minute {
 		t.Errorf("AccessTokenTTL = %v, want 30m", cfg.AccessTokenTTL)
+	}
+}
+
+func TestLoadNormalizesRelativePaths(t *testing.T) {
+	validTestEnv(t)
+
+	t.Setenv("DATABASE_PATH", "./data/hostbox.db")
+	t.Setenv("DEPLOYMENTS_DIR", "./deployments")
+	t.Setenv("LOGS_DIR", "./logs")
+	t.Setenv("CACHE_DIR", "./tmp")
+	t.Setenv("BACKUP_DIR", "./data/backups")
+	t.Setenv("CLONE_BASE_DIR", "./tmp")
+	t.Setenv("DEPLOYMENT_BASE_DIR", "./deployments")
+	t.Setenv("LOG_BASE_DIR", "./logs")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	for name, got := range map[string]string{
+		"DATABASE_PATH":       cfg.DatabasePath,
+		"DEPLOYMENTS_DIR":     cfg.DeploymentsDir,
+		"LOGS_DIR":            cfg.LogsDir,
+		"CACHE_DIR":           cfg.CacheDir,
+		"BACKUP_DIR":          cfg.BackupDir,
+		"CLONE_BASE_DIR":      cfg.Build.CloneBaseDir,
+		"DEPLOYMENT_BASE_DIR": cfg.Build.DeploymentBaseDir,
+		"LOG_BASE_DIR":        cfg.Build.LogBaseDir,
+	} {
+		if !filepath.IsAbs(got) {
+			t.Fatalf("%s should be absolute, got %q", name, got)
+		}
 	}
 }
 

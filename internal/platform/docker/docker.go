@@ -20,6 +20,14 @@ import (
 	"github.com/docker/go-units"
 )
 
+const (
+	buildSourceDir      = "/app/src"
+	buildNodeModulesDir = "/app/src/node_modules"
+	buildCacheDir       = "/app/.build-cache"
+	buildOutputDir      = "/app/output"
+	buildPathEnv        = buildCacheDir + "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+)
+
 // Client wraps the Docker Engine SDK for build operations.
 type Client struct {
 	cli *client.Client
@@ -69,7 +77,7 @@ func (c *Client) CreateBuildContainer(ctx context.Context, opts BuildContainerOp
 
 	workDir := opts.WorkDir
 	if workDir == "" {
-		workDir = "/app/src"
+		workDir = buildSourceDir
 	}
 
 	pidLimit := opts.PIDLimit
@@ -101,12 +109,7 @@ func (c *Client) CreateBuildContainer(ctx context.Context, opts BuildContainerOp
 		Tmpfs: map[string]string{
 			"/tmp": "rw,noexec,nosuid,size=512m",
 		},
-		Mounts: []mount.Mount{
-			{Type: mount.TypeBind, Source: opts.SourceDir, Target: "/app/src", ReadOnly: true},
-			{Type: mount.TypeVolume, Source: opts.CacheVolume, Target: "/app/node_modules"},
-			{Type: mount.TypeVolume, Source: opts.BuildCache, Target: "/app/.build-cache"},
-			{Type: mount.TypeBind, Source: opts.OutputDir, Target: "/app/output", ReadOnly: false},
-		},
+		Mounts: buildContainerMounts(opts),
 	}
 
 	resp, err := c.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, "build-"+opts.DeploymentID)
@@ -125,7 +128,7 @@ func (c *Client) CreateBuildContainer(ctx context.Context, opts BuildContainerOp
 // ExecCommand runs a shell command inside a running container.
 func (c *Client) ExecCommand(ctx context.Context, containerID string, cmd string, stdout, stderr io.Writer) error {
 	execConfig := container.ExecOptions{
-		Cmd:          []string{"sh", "-c", cmd},
+		Cmd:          []string{"sh", "-c", wrapBuildCommand(cmd)},
 		AttachStdout: true,
 		AttachStderr: true,
 	}
@@ -154,6 +157,33 @@ func (c *Client) ExecCommand(ctx context.Context, containerID string, cmd string
 	}
 
 	return nil
+}
+
+func buildContainerMounts(opts BuildContainerOpts) []mount.Mount {
+	return []mount.Mount{
+		{Type: mount.TypeBind, Source: opts.SourceDir, Target: buildSourceDir, ReadOnly: false},
+		{Type: mount.TypeVolume, Source: opts.CacheVolume, Target: buildNodeModulesDir},
+		{Type: mount.TypeVolume, Source: opts.BuildCache, Target: buildCacheDir},
+		{Type: mount.TypeBind, Source: opts.OutputDir, Target: buildOutputDir, ReadOnly: false},
+	}
+}
+
+func wrapBuildCommand(cmd string) string {
+	prelude := []string{
+		fmt.Sprintf("export HOME=%s/home", buildCacheDir),
+		fmt.Sprintf("export XDG_CACHE_HOME=%s/xdg-cache", buildCacheDir),
+		fmt.Sprintf("export COREPACK_HOME=%s/corepack", buildCacheDir),
+		fmt.Sprintf("export NPM_CONFIG_CACHE=%s/npm", buildCacheDir),
+		fmt.Sprintf("export YARN_CACHE_FOLDER=%s/yarn", buildCacheDir),
+		fmt.Sprintf("export PATH=%q", buildPathEnv),
+		fmt.Sprintf("mkdir -p %s/home %s/xdg-cache %s/corepack %s/npm %s/yarn %s/bin", buildCacheDir, buildCacheDir, buildCacheDir, buildCacheDir, buildCacheDir, buildCacheDir),
+		fmt.Sprintf("printf '%%s\\n' '#!/bin/sh' 'exec corepack pnpm \"$@\"' > %s/bin/pnpm", buildCacheDir),
+		fmt.Sprintf("printf '%%s\\n' '#!/bin/sh' 'exec corepack yarn \"$@\"' > %s/bin/yarn", buildCacheDir),
+		fmt.Sprintf("printf '%%s\\n' '#!/bin/sh' 'exec npx --yes bun@1 \"$@\"' > %s/bin/bun", buildCacheDir),
+		fmt.Sprintf("chmod +x %s/bin/pnpm %s/bin/yarn %s/bin/bun", buildCacheDir, buildCacheDir, buildCacheDir),
+	}
+
+	return strings.Join(append(prelude, cmd), "\n")
 }
 
 // StopContainer stops a container with the given grace period.
