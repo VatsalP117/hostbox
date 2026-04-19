@@ -49,7 +49,7 @@ import Layout from '../layouts/Layout.astro';
               <p class="text-on-surface-variant text-sm leading-relaxed">Intelligent heuristic analysis automatically detects your framework and injects optimal build steps.</p>
             </div>
             <div class="flex flex-wrap gap-2 mt-4">
-              {['Next.js', 'SvelteKit', 'Nuxt', 'Astro', 'Vite', 'Hugo'].map((fw) => (
+              {['Next.js', 'SvelteKit', 'Nuxt'].map((fw) => (
                 <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">{fw}</span>
               ))}
             </div>
@@ -152,85 +152,6 @@ import Layout from '../layouts/Layout.astro';
             <h3 class="font-headline text-lg font-bold">Unified CLI &amp; Dash</h3>
           </div>
           <p class="text-on-surface-variant text-sm">Everything you can do in the dashboard is available via the CLI. Manage your infrastructure entirely from your terminal if you prefer.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Comparison Table -->
-  <section class="px-6 py-20 max-w-[1400px] mx-auto">
-    <h2 class="font-headline text-3xl font-bold mb-4">The Strategic Choice</h2>
-    <p class="text-on-surface-variant mb-12">Performance vs. Complexity: Why architects choose Hostbox.</p>
-    <div class="overflow-x-auto rounded-xl border border-outline-variant/10">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="bg-surface-container-high">
-            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Metric</th>
-            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest text-primary border-b border-outline-variant/10">Hostbox</th>
-            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Vercel</th>
-            <th class="p-6 font-headline text-sm font-bold uppercase tracking-widest border-b border-outline-variant/10">Coolify</th>
-          </tr>
-        </thead>
-        <tbody class="text-sm font-body">
-          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-on-surface">Licensing / Cost</td>
-            <td class="p-6 text-primary">Self-Hosted (Free)</td>
-            <td class="p-6 text-on-surface-variant">Proprietary ($$$)</td>
-            <td class="p-6 text-on-surface-variant">Open Source (Free)</td>
-          </tr>
-          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-on-surface">RAM Overhead</td>
-            <td class="p-6 text-primary">&lt; 50MB</td>
-            <td class="p-6 text-on-surface-variant">Managed-Only</td>
-            <td class="p-6 text-on-surface-variant">~1.2GB (Docker-heavy)</td>
-          </tr>
-          <tr class="border-b border-outline-variant/10 hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-on-surface">Primary Focus</td>
-            <td class="p-6 text-primary">Frontend / Static</td>
-            <td class="p-6 text-on-surface-variant">Full Stack / Edge</td>
-            <td class="p-6 text-on-surface-variant">Generic PaaS</td>
-          </tr>
-          <tr class="hover:bg-white/5 transition-colors">
-            <td class="p-6 font-medium text-on-surface">Database Req.</td>
-            <td class="p-6 text-primary">None (SQLite built-in)</td>
-            <td class="p-6 text-on-surface-variant">Cloud Managed</td>
-            <td class="p-6 text-on-surface-variant">Postgres External</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- Security + CTA -->
-  <section class="px-6 py-20 max-w-[1400px] mx-auto">
-    <div class="grid md:grid-cols-2 gap-8 items-stretch">
-      <div class="bg-surface-container-low rounded-xl p-10 border border-outline-variant/10 relative overflow-hidden group">
-        <div class="absolute -right-4 -bottom-4 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-all"></div>
-        <h3 class="font-headline text-2xl font-bold mb-4 flex items-center gap-3">
-          <span class="material-symbols-outlined text-primary" data-icon="verified_user">verified_user</span>
-          Hardened Security
-        </h3>
-        <p class="text-on-surface-variant leading-relaxed">
-          Hostbox treats security as a foundational layer, not an afterthought. Every deployment is served through an integrated Caddy server instance, providing automatic HTTPS via Let's Encrypt out of the box.
-        </p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">AES-256 Encryption</span>
-          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">Caddy HTTPS</span>
-          <span class="bg-surface-container-highest px-3 py-1 rounded-lg font-label text-[10px] text-on-surface uppercase border border-outline-variant/20">mTLS Ready</span>
-        </div>
-      </div>
-      <div class="bg-primary text-on-primary rounded-xl p-10 flex flex-col justify-center items-center text-center">
-        <h3 class="font-headline text-2xl font-extrabold mb-4">Ready to Reclaim Control?</h3>
-        <p class="text-on-primary/80 mb-8 max-w-sm">
-          Join developers deploying sovereign infrastructure with Hostbox.
-        </p>
-        <div class="flex flex-col sm:flex-row gap-4 w-full justify-center">
-          <a class="bg-on-primary text-primary px-8 py-3 rounded-xl font-headline font-bold hover:bg-on-primary/90 transition-all inline-block text-center" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md" target="_blank" rel="noopener noreferrer">
-            Get Started
-          </a>
-          <a class="border border-on-primary/30 text-on-primary px-8 py-3 rounded-xl font-headline font-bold hover:bg-on-primary/10 transition-all inline-block text-center" href="https://github.com/VatsalP117/hostbox/tree/main/docs" target="_blank" rel="noopener noreferrer">
-            Read the Docs
-          </a>
         </div>
       </div>
     </div>

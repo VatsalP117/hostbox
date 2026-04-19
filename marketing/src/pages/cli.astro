@@ -88,7 +88,11 @@ import Layout from '../layouts/Layout.astro';
               <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">logs</span>
             </div>
           </div>
-          <p class="text-xs text-on-surface-variant">Stream live application and infrastructure logs.</p>
+          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
+            <div class="text-on-surface-variant">[info] Server listening on :8080</div>
+            <div class="text-on-surface-variant">[req] GET /api/v1/users 200</div>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-3">Stream live application and infrastructure logs.</p>
         </div>
 
         <!-- env -->
@@ -100,7 +104,11 @@ import Layout from '../layouts/Layout.astro';
               <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">env</span>
             </div>
           </div>
-          <p class="text-xs text-on-surface-variant">Manage secrets and environment variables securely.</p>
+          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
+            <div class="text-on-surface-variant">$ hbx env add DB_URL</div>
+            <div class="text-primary mt-1">Updated production environment.</div>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-3">Manage secrets and environment variables securely.</p>
         </div>
 
         <!-- rollback -->
@@ -112,7 +120,11 @@ import Layout from '../layouts/Layout.astro';
               <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">rollback</span>
             </div>
           </div>
-          <p class="text-xs text-on-surface-variant">Instantly revert to a previous healthy state.</p>
+          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
+            <div class="text-on-surface-variant">Reverting to d9f2a1...</div>
+            <div class="text-primary mt-1">Rollback complete.</div>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-3">Instantly revert to a previous healthy state.</p>
         </div>
       </div>
     </section>
@@ -125,18 +137,18 @@ import Layout from '../layouts/Layout.astro';
           Whether you prefer the visual overview of a dashboard or the speed of a terminal, you sacrifice nothing. Both interfaces command the exact same sovereign infrastructure API.
         </p>
       </div>
-      <div class="flex items-center gap-4 text-sm font-label">
+      <div class="flex items-center gap-4 text-sm font-label flex-wrap">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
           <span class="text-on-surface-variant">100% feature parity</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-          <span class="text-on-surface-variant">Shared auth state</span>
+          <span class="text-on-surface-variant">Shared authentication state</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-          <span class="text-on-surface-variant">Real-time sync</span>
+          <span class="text-on-surface-variant">Real-time sync between CLI and Web</span>
         </div>
       </div>
 
@@ -154,67 +166,6 @@ import Layout from '../layouts/Layout.astro';
           <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] mt-3 leading-relaxed">
             <div class="text-primary">$ hbx status</div>
             <div class="text-on-surface-variant mt-1">[ok] all systems go</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Real-time Stream Preview -->
-    <section class="space-y-6">
-      <h2 class="font-headline text-2xl md:text-3xl font-bold text-white tracking-tight">Real-time Stream</h2>
-      <div class="terminal-window">
-        <div class="terminal-header">
-          <div class="terminal-dots">
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-          </div>
-          <div class="font-label text-[10px] text-outline tracking-widest uppercase">hostbox-logs --follow</div>
-          <div class="w-10"></div>
-        </div>
-        <div class="p-4 font-label text-[11px] leading-relaxed h-64 overflow-y-auto custom-scrollbar">
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:01</span>
-            <span class="text-[#89DDFF]">[SYS]</span>
-            <span class="text-on-surface-variant">Initializing build environment...</span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:03</span>
-            <span class="text-[#C3E88D]">[OK]</span>
-            <span class="text-on-surface-variant">Docker layer cache hit for <span class="text-primary">node:20-alpine</span></span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:05</span>
-            <span class="text-primary-container">[INFO]</span>
-            <span class="text-on-surface-variant">Compiling assets with <span class="italic">esbuild</span>...</span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:08</span>
-            <span class="text-[#FFCB6B]">[WARN]</span>
-            <span class="text-on-surface-variant">Large bundle detected in <span class="text-tertiary">/vendor/core.js</span></span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:10</span>
-            <span class="text-[#C3E88D]">[OK]</span>
-            <span class="text-on-surface-variant">Build completed in 8.42s</span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:11</span>
-            <span class="text-[#89DDFF]">[SYS]</span>
-            <span class="text-on-surface-variant">Streaming image to <span class="text-primary">us-east-1</span> (Edge)</span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:14</span>
-            <span class="text-primary-container">[INFO]</span>
-            <span class="text-on-surface-variant">Health check status: <span class="text-[#C3E88D]">PASS</span></span>
-          </div>
-          <div class="flex gap-3 mb-1">
-            <span class="text-outline shrink-0">14:02:15</span>
-            <span class="text-primary">[LIVE]</span>
-            <span class="text-white font-bold underline decoration-primary/50">https://sovereign-app-v2.hb.app</span>
-          </div>
-          <div class="flex gap-2 mt-2 animate-pulse">
-            <span class="text-primary">_</span>
           </div>
         </div>
       </div>
