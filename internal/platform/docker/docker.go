@@ -52,6 +52,15 @@ func (c *Client) Close() error {
 	return c.cli.Close()
 }
 
+// Ping verifies Docker Engine connectivity.
+func (c *Client) Ping(ctx context.Context) error {
+	_, err := c.cli.Ping(ctx)
+	if err != nil {
+		return fmt.Errorf("docker ping failed: %w", err)
+	}
+	return nil
+}
+
 // BuildContainerOpts configures a build container.
 type BuildContainerOpts struct {
 	DeploymentID string

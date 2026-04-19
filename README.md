@@ -19,7 +19,7 @@
 - 🔑 **Encrypted environment variables** — AES-256-GCM encryption at rest
 - 📊 **Real-time build logs** — stream build output via SSE
 - ↩️ **Instant rollbacks** — one-click rollback to any previous deployment
-- 🛡️ **Admin dashboard** — user management, system stats, settings
+- 🛡️ **Admin dashboard** — user management, live system monitoring, alerts, settings
 - 💻 **CLI tool** — deploy, manage projects, and configure from your terminal
 - 📱 **Responsive dashboard** — React SPA with dark mode support
 

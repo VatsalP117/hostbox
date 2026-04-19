@@ -8,8 +8,11 @@ export function cn(...inputs: ClassValue[]) {
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(k)),
+    sizes.length - 1,
+  );
   return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
 }
 
@@ -34,6 +37,10 @@ export function formatUptime(seconds: number): string {
   if (hours > 0) parts.push(`${hours}h`);
   if (parts.length === 0) parts.push(`${Math.floor(seconds / 60)}m`);
   return parts.join(" ");
+}
+
+export function formatPercent(value: number, digits = 1): string {
+  return `${value.toFixed(digits)}%`;
 }
 
 export function parseEnvFile(

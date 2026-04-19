@@ -14,6 +14,16 @@ type DeploymentRepository struct {
 	db *sql.DB
 }
 
+type DeploymentHealthSummary struct {
+	Total                  int64
+	Successful             int64
+	Failed                 int64
+	Cancelled              int64
+	AverageBuildDurationMs *int64
+	LastSuccessAt          *time.Time
+	LastFailureAt          *time.Time
+}
+
 func NewDeploymentRepository(db *sql.DB) *DeploymentRepository {
 	return &DeploymentRepository{db: db}
 }
@@ -180,6 +190,59 @@ func (r *DeploymentRepository) CountByStatuses(ctx context.Context, statuses ...
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *DeploymentRepository) SummarizeSince(ctx context.Context, since time.Time) (DeploymentHealthSummary, error) {
+	var (
+		summary       DeploymentHealthSummary
+		avgDuration   sql.NullFloat64
+		lastSuccessAt sql.NullString
+		lastFailureAt sql.NullString
+	)
+
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END), 0) AS successful,
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) AS cancelled,
+			AVG(CASE WHEN status = 'ready' AND build_duration_ms IS NOT NULL THEN build_duration_ms END) AS avg_build_duration_ms,
+			MAX(CASE WHEN status = 'ready' THEN COALESCE(completed_at, created_at) END) AS last_success_at,
+			MAX(CASE WHEN status = 'failed' THEN COALESCE(completed_at, created_at) END) AS last_failure_at
+		FROM deployments
+		WHERE created_at >= ?`,
+		since.UTC().Format(time.RFC3339),
+	).Scan(
+		&summary.Total,
+		&summary.Successful,
+		&summary.Failed,
+		&summary.Cancelled,
+		&avgDuration,
+		&lastSuccessAt,
+		&lastFailureAt,
+	)
+	if err != nil {
+		return DeploymentHealthSummary{}, fmt.Errorf("summarize deployments since %s: %w", since.UTC().Format(time.RFC3339), err)
+	}
+
+	if avgDuration.Valid {
+		v := int64(avgDuration.Float64 + 0.5)
+		summary.AverageBuildDurationMs = &v
+	}
+	if lastSuccessAt.Valid {
+		t, err := time.Parse(time.RFC3339, lastSuccessAt.String)
+		if err == nil {
+			summary.LastSuccessAt = &t
+		}
+	}
+	if lastFailureAt.Valid {
+		t, err := time.Parse(time.RFC3339, lastFailureAt.String)
+		if err == nil {
+			summary.LastFailureAt = &t
+		}
+	}
+
+	return summary, nil
 }
 
 func (r *DeploymentRepository) CancelQueuedByProjectAndBranch(ctx context.Context, projectID, branch string) (int64, error) {

@@ -344,22 +344,100 @@ type SetupStatusResponse struct {
 // --- Admin DTOs ---
 
 type AdminStatsResponse struct {
-	ProjectCount    int64             `json:"project_count"`
-	DeploymentCount int64             `json:"deployment_count"`
-	ActiveBuilds    int64             `json:"active_builds"`
-	UserCount       int64             `json:"user_count"`
-	DiskUsage       DiskUsageResponse `json:"disk_usage"`
-	UptimeSeconds   int64             `json:"uptime_seconds"`
+	ProjectCount        int64                    `json:"project_count"`
+	DeploymentCount     int64                    `json:"deployment_count"`
+	ActiveBuilds        int64                    `json:"active_builds"`
+	QueuedBuilds        int64                    `json:"queued_builds"`
+	MaxConcurrentBuilds int64                    `json:"max_concurrent_builds"`
+	UserCount           int64                    `json:"user_count"`
+	DiskUsage           DiskUsageResponse        `json:"disk_usage"`
+	Components          ComponentHealthResponse  `json:"components"`
+	CPU                 CPUStatsResponse         `json:"cpu"`
+	Memory              MemoryStatsResponse      `json:"memory"`
+	BuildQueue          BuildQueueResponse       `json:"build_queue"`
+	DeploymentHealth    DeploymentHealthResponse `json:"deployment_health"`
+	Trends              MetricTrendsResponse     `json:"trends"`
+	Alerts              []SystemAlertResponse    `json:"alerts"`
+	UptimeSeconds       int64                    `json:"uptime_seconds"`
+}
+
+type ComponentHealthResponse struct {
+	API      ServiceHealthResponse `json:"api"`
+	Database ServiceHealthResponse `json:"database"`
+	Docker   ServiceHealthResponse `json:"docker"`
+	Caddy    ServiceHealthResponse `json:"caddy"`
+}
+
+type ServiceHealthResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
+type CPUStatsResponse struct {
+	UsagePercent float64 `json:"usage_percent"`
+	Cores        int     `json:"cores"`
+	Load1        float64 `json:"load1"`
+	Load5        float64 `json:"load5"`
+	Load15       float64 `json:"load15"`
+}
+
+type MemoryStatsResponse struct {
+	UsedBytes      int64   `json:"used_bytes"`
+	TotalBytes     int64   `json:"total_bytes"`
+	AvailableBytes int64   `json:"available_bytes"`
+	UsagePercent   float64 `json:"usage_percent"`
+}
+
+type BuildQueueResponse struct {
+	ActiveBuilds        int64   `json:"active_builds"`
+	QueuedBuilds        int64   `json:"queued_builds"`
+	MaxConcurrentBuilds int64   `json:"max_concurrent_builds"`
+	UtilizationPercent  float64 `json:"utilization_percent"`
+	Saturated           bool    `json:"saturated"`
+}
+
+type DeploymentHealthResponse struct {
+	WindowHours            int     `json:"window_hours"`
+	Total                  int64   `json:"total"`
+	Successful             int64   `json:"successful"`
+	Failed                 int64   `json:"failed"`
+	Cancelled              int64   `json:"cancelled"`
+	SuccessRate            float64 `json:"success_rate"`
+	AverageBuildDurationMs *int64  `json:"average_build_duration_ms,omitempty"`
+	LastSuccessAt          *string `json:"last_success_at,omitempty"`
+	LastFailureAt          *string `json:"last_failure_at,omitempty"`
+}
+
+type MetricPointResponse struct {
+	Timestamp string  `json:"timestamp"`
+	Value     float64 `json:"value"`
+}
+
+type MetricTrendsResponse struct {
+	CPUUsage     []MetricPointResponse `json:"cpu_usage"`
+	MemoryUsage  []MetricPointResponse `json:"memory_usage"`
+	DiskUsage    []MetricPointResponse `json:"disk_usage"`
+	QueuedBuilds []MetricPointResponse `json:"queued_builds"`
+}
+
+type SystemAlertResponse struct {
+	Severity string `json:"severity"`
+	Title    string `json:"title"`
+	Message  string `json:"message"`
 }
 
 type DiskUsageResponse struct {
-	DeploymentsBytes int64 `json:"deployments_bytes"`
-	DeploymentBytes  int64 `json:"deployment_bytes"`
-	LogsBytes        int64 `json:"logs_bytes"`
-	DatabaseBytes    int64 `json:"database_bytes"`
-	TotalBytes       int64 `json:"total_bytes"`
-	UsedBytes        int64 `json:"used_bytes"`
-	AvailableBytes   int64 `json:"available_bytes"`
+	DeploymentsBytes int64   `json:"deployments_bytes"`
+	DeploymentBytes  int64   `json:"deployment_bytes"`
+	LogsBytes        int64   `json:"logs_bytes"`
+	DatabaseBytes    int64   `json:"database_bytes"`
+	BackupsBytes     int64   `json:"backups_bytes"`
+	CacheBytes       int64   `json:"cache_bytes"`
+	PlatformBytes    int64   `json:"platform_bytes"`
+	TotalBytes       int64   `json:"total_bytes"`
+	UsedBytes        int64   `json:"used_bytes"`
+	AvailableBytes   int64   `json:"available_bytes"`
+	UsagePercent     float64 `json:"usage_percent"`
 }
 
 type UserListResponse struct {

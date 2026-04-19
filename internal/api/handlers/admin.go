@@ -31,6 +31,7 @@ type AdminHandler struct {
 	logger         *slog.Logger
 	backupService  *backup.Service
 	updateService  *adminsvc.UpdateService
+	metricsService *adminsvc.MetricsService
 }
 
 func NewAdminHandler(
@@ -55,6 +56,14 @@ func NewAdminHandler(
 }
 
 func (h *AdminHandler) Stats(c echo.Context) error {
+	if h.metricsService != nil {
+		stats, err := h.metricsService.GetStats(c.Request().Context(), int64(time.Since(h.startTime).Seconds()))
+		if err != nil {
+			return apperrors.NewInternal(err)
+		}
+		return c.JSON(http.StatusOK, stats)
+	}
+
 	ctx := c.Request().Context()
 
 	projectCount, err := h.projectRepo.Count(ctx)
@@ -205,6 +214,7 @@ func (h *AdminHandler) getDiskUsage() dto.DiskUsageResponse {
 		DeploymentBytes:  deploymentsSize,
 		LogsBytes:        logsSize,
 		DatabaseBytes:    dbSize,
+		PlatformBytes:    totalSize,
 		TotalBytes:       totalSize,
 		UsedBytes:        totalSize,
 		AvailableBytes:   0,
@@ -285,11 +295,10 @@ func toActivityResponse(a *models.ActivityLog) dto.ActivityLogResponse {
 
 func dirSize(path string) int64 {
 	var size int64
-	filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err == nil && info != nil && !info.IsDir() {
+			size += info.Size()
 		}
-		size += info.Size()
 		return nil
 	})
 	return size
@@ -311,6 +320,11 @@ func (h *AdminHandler) SetBackupService(svc *backup.Service) {
 // SetUpdateService injects the update service for admin endpoints.
 func (h *AdminHandler) SetUpdateService(svc *adminsvc.UpdateService) {
 	h.updateService = svc
+}
+
+// SetMetricsService injects the metrics service for admin monitoring endpoints.
+func (h *AdminHandler) SetMetricsService(svc *adminsvc.MetricsService) {
+	h.metricsService = svc
 }
 
 func (h *AdminHandler) CreateBackup(c echo.Context) error {

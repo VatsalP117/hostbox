@@ -34,25 +34,25 @@ type Session struct {
 // --- Project ---
 
 type Project struct {
-	ID                   string    `db:"id"`
-	OwnerID              string    `db:"owner_id"`
-	Name                 string    `db:"name"`
-	Slug                 string    `db:"slug"`
-	GitHubRepo           *string   `db:"github_repo"`
-	GitHubInstallationID *int64    `db:"github_installation_id"`
-	ProductionBranch     string    `db:"production_branch"`
-	Framework            *string   `db:"framework"`
-	BuildCommand         *string   `db:"build_command"`
-	InstallCommand       *string   `db:"install_command"`
-	OutputDirectory      *string   `db:"output_directory"`
-	RootDirectory        string    `db:"root_directory"`
-	NodeVersion          string    `db:"node_version"`
-	AutoDeploy              bool      `db:"auto_deploy"`
-	PreviewDeployments      bool      `db:"preview_deployments"`
-	LockFileHash            string    `db:"lock_file_hash"`
-	DetectedPackageManager  string    `db:"detected_package_manager"`
-	CreatedAt               time.Time `db:"created_at"`
-	UpdatedAt               time.Time `db:"updated_at"`
+	ID                     string    `db:"id"`
+	OwnerID                string    `db:"owner_id"`
+	Name                   string    `db:"name"`
+	Slug                   string    `db:"slug"`
+	GitHubRepo             *string   `db:"github_repo"`
+	GitHubInstallationID   *int64    `db:"github_installation_id"`
+	ProductionBranch       string    `db:"production_branch"`
+	Framework              *string   `db:"framework"`
+	BuildCommand           *string   `db:"build_command"`
+	InstallCommand         *string   `db:"install_command"`
+	OutputDirectory        *string   `db:"output_directory"`
+	RootDirectory          string    `db:"root_directory"`
+	NodeVersion            string    `db:"node_version"`
+	AutoDeploy             bool      `db:"auto_deploy"`
+	PreviewDeployments     bool      `db:"preview_deployments"`
+	LockFileHash           string    `db:"lock_file_hash"`
+	DetectedPackageManager string    `db:"detected_package_manager"`
+	CreatedAt              time.Time `db:"created_at"`
+	UpdatedAt              time.Time `db:"updated_at"`
 }
 
 // --- Deployment ---
@@ -147,4 +147,25 @@ type Setting struct {
 	Key       string    `db:"key"`
 	Value     string    `db:"value"`
 	UpdatedAt time.Time `db:"updated_at"`
+}
+
+// --- SystemMetricSnapshot ---
+
+type SystemMetricSnapshot struct {
+	ID                   int64     `db:"id"`
+	CPUUsagePercent      float64   `db:"cpu_usage_percent"`
+	Load1                float64   `db:"load1"`
+	Load5                float64   `db:"load5"`
+	Load15               float64   `db:"load15"`
+	MemoryUsedBytes      int64     `db:"memory_used_bytes"`
+	MemoryTotalBytes     int64     `db:"memory_total_bytes"`
+	MemoryAvailableBytes int64     `db:"memory_available_bytes"`
+	MemoryUsagePercent   float64   `db:"memory_usage_percent"`
+	DiskUsedBytes        int64     `db:"disk_used_bytes"`
+	DiskTotalBytes       int64     `db:"disk_total_bytes"`
+	DiskAvailableBytes   int64     `db:"disk_available_bytes"`
+	DiskUsagePercent     float64   `db:"disk_usage_percent"`
+	ActiveBuilds         int64     `db:"active_builds"`
+	QueuedBuilds         int64     `db:"queued_builds"`
+	CreatedAt            time.Time `db:"created_at"`
 }

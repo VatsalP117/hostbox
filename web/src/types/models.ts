@@ -174,20 +174,86 @@ export interface Activity {
 }
 
 export interface SystemStats {
+  components: {
+    api: ServiceHealth;
+    database: ServiceHealth;
+    docker: ServiceHealth;
+    caddy: ServiceHealth;
+  };
+  cpu: {
+    usage_percent: number;
+    cores: number;
+    load1: number;
+    load5: number;
+    load15: number;
+  };
+  memory: {
+    used_bytes: number;
+    total_bytes: number;
+    available_bytes: number;
+    usage_percent: number;
+  };
+  build_queue: {
+    active_builds: number;
+    queued_builds: number;
+    max_concurrent_builds: number;
+    utilization_percent: number;
+    saturated: boolean;
+  };
+  deployment_health: {
+    window_hours: number;
+    total: number;
+    successful: number;
+    failed: number;
+    cancelled: number;
+    success_rate: number;
+    average_build_duration_ms: number | null;
+    last_success_at: string | null;
+    last_failure_at: string | null;
+  };
+  trends: {
+    cpu_usage: MetricPoint[];
+    memory_usage: MetricPoint[];
+    disk_usage: MetricPoint[];
+    queued_builds: MetricPoint[];
+  };
+  alerts: SystemAlert[];
   disk_usage: {
     total_bytes: number;
     used_bytes: number;
     available_bytes: number;
     deployment_bytes: number;
-    deployments_bytes?: number;
-    logs_bytes?: number;
-    database_bytes?: number;
+    deployments_bytes: number;
+    logs_bytes: number;
+    database_bytes: number;
+    backups_bytes: number;
+    cache_bytes: number;
+    platform_bytes: number;
+    usage_percent: number;
   };
   project_count: number;
   deployment_count: number;
   active_builds: number;
+  queued_builds: number;
+  max_concurrent_builds: number;
   user_count?: number;
   uptime_seconds: number;
+}
+
+export interface ServiceHealth {
+  status: "healthy" | "degraded" | "unavailable" | string;
+  message?: string;
+}
+
+export interface MetricPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface SystemAlert {
+  severity: "info" | "warning" | "error" | string;
+  title: string;
+  message: string;
 }
 
 export interface PlatformSettings {

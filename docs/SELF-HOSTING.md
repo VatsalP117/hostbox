@@ -65,6 +65,18 @@ It will:
 
 After the install finishes, open `https://hostbox.example.com` and create the first admin account.
 
+## Built-in monitoring
+
+Hostbox now includes an admin monitoring view that surfaces the metrics you typically need first when operating a self-hosted deployment platform:
+
+- component health for the API, database, Docker, and Caddy
+- CPU, memory, disk, and build-queue pressure
+- storage breakdown across deployments, logs, database, backups, and cache
+- recent deployment success rate and average build duration
+- 24-hour trends for resource usage and queued builds
+
+This view is meant for fast operator diagnosis when builds start backing up, the VM is running hot, or storage pressure is approaching a deployment failure.
+
 ### Fresh install on a VM that already has the right DNS records
 
 If DNS already points at this VM and you just want to replace an older or broken Hostbox install, you do **not** need to change DNS. The IP address stays the same, so the records can stay the same too.

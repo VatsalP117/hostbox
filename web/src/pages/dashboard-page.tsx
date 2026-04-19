@@ -3,8 +3,9 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { routes, queryKeys } from "@/lib/constants";
-import { formatBytes, formatUptime } from "@/lib/utils";
+import { formatBytes, formatPercent } from "@/lib/utils";
 import { timeAgo } from "@/lib/date";
+import { SystemAlerts } from "@/components/admin/system-alerts";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,11 +18,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
 import type { AdminStatsResponse, DeploymentListResponse } from "@/types/api";
 import {
-  FolderKanban,
-  Rocket,
+  Cpu,
   HardDrive,
-  Hammer,
+  MemoryStick,
   Plus,
+  Workflow,
 } from "lucide-react";
 
 export function DashboardPage() {
@@ -56,37 +57,62 @@ export function DashboardPage() {
         </Button>
       </PageHeader>
 
-      {/* Stats row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Total Projects"
-          value={stats?.project_count}
-          icon={FolderKanban}
-          loading={statsLoading}
-        />
-        <StatsCard
-          title="Total Deployments"
-          value={stats?.deployment_count}
-          icon={Rocket}
-          loading={statsLoading}
-        />
-        <StatsCard
-          title="Active Builds"
-          value={stats?.active_builds}
-          icon={Hammer}
-          loading={statsLoading}
-        />
-        <StatsCard
-          title="Disk Usage"
-          value={
-            stats
-              ? `${formatBytes(stats.disk_usage.used_bytes)} / ${formatBytes(stats.disk_usage.total_bytes)}`
-              : undefined
-          }
-          icon={HardDrive}
-          loading={statsLoading}
-        />
-      </div>
+      {isAdmin && stats && <SystemAlerts alerts={stats.alerts} />}
+
+      {isAdmin && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatsCard
+            title="CPU Usage"
+            value={stats ? formatPercent(stats.cpu.usage_percent) : undefined}
+            subtitle={stats ? `${stats.cpu.cores} cores` : undefined}
+            icon={Cpu}
+            loading={statsLoading}
+          />
+          <StatsCard
+            title="Memory Usage"
+            value={
+              stats
+                ? `${formatBytes(stats.memory.used_bytes)} / ${formatBytes(stats.memory.total_bytes)}`
+                : undefined
+            }
+            subtitle={
+              stats ? formatPercent(stats.memory.usage_percent) : undefined
+            }
+            icon={MemoryStick}
+            loading={statsLoading}
+          />
+          <StatsCard
+            title="Disk Usage"
+            value={
+              stats
+                ? `${formatBytes(stats.disk_usage.used_bytes)} / ${formatBytes(stats.disk_usage.total_bytes)}`
+                : undefined
+            }
+            subtitle={
+              stats
+                ? `${formatBytes(stats.disk_usage.platform_bytes)} Hostbox data`
+                : undefined
+            }
+            icon={HardDrive}
+            loading={statsLoading}
+          />
+          <StatsCard
+            title="Build Queue"
+            value={
+              stats
+                ? `${stats.build_queue.active_builds} active / ${stats.build_queue.queued_builds} queued`
+                : undefined
+            }
+            subtitle={
+              stats
+                ? `${formatPercent(stats.build_queue.utilization_percent)} utilized`
+                : undefined
+            }
+            icon={Workflow}
+            loading={statsLoading}
+          />
+        </div>
+      )}
 
       {/* Recent Deployments */}
       <Card>
@@ -141,11 +167,13 @@ export function DashboardPage() {
 function StatsCard({
   title,
   value,
+  subtitle,
   icon: Icon,
   loading,
 }: {
   title: string;
   value?: string | number;
+  subtitle?: string;
   icon: React.ElementType;
   loading: boolean;
 }) {
@@ -160,7 +188,12 @@ function StatsCard({
           {loading ? (
             <Skeleton className="mt-1 h-6 w-16" />
           ) : (
-            <p className="text-2xl font-bold">{value ?? "—"}</p>
+            <>
+              <p className="text-2xl font-bold">{value ?? "—"}</p>
+              {subtitle && (
+                <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+              )}
+            </>
           )}
         </div>
       </CardContent>

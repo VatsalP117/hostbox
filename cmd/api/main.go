@@ -175,6 +175,8 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(repos.User, repos.Project, repos.Deployment, repos.Activity, repos.Settings, cfg, l)
 	adminHandler.SetBackupService(backupService)
 	adminHandler.SetUpdateService(updateService)
+	metricsService := adminsvc.NewMetricsService(db, cfg, repos.Project, repos.User, repos.Deployment, repos.SystemMetrics, dockerClient, caddyClient, l)
+	adminHandler.SetMetricsService(metricsService)
 
 	// 12. Initialize build pipeline (executor, pool, service) if Docker is available
 	if dockerClient != nil {
@@ -247,7 +249,7 @@ func main() {
 
 	// 12b. Start background schedulers
 	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
-	schedulerMgr := scheduler.NewManager(db, repos.Deployment, repos.Project, repos.Settings, repos.Domain, cfg.Build.LogBaseDir, l)
+	schedulerMgr := scheduler.NewManager(db, repos.Deployment, repos.Project, repos.Settings, repos.Domain, scheduler.NewSystemMetricsCollector(metricsService, l), cfg.Build.LogBaseDir, l)
 	schedulerMgr.Start(schedulerCtx)
 	l.Info("background schedulers started")
 

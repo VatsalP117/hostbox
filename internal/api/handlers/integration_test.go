@@ -24,6 +24,8 @@ import (
 	apperrors "github.com/VatsalP117/hostbox/internal/errors"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	"github.com/VatsalP117/hostbox/internal/services"
+	adminsvc "github.com/VatsalP117/hostbox/internal/services/admin"
+	caddysvc "github.com/VatsalP117/hostbox/internal/services/caddy"
 	"github.com/VatsalP117/hostbox/migrations"
 )
 
@@ -119,6 +121,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, "test.example.com", logger)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, logger)
 	adminHandler := handlers.NewAdminHandler(repos.User, repos.Project, repos.Deployment, repos.Activity, repos.Settings, cfg, logger)
+	adminHandler.SetMetricsService(adminsvc.NewMetricsService(db, cfg, repos.Project, repos.User, repos.Deployment, repos.SystemMetrics, nil, caddysvc.NewCaddyClient("http://127.0.0.1:0", logger), logger))
 
 	routes.Register(e, routes.Deps{
 		AuthService:       authService,
@@ -689,6 +692,12 @@ func TestAdminStats(t *testing.T) {
 	mustDecode(t, rec, &resp)
 	if resp.UserCount != 1 {
 		t.Errorf("user count = %d, want 1", resp.UserCount)
+	}
+	if resp.Components.API.Status != "healthy" {
+		t.Errorf("api status = %q, want healthy", resp.Components.API.Status)
+	}
+	if resp.BuildQueue.MaxConcurrentBuilds != 0 {
+		t.Errorf("max concurrent builds = %d, want 0", resp.BuildQueue.MaxConcurrentBuilds)
 	}
 }
 

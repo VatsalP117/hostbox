@@ -13,6 +13,7 @@ type Manager struct {
 	gc             *GarbageCollector
 	sessionCleaner *SessionCleaner
 	domainVerifier *DomainReVerifier
+	systemMetrics  *SystemMetricsCollector
 	logger         *slog.Logger
 }
 
@@ -22,6 +23,7 @@ func NewManager(
 	projectRepo *repository.ProjectRepository,
 	settingsRepo *repository.SettingsRepository,
 	domainRepo *repository.DomainRepository,
+	systemMetrics *SystemMetricsCollector,
 	logDir string,
 	logger *slog.Logger,
 ) *Manager {
@@ -29,6 +31,7 @@ func NewManager(
 		gc:             NewGarbageCollector(deployRepo, projectRepo, settingsRepo, logDir, logger),
 		sessionCleaner: NewSessionCleaner(db, logger),
 		domainVerifier: NewDomainReVerifier(domainRepo, logger),
+		systemMetrics:  systemMetrics,
 		logger:         logger,
 	}
 }
@@ -38,9 +41,13 @@ func (m *Manager) Start(ctx context.Context) {
 	go m.gc.Run(ctx)
 	go m.sessionCleaner.Run(ctx)
 	go m.domainVerifier.Run(ctx)
+	if m.systemMetrics != nil {
+		go m.systemMetrics.Run(ctx)
+	}
 	m.logger.Info("background schedulers started",
 		"gc_interval", "6h",
 		"session_cleanup_interval", "1h",
 		"domain_reverify_interval", "24h",
+		"system_metrics_interval", "5m",
 	)
 }
