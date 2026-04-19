@@ -105,6 +105,7 @@ func (c *Client) CreateBuildContainer(ctx context.Context, opts BuildContainerOp
 		},
 		SecurityOpt:    []string{"no-new-privileges"},
 		CapDrop:        []string{"ALL"},
+		CapAdd:         []string{"DAC_OVERRIDE", "FOWNER"},
 		ReadonlyRootfs: true,
 		Tmpfs: map[string]string{
 			"/tmp": "rw,noexec,nosuid,size=512m",
