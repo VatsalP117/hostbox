@@ -67,7 +67,7 @@ After the install finishes, open `https://hostbox.example.com` and create the fi
 Use this if you want to review everything yourself.
 
 ```bash
-sudo mkdir -p /opt/hostbox
+sudo mkdir -p /opt/hostbox/{data/backups,deployments,logs,cache,tmp}
 cd /opt/hostbox
 
 curl -fsSL https://raw.githubusercontent.com/VatsalP117/hostbox/main/docker-compose.yml -o docker-compose.yml
@@ -87,7 +87,14 @@ JWT_SECRET=${JWT_SECRET}
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
 
-DATABASE_PATH=/app/data/hostbox.db
+DATABASE_PATH=/opt/hostbox/data/hostbox.db
+DEPLOYMENTS_DIR=/opt/hostbox/deployments
+LOGS_DIR=/opt/hostbox/logs
+CACHE_DIR=/opt/hostbox/cache
+BACKUP_DIR=/opt/hostbox/data/backups
+CLONE_BASE_DIR=/opt/hostbox/tmp
+DEPLOYMENT_BASE_DIR=/opt/hostbox/deployments
+LOG_BASE_DIR=/opt/hostbox/logs
 DOCKER_GID=${DOCKER_GID}
 
 ACME_EMAIL=admin@example.com
@@ -118,7 +125,13 @@ Hostbox reads runtime configuration from `.env`.
 | `PLATFORM_NAME` | No | UI display name. |
 | `JWT_SECRET` | Yes | At least 32 characters. |
 | `ENCRYPTION_KEY` | Yes | Use `openssl rand -hex 32`. |
-| `DATABASE_PATH` | Yes | Default Docker path is `/app/data/hostbox.db`. |
+| `DATABASE_PATH` | Yes | For Docker installs, use a host-visible absolute path like `/opt/hostbox/data/hostbox.db`. |
+| `DEPLOYMENTS_DIR` | No | For Docker installs, use a host-visible absolute path like `/opt/hostbox/deployments`. |
+| `LOGS_DIR` | No | For Docker installs, use a host-visible absolute path like `/opt/hostbox/logs`. |
+| `CACHE_DIR` | No | For Docker installs, use a host-visible absolute path like `/opt/hostbox/cache`. |
+| `CLONE_BASE_DIR` | No | For Docker installs, use a host-visible absolute path like `/opt/hostbox/tmp`. |
+| `DEPLOYMENT_BASE_DIR` | No | Usually matches `DEPLOYMENTS_DIR`. |
+| `LOG_BASE_DIR` | No | Usually matches `LOGS_DIR`. |
 | `DOCKER_GID` | Yes for Docker installs | Group ID of `/var/run/docker.sock` on the host. Needed for build access from inside the container. |
 | `ACME_EMAIL` | Yes | Email used for Let's Encrypt / ACME. |
 | `DNS_PROVIDER` | No | `none`, `cloudflare`, `route53`, or `digitalocean`. |

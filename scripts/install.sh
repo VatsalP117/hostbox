@@ -93,7 +93,7 @@ install_prerequisites() {
 
 setup_directory() {
     info "Setting up ${HOSTBOX_DIR}..."
-    mkdir -p "${HOSTBOX_DIR}"/{data/backups,deployments,logs}
+    mkdir -p "${HOSTBOX_DIR}"/{data/backups,deployments,logs,cache,tmp}
     ok "Directory structure created"
 }
 
@@ -166,7 +166,14 @@ JWT_SECRET=${JWT_SECRET}
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
 # Database
-DATABASE_PATH=/app/data/hostbox.db
+DATABASE_PATH=${HOSTBOX_DIR}/data/hostbox.db
+DEPLOYMENTS_DIR=${HOSTBOX_DIR}/deployments
+LOGS_DIR=${HOSTBOX_DIR}/logs
+CACHE_DIR=${HOSTBOX_DIR}/cache
+BACKUP_DIR=${HOSTBOX_DIR}/data/backups
+CLONE_BASE_DIR=${HOSTBOX_DIR}/tmp
+DEPLOYMENT_BASE_DIR=${HOSTBOX_DIR}/deployments
+LOG_BASE_DIR=${HOSTBOX_DIR}/logs
 DOCKER_GID=${DOCKER_GID}
 
 # GitHub App (configure after installation via setup wizard)
