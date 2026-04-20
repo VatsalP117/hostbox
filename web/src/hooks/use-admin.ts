@@ -10,10 +10,13 @@ import type {
   UpdateSettingsRequest,
 } from "@/types/api";
 
-export function useAdminStats() {
+export function useAdminStats(enabled = true) {
   return useQuery({
     queryKey: queryKeys.adminStats,
     queryFn: () => api.get<AdminStatsResponse>("/admin/stats"),
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
+    enabled,
   });
 }
 

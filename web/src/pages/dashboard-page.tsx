@@ -7,6 +7,7 @@ import { formatBytes, formatPercent } from "@/lib/utils";
 import { timeAgo } from "@/lib/date";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAdminStats } from "@/hooks/use-admin";
 import type { AdminStatsResponse, DeploymentListResponse } from "@/types/api";
 import {
   AlertCircle,
@@ -29,11 +30,7 @@ export function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = !!user?.is_admin;
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: queryKeys.adminStats,
-    queryFn: () => api.get<AdminStatsResponse>("/admin/stats"),
-    enabled: isAdmin,
-  });
+  const { data: stats, isLoading: statsLoading } = useAdminStats(isAdmin);
 
   const { data: recentDeploys, isLoading: deploysLoading } = useQuery({
     queryKey: ["recent-deployments"],
