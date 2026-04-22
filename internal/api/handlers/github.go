@@ -3,22 +3,45 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
-	"github.com/labstack/echo/v4"
 	"github.com/VatsalP117/hostbox/internal/services/github"
+	"github.com/labstack/echo/v4"
 )
 
 type GitHubHandler struct {
 	githubClient *github.Client
+	appSlug      string
 	logger       *slog.Logger
 }
 
-func NewGitHubHandler(client *github.Client, logger *slog.Logger) *GitHubHandler {
+func NewGitHubHandler(client *github.Client, appSlug string, logger *slog.Logger) *GitHubHandler {
 	return &GitHubHandler{
 		githubClient: client,
+		appSlug:      appSlug,
 		logger:       logger,
 	}
+}
+
+type githubStatusDTO struct {
+	Configured bool   `json:"configured"`
+	AppSlug    string `json:"app_slug,omitempty"`
+	InstallURL string `json:"install_url,omitempty"`
+}
+
+// Status returns GitHub App connection metadata for the dashboard.
+func (h *GitHubHandler) Status(c echo.Context) error {
+	status := githubStatusDTO{
+		Configured: h.githubClient != nil,
+		AppSlug:    h.appSlug,
+	}
+
+	if status.Configured && h.appSlug != "" {
+		status.InstallURL = "https://github.com/apps/" + url.PathEscape(h.appSlug) + "/installations/new"
+	}
+
+	return c.JSON(http.StatusOK, status)
 }
 
 type installationDTO struct {
@@ -30,6 +53,15 @@ type installationDTO struct {
 
 // ListInstallations returns GitHub App installations.
 func (h *GitHubHandler) ListInstallations(c echo.Context) error {
+	if h.githubClient == nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{
+			"error": map[string]string{
+				"code":    "GITHUB_NOT_CONFIGURED",
+				"message": "GitHub App integration is not configured",
+			},
+		})
+	}
+
 	ctx := c.Request().Context()
 
 	installations, err := h.githubClient.ListInstallations(ctx)
@@ -70,6 +102,15 @@ type repoDTO struct {
 
 // ListRepos returns repositories for a GitHub App installation.
 func (h *GitHubHandler) ListRepos(c echo.Context) error {
+	if h.githubClient == nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{
+			"error": map[string]string{
+				"code":    "GITHUB_NOT_CONFIGURED",
+				"message": "GitHub App integration is not configured",
+			},
+		})
+	}
+
 	ctx := c.Request().Context()
 
 	installationIDStr := c.QueryParam("installation_id")

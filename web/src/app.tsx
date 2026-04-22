@@ -28,6 +28,11 @@ const CreateProjectPage = lazy(() =>
     default: m.CreateProjectPage,
   })),
 );
+const GitHubSetupPage = lazy(() =>
+  import("@/pages/github-setup-page").then((m) => ({
+    default: m.GitHubSetupPage,
+  })),
+);
 const ProjectDetailPage = lazy(() =>
   import("@/pages/project-detail-page").then((m) => ({
     default: m.ProjectDetailPage,
@@ -115,6 +120,14 @@ export function App() {
                 element={
                   <SuspenseWrapper>
                     <CreateProjectPage />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="/github/setup"
+                element={
+                  <SuspenseWrapper>
+                    <GitHubSetupPage />
                   </SuspenseWrapper>
                 }
               />

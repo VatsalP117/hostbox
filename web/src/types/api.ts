@@ -232,6 +232,12 @@ export interface BulkImportEnvVarResponse {
 
 // ─── GitHub ──────────────────────────────────────────
 
+export interface GitHubStatusResponse {
+  configured: boolean;
+  app_slug?: string;
+  install_url?: string;
+}
+
 export interface GitHubReposResponse {
   repos: GitHubRepo[];
   pagination: Pagination;

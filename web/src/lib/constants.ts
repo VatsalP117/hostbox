@@ -10,6 +10,7 @@ export const routes = {
   dashboard: "/",
   projects: "/projects",
   newProject: "/projects/new",
+  githubSetup: "/github/setup",
   project: (id: string) => `/projects/${id}`,
   deployment: (projectId: string, deploymentId: string) =>
     `/projects/${projectId}/deployments/${deploymentId}`,
@@ -94,6 +95,7 @@ export const queryKeys = {
   deploymentLogs: (id: string) => ["deployment-logs", id] as const,
   domains: (projectId: string) => ["domains", projectId] as const,
   envVars: (projectId: string) => ["env-vars", projectId] as const,
+  githubStatus: ["github-status"] as const,
   installations: ["github-installations"] as const,
   repos: (installationId: number) =>
     ["github-repos", installationId] as const,

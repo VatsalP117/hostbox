@@ -127,6 +127,7 @@ func Register(e *echo.Echo, deps Deps) {
 	// --- GitHub authenticated endpoints ---
 	if deps.GitHubHandler != nil {
 		gh := authed.Group("/github")
+		gh.GET("/status", deps.GitHubHandler.Status)
 		gh.GET("/installations", deps.GitHubHandler.ListInstallations)
 		gh.GET("/repos", deps.GitHubHandler.ListRepos)
 	}

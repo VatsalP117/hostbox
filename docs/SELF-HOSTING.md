@@ -259,9 +259,10 @@ If you want repository-driven deployments:
 1. Create a GitHub App at <https://github.com/settings/apps>.
 2. Use:
    - **Homepage URL**: `https://hostbox.example.com`
+   - **Setup URL**: `https://hostbox.example.com/github/setup`
    - **Webhook URL**: `https://hostbox.example.com/api/v1/github/webhook`
 3. Grant:
-   - Repository permissions: Contents `Read`, Pull requests `Read & write`, Commit statuses `Read & write`
+   - Repository permissions: Contents `Read`, Pull requests `Read & write`, Commit statuses `Read & write`, Deployments `Read & write`
    - Organization permission: Members `Read`
 4. Subscribe to `Push`, `Pull request`, and `Installation` events.
 5. Add the generated values to `.env`.

@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,20 +16,22 @@ import (
 	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/internal/services/github"
 )
 
 type ProjectHandler struct {
-	projectRepo    *repository.ProjectRepository
-	deploymentRepo *repository.DeploymentRepository
-	domainRepo     *repository.DomainRepository
-	envVarRepo     *repository.EnvVarRepository
+	projectRepo      *repository.ProjectRepository
+	deploymentRepo   *repository.DeploymentRepository
+	domainRepo       *repository.DomainRepository
+	envVarRepo       *repository.EnvVarRepository
 	notificationRepo *repository.NotificationRepository
-	activityRepo   *repository.ActivityRepository
-	config         struct {
+	activityRepo     *repository.ActivityRepository
+	config           struct {
 		PlatformDomain  string
 		DashboardDomain string
 	}
-	logger *slog.Logger
+	githubClient *github.Client
+	logger       *slog.Logger
 }
 
 func NewProjectHandler(
@@ -42,12 +46,12 @@ func NewProjectHandler(
 	logger *slog.Logger,
 ) *ProjectHandler {
 	return &ProjectHandler{
-		projectRepo:    projectRepo,
-		deploymentRepo: deploymentRepo,
-		domainRepo:     domainRepo,
-		envVarRepo:     envVarRepo,
+		projectRepo:      projectRepo,
+		deploymentRepo:   deploymentRepo,
+		domainRepo:       domainRepo,
+		envVarRepo:       envVarRepo,
 		notificationRepo: notificationRepo,
-		activityRepo:   activityRepo,
+		activityRepo:     activityRepo,
 		config: struct {
 			PlatformDomain  string
 			DashboardDomain string
@@ -57,6 +61,10 @@ func NewProjectHandler(
 		},
 		logger: logger,
 	}
+}
+
+func (h *ProjectHandler) SetGitHubClient(client *github.Client) {
+	h.githubClient = client
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -71,6 +79,9 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	user := middleware.GetUser(c)
 	slug := hostnames.NormalizeProjectSlug(req.Name)
 	if err := h.validateProjectSlug(slug); err != nil {
+		return err
+	}
+	if err := h.validateGitHubRepository(c.Request().Context(), req.GitHubRepo, req.GitHubInstallationID); err != nil {
 		return err
 	}
 
@@ -305,6 +316,45 @@ func (h *ProjectHandler) validateProjectSlug(slug string) error {
 		}})
 	}
 	return nil
+}
+
+func (h *ProjectHandler) validateGitHubRepository(ctx context.Context, repo *string, installationID *int64) error {
+	if installationID == nil {
+		return nil
+	}
+
+	if repo == nil || strings.TrimSpace(*repo) == "" {
+		return apperrors.NewBadRequest("github_repo is required when github_installation_id is provided")
+	}
+	if h.githubClient == nil {
+		return apperrors.NewBadRequest("GitHub App integration is not configured")
+	}
+
+	owner, name, ok := splitGitHubRepo(*repo)
+	if !ok {
+		return apperrors.NewBadRequest("github_repo must be in owner/repository format")
+	}
+
+	if _, err := h.githubClient.GetRepo(ctx, *installationID, owner, name); err != nil {
+		h.logger.Warn("selected github repository is not accessible through installation",
+			"repo", strings.TrimSpace(*repo),
+			"installation_id", *installationID,
+			"error", err,
+		)
+		return apperrors.NewBadRequest("Selected repository is not accessible by this GitHub installation")
+	}
+
+	normalized := owner + "/" + name
+	*repo = normalized
+	return nil
+}
+
+func splitGitHubRepo(repo string) (string, string, bool) {
+	parts := strings.Split(strings.TrimSpace(repo), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func toProjectResponse(p *models.Project, status string) dto.ProjectResponse {

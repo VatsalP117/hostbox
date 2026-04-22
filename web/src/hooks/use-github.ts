@@ -5,12 +5,21 @@ import type {
   GitHubInstallationsResponse,
   GitHubReposParams,
   GitHubReposResponse,
+  GitHubStatusResponse,
 } from "@/types/api";
 
-export function useGitHubInstallations() {
+export function useGitHubStatus() {
+  return useQuery({
+    queryKey: queryKeys.githubStatus,
+    queryFn: () => api.get<GitHubStatusResponse>("/github/status"),
+  });
+}
+
+export function useGitHubInstallations(enabled = true) {
   return useQuery({
     queryKey: queryKeys.installations,
     queryFn: () => api.get<GitHubInstallationsResponse>("/github/installations"),
+    enabled,
   });
 }
 

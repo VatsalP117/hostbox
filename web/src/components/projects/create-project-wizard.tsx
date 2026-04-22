@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -22,11 +27,22 @@ import {
   BuildSettingsForm,
   type BuildSettingsValues,
 } from "@/components/projects/build-settings-form";
-import { useGitHubInstallations, useGitHubRepos } from "@/hooks/use-github";
+import {
+  useGitHubInstallations,
+  useGitHubRepos,
+  useGitHubStatus,
+} from "@/hooks/use-github";
 import { useCreateProject } from "@/hooks/use-projects";
 import { routes } from "@/lib/constants";
 import { getApiErrorMessage } from "@/lib/utils";
-import { Loader2, ArrowLeft, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  ArrowRight,
+  Github,
+  RefreshCw,
+  ExternalLink,
+} from "lucide-react";
 
 type Step = "repo" | "settings";
 
@@ -37,12 +53,18 @@ export function CreateProjectWizard() {
   const [repoUrl, setRepoUrl] = useState("");
   const [installationId, setInstallationId] = useState<string>("");
 
-  const { data: installations } = useGitHubInstallations();
+  const { data: githubStatus } = useGitHubStatus();
+  const {
+    data: installations,
+    isFetching: installationsFetching,
+    refetch: refetchInstallations,
+  } = useGitHubInstallations(!!githubStatus?.configured);
   const { data: repos } = useGitHubRepos(
     installationId
       ? { installation_id: Number(installationId), per_page: 100 }
       : undefined,
   );
+  const hasInstallations = !!installations?.installations?.length;
 
   const handleSubmit = (values: BuildSettingsValues) => {
     createProject.mutate(
@@ -103,7 +125,59 @@ export function CreateProjectWizard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {installations?.installations?.length ? (
+            {githubStatus?.configured && !hasInstallations ? (
+              <Alert>
+                <Github className="h-4 w-4" />
+                <AlertTitle>No GitHub account connected</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>
+                    Install the Hostbox GitHub App to select private
+                    repositories and enable push deployments.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {githubStatus.install_url ? (
+                      <Button asChild size="sm">
+                        <a href={githubStatus.install_url}>
+                          <Github className="h-4 w-4" />
+                          Connect GitHub
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Set GITHUB_APP_SLUG to enable the install link.
+                      </p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => refetchInstallations()}
+                      disabled={installationsFetching}
+                    >
+                      {installationsFetching ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      Refresh
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {githubStatus && !githubStatus.configured ? (
+              <Alert>
+                <Github className="h-4 w-4" />
+                <AlertTitle>GitHub App not configured</AlertTitle>
+                <AlertDescription>
+                  Add GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PEM, and
+                  GITHUB_WEBHOOK_SECRET to enable private repository selection.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {hasInstallations ? (
               <>
                 <div className="space-y-2">
                   <Label>GitHub Installation</Label>

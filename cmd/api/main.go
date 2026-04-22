@@ -147,10 +147,10 @@ func main() {
 
 		ghTokenProvider = tokenProvider
 		ghClient = ghsvc.NewClient(tokenProvider, l)
-		ghHandler = handlers.NewGitHubHandler(ghClient, l)
 
 		l.Info("github app integration initialized", "app_id", cfg.GitHubAppID)
 	}
+	ghHandler = handlers.NewGitHubHandler(ghClient, cfg.GitHubAppSlug, l)
 
 	// 10. Create server
 	srv := api.NewServer(cfg, db, repos, l)
@@ -170,6 +170,7 @@ func main() {
 		cfg.DashboardDomain,
 		l,
 	)
+	projectHandler.SetGitHubClient(ghClient)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, l)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, cfg.PlatformDomain, l)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, l)
