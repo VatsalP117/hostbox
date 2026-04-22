@@ -33,6 +33,11 @@ const GitHubSetupPage = lazy(() =>
     default: m.GitHubSetupPage,
   })),
 );
+const GitHubManifestPage = lazy(() =>
+  import("@/pages/github-manifest-page").then((m) => ({
+    default: m.GitHubManifestPage,
+  })),
+);
 const ProjectDetailPage = lazy(() =>
   import("@/pages/project-detail-page").then((m) => ({
     default: m.ProjectDetailPage,
@@ -128,6 +133,14 @@ export function App() {
                 element={
                   <SuspenseWrapper>
                     <GitHubSetupPage />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="/github/manifest"
+                element={
+                  <SuspenseWrapper>
+                    <GitHubManifestPage />
                   </SuspenseWrapper>
                 }
               />

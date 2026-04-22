@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { queryKeys } from "@/lib/constants";
 import type {
+  CompleteGitHubManifestRequest,
   GitHubInstallationsResponse,
+  GitHubManifestResponse,
   GitHubReposParams,
   GitHubReposResponse,
   GitHubStatusResponse,
@@ -20,6 +22,25 @@ export function useGitHubInstallations(enabled = true) {
     queryKey: queryKeys.installations,
     queryFn: () => api.get<GitHubInstallationsResponse>("/github/installations"),
     enabled,
+  });
+}
+
+export function useCreateGitHubManifest() {
+  return useMutation({
+    mutationFn: () => api.post<GitHubManifestResponse>("/github/manifest"),
+  });
+}
+
+export function useCompleteGitHubManifest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: CompleteGitHubManifestRequest) =>
+      api.post<GitHubStatusResponse>("/github/manifest/complete", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.githubStatus });
+      queryClient.invalidateQueries({ queryKey: queryKeys.installations });
+    },
   });
 }
 

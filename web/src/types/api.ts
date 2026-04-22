@@ -238,6 +238,16 @@ export interface GitHubStatusResponse {
   install_url?: string;
 }
 
+export interface GitHubManifestResponse {
+  action_url: string;
+  manifest: Record<string, unknown>;
+}
+
+export interface CompleteGitHubManifestRequest {
+  code: string;
+  state: string;
+}
+
 export interface GitHubReposResponse {
   repos: GitHubRepo[];
   pagination: Pagination;

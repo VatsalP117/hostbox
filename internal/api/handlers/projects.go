@@ -30,8 +30,8 @@ type ProjectHandler struct {
 		PlatformDomain  string
 		DashboardDomain string
 	}
-	githubClient *github.Client
-	logger       *slog.Logger
+	githubRuntime *github.Runtime
+	logger        *slog.Logger
 }
 
 func NewProjectHandler(
@@ -63,8 +63,8 @@ func NewProjectHandler(
 	}
 }
 
-func (h *ProjectHandler) SetGitHubClient(client *github.Client) {
-	h.githubClient = client
+func (h *ProjectHandler) SetGitHubRuntime(runtime *github.Runtime) {
+	h.githubRuntime = runtime
 }
 
 func (h *ProjectHandler) Create(c echo.Context) error {
@@ -326,7 +326,7 @@ func (h *ProjectHandler) validateGitHubRepository(ctx context.Context, repo *str
 	if repo == nil || strings.TrimSpace(*repo) == "" {
 		return apperrors.NewBadRequest("github_repo is required when github_installation_id is provided")
 	}
-	if h.githubClient == nil {
+	if h.githubRuntime == nil {
 		return apperrors.NewBadRequest("GitHub App integration is not configured")
 	}
 
@@ -335,7 +335,7 @@ func (h *ProjectHandler) validateGitHubRepository(ctx context.Context, repo *str
 		return apperrors.NewBadRequest("github_repo must be in owner/repository format")
 	}
 
-	if _, err := h.githubClient.GetRepo(ctx, *installationID, owner, name); err != nil {
+	if _, err := h.githubRuntime.GetRepo(ctx, *installationID, owner, name); err != nil {
 		h.logger.Warn("selected github repository is not accessible through installation",
 			"repo", strings.TrimSpace(*repo),
 			"installation_id", *installationID,

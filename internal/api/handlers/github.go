@@ -1,26 +1,39 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/VatsalP117/hostbox/internal/services/github"
 	"github.com/labstack/echo/v4"
 )
 
 type GitHubHandler struct {
-	githubClient *github.Client
-	appSlug      string
-	logger       *slog.Logger
+	runtime          *github.Runtime
+	configStore      *github.AppConfigStore
+	dashboardBaseURL string
+	platformName     string
+	logger           *slog.Logger
 }
 
-func NewGitHubHandler(client *github.Client, appSlug string, logger *slog.Logger) *GitHubHandler {
+func NewGitHubHandler(
+	runtime *github.Runtime,
+	configStore *github.AppConfigStore,
+	dashboardBaseURL string,
+	platformName string,
+	logger *slog.Logger,
+) *GitHubHandler {
 	return &GitHubHandler{
-		githubClient: client,
-		appSlug:      appSlug,
-		logger:       logger,
+		runtime:          runtime,
+		configStore:      configStore,
+		dashboardBaseURL: strings.TrimRight(dashboardBaseURL, "/"),
+		platformName:     platformName,
+		logger:           logger,
 	}
 }
 
@@ -32,16 +45,134 @@ type githubStatusDTO struct {
 
 // Status returns GitHub App connection metadata for the dashboard.
 func (h *GitHubHandler) Status(c echo.Context) error {
+	configured, appSlug := h.runtime.Status()
 	status := githubStatusDTO{
-		Configured: h.githubClient != nil,
-		AppSlug:    h.appSlug,
+		Configured: configured,
+		AppSlug:    appSlug,
 	}
 
-	if status.Configured && h.appSlug != "" {
-		status.InstallURL = "https://github.com/apps/" + url.PathEscape(h.appSlug) + "/installations/new"
+	if status.Configured && appSlug != "" {
+		status.InstallURL = githubInstallURL(appSlug)
 	}
 
 	return c.JSON(http.StatusOK, status)
+}
+
+type githubManifestDTO struct {
+	ActionURL string         `json:"action_url"`
+	Manifest  map[string]any `json:"manifest"`
+}
+
+// Manifest creates a GitHub App manifest payload for one-click app registration.
+func (h *GitHubHandler) Manifest(c echo.Context) error {
+	state, err := randomState()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to start GitHub connection",
+			},
+		})
+	}
+	if err := h.configStore.SetManifestState(c.Request().Context(), state); err != nil {
+		h.logger.Error("failed to store github manifest state", "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to start GitHub connection",
+			},
+		})
+	}
+
+	baseURL := h.dashboardBaseURL
+	manifest := map[string]any{
+		"name":        h.defaultAppName(),
+		"url":         baseURL,
+		"description": "Deploy static sites from GitHub repositories with Hostbox.",
+		"hook_attributes": map[string]any{
+			"url":    baseURL + "/api/v1/github/webhook",
+			"active": true,
+		},
+		"redirect_url":  baseURL + "/github/manifest",
+		"callback_urls": []string{baseURL + "/github/setup"},
+		"setup_url":     baseURL + "/github/setup",
+		"public":        false,
+		"default_events": []string{
+			"push",
+			"pull_request",
+			"installation",
+		},
+		"default_permissions": map[string]string{
+			"contents":      "read",
+			"deployments":   "write",
+			"pull_requests": "write",
+			"statuses":      "write",
+		},
+		"setup_on_update": true,
+	}
+
+	return c.JSON(http.StatusOK, githubManifestDTO{
+		ActionURL: "https://github.com/settings/apps/new?state=" + url.QueryEscape(state),
+		Manifest:  manifest,
+	})
+}
+
+type githubManifestCompleteRequest struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+// CompleteManifest exchanges GitHub's manifest code for app credentials.
+func (h *GitHubHandler) CompleteManifest(c echo.Context) error {
+	var req githubManifestCompleteRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]any{
+			"error": map[string]string{"code": "VALIDATION_ERROR", "message": "Invalid request body"},
+		})
+	}
+
+	expectedState, err := h.configStore.GetManifestState(c.Request().Context())
+	if err != nil {
+		h.logger.Error("failed to load github manifest state", "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"code": "INTERNAL_ERROR", "message": "Failed to finish GitHub connection"},
+		})
+	}
+	if req.Code == "" || req.State == "" || expectedState == "" || req.State != expectedState {
+		return c.JSON(http.StatusBadRequest, map[string]any{
+			"error": map[string]string{"code": "VALIDATION_ERROR", "message": "Invalid GitHub connection state"},
+		})
+	}
+
+	conversion, err := github.ConvertManifest(c.Request().Context(), req.Code)
+	if err != nil {
+		h.logger.Error("failed to convert github manifest", "error", err)
+		return c.JSON(http.StatusBadGateway, map[string]any{
+			"error": map[string]string{"code": "GITHUB_ERROR", "message": "Failed to finish GitHub connection"},
+		})
+	}
+
+	appConfig := github.AppConfig{
+		AppID:         conversion.ID,
+		AppSlug:       conversion.Slug,
+		PrivateKeyPEM: []byte(conversion.PEM),
+		WebhookSecret: conversion.WebhookSecret,
+	}
+	if err := h.configStore.Save(c.Request().Context(), appConfig); err != nil {
+		h.logger.Error("failed to save github app config", "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"code": "INTERNAL_ERROR", "message": "Failed to save GitHub connection"},
+		})
+	}
+	if err := h.runtime.Configure(appConfig); err != nil {
+		h.logger.Error("failed to configure github runtime", "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]any{
+			"error": map[string]string{"code": "INTERNAL_ERROR", "message": "Failed to activate GitHub connection"},
+		})
+	}
+	_ = h.configStore.SetManifestState(c.Request().Context(), "")
+
+	return h.Status(c)
 }
 
 type installationDTO struct {
@@ -53,18 +184,9 @@ type installationDTO struct {
 
 // ListInstallations returns GitHub App installations.
 func (h *GitHubHandler) ListInstallations(c echo.Context) error {
-	if h.githubClient == nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]any{
-			"error": map[string]string{
-				"code":    "GITHUB_NOT_CONFIGURED",
-				"message": "GitHub App integration is not configured",
-			},
-		})
-	}
-
 	ctx := c.Request().Context()
 
-	installations, err := h.githubClient.ListInstallations(ctx)
+	installations, err := h.runtime.ListInstallations(ctx)
 	if err != nil {
 		h.logger.Error("failed to list github installations", "error", err)
 		return c.JSON(http.StatusBadGateway, map[string]any{
@@ -102,15 +224,6 @@ type repoDTO struct {
 
 // ListRepos returns repositories for a GitHub App installation.
 func (h *GitHubHandler) ListRepos(c echo.Context) error {
-	if h.githubClient == nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]any{
-			"error": map[string]string{
-				"code":    "GITHUB_NOT_CONFIGURED",
-				"message": "GitHub App integration is not configured",
-			},
-		})
-	}
-
 	ctx := c.Request().Context()
 
 	installationIDStr := c.QueryParam("installation_id")
@@ -141,7 +254,7 @@ func (h *GitHubHandler) ListRepos(c echo.Context) error {
 		perPage = 30
 	}
 
-	repos, total, err := h.githubClient.ListRepos(ctx, installationID, page, perPage)
+	repos, total, err := h.runtime.ListRepos(ctx, installationID, page, perPage)
 	if err != nil {
 		h.logger.Error("failed to list repos", "installation_id", installationID, "error", err)
 		return c.JSON(http.StatusBadGateway, map[string]any{
@@ -176,4 +289,28 @@ func (h *GitHubHandler) ListRepos(c echo.Context) error {
 			"total_pages": totalPages,
 		},
 	})
+}
+
+func (h *GitHubHandler) defaultAppName() string {
+	host := "self-hosted"
+	if parsed, err := url.Parse(h.dashboardBaseURL); err == nil && parsed.Hostname() != "" {
+		host = strings.ReplaceAll(parsed.Hostname(), ".", "-")
+	}
+	name := strings.TrimSpace(h.platformName)
+	if name == "" {
+		name = "Hostbox"
+	}
+	return name + " " + host
+}
+
+func githubInstallURL(appSlug string) string {
+	return "https://github.com/apps/" + url.PathEscape(appSlug) + "/installations/new"
+}
+
+func randomState() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }

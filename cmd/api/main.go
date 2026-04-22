@@ -126,31 +126,26 @@ func main() {
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	caddySyncSvc.StartPeriodicSync(syncCtx, 5*time.Minute)
 
-	// 9b. Initialize GitHub services (optional, only if configured)
-	var ghClient *ghsvc.Client
-	var ghTokenProvider *ghsvc.TokenProvider
-	var ghEventRouter *ghsvc.GitHubEventRouter
-	var ghWebhookHandler *handlers.GitHubWebhookHandler
-	var ghHandler *handlers.GitHubHandler
-
-	if cfg.GitHubAppID > 0 && len(cfg.GitHubAppPEM) > 0 {
-		tokenProvider, err := ghsvc.NewTokenProvider(ghsvc.AppConfig{
-			AppID:         cfg.GitHubAppID,
-			AppSlug:       cfg.GitHubAppSlug,
-			PrivateKeyPEM: []byte(cfg.GitHubAppPEM),
-			WebhookSecret: cfg.GitHubWebhookSecret,
-		}, l)
-		if err != nil {
-			l.Error("failed to initialize GitHub token provider", "error", err)
-			os.Exit(1)
+	// 9b. Initialize GitHub services. The runtime can be configured now from
+	// env/settings or later by the dashboard GitHub App manifest flow.
+	ghRuntime := ghsvc.NewRuntime(l)
+	ghConfigStore := ghsvc.NewAppConfigStore(repos.Settings, cfg.EncryptionKey)
+	if ghConfig, ok, err := ghConfigStore.Load(ctx, ghsvc.AppConfig{
+		AppID:         cfg.GitHubAppID,
+		AppSlug:       cfg.GitHubAppSlug,
+		PrivateKeyPEM: []byte(cfg.GitHubAppPEM),
+		WebhookSecret: cfg.GitHubWebhookSecret,
+	}); err != nil {
+		l.Error("failed to load GitHub App configuration", "error", err)
+	} else if ok {
+		if err := ghRuntime.Configure(ghConfig); err != nil {
+			l.Error("failed to initialize GitHub runtime", "error", err)
+		} else {
+			l.Info("github app integration initialized", "app_id", ghConfig.AppID)
 		}
-
-		ghTokenProvider = tokenProvider
-		ghClient = ghsvc.NewClient(tokenProvider, l)
-
-		l.Info("github app integration initialized", "app_id", cfg.GitHubAppID)
 	}
-	ghHandler = handlers.NewGitHubHandler(ghClient, cfg.GitHubAppSlug, l)
+	ghWebhookHandler := handlers.NewGitHubWebhookHandler(ghRuntime, l)
+	ghHandler := handlers.NewGitHubHandler(ghRuntime, ghConfigStore, cfg.DashboardBaseURL(), cfg.PlatformName, l)
 
 	// 10. Create server
 	srv := api.NewServer(cfg, db, repos, l)
@@ -170,7 +165,7 @@ func main() {
 		cfg.DashboardDomain,
 		l,
 	)
-	projectHandler.SetGitHubClient(ghClient)
+	projectHandler.SetGitHubRuntime(ghRuntime)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, l)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, cfg.PlatformDomain, l)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, l)
@@ -192,7 +187,7 @@ func main() {
 			repos.EnvVar,
 			sseHub,
 			cfg.PlatformDomain,
-			ghTokenProvider,
+			ghRuntime,
 		)
 
 		// Wire Caddy route updates and notifications into the build pipeline
@@ -219,14 +214,10 @@ func main() {
 
 		deploymentHandler.SetBuildDeps(deploymentService, sseHub, cfg.Build.LogBaseDir)
 
-		// Wire GitHub event handlers if GitHub integration is configured
-		if ghClient != nil {
-			pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, l)
-			prHandler := ghsvc.NewPullRequestHandler(repos.Project, deploymentService, routeManager, l)
-			installHandler := ghsvc.NewInstallationHandler(repos.Project, l)
-			ghEventRouter = ghsvc.NewGitHubEventRouter(pushHandler, prHandler, installHandler, l)
-			ghWebhookHandler = handlers.NewGitHubWebhookHandler(cfg.GitHubWebhookSecret, ghEventRouter, l)
-		}
+		pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, l)
+		prHandler := ghsvc.NewPullRequestHandler(repos.Project, deploymentService, routeManager, l)
+		installHandler := ghsvc.NewInstallationHandler(repos.Project, l)
+		ghRuntime.SetEventRouter(ghsvc.NewGitHubEventRouter(pushHandler, prHandler, installHandler, l))
 
 		if err := pool.Start(); err != nil {
 			l.Error("failed to start worker pool", "error", err)

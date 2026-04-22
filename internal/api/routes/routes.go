@@ -128,6 +128,8 @@ func Register(e *echo.Echo, deps Deps) {
 	if deps.GitHubHandler != nil {
 		gh := authed.Group("/github")
 		gh.GET("/status", deps.GitHubHandler.Status)
+		gh.POST("/manifest", deps.GitHubHandler.Manifest)
+		gh.POST("/manifest/complete", deps.GitHubHandler.CompleteManifest)
 		gh.GET("/installations", deps.GitHubHandler.ListInstallations)
 		gh.GET("/repos", deps.GitHubHandler.ListRepos)
 	}

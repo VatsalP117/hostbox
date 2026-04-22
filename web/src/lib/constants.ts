@@ -10,6 +10,7 @@ export const routes = {
   dashboard: "/",
   projects: "/projects",
   newProject: "/projects/new",
+  githubManifest: "/github/manifest",
   githubSetup: "/github/setup",
   project: (id: string) => `/projects/${id}`,
   deployment: (projectId: string, deploymentId: string) =>

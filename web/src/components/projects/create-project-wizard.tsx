@@ -3,11 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
-import {
   Card,
   CardContent,
   CardDescription,
@@ -28,6 +23,7 @@ import {
   type BuildSettingsValues,
 } from "@/components/projects/build-settings-form";
 import {
+  useCreateGitHubManifest,
   useGitHubInstallations,
   useGitHubRepos,
   useGitHubStatus,
@@ -40,8 +36,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Github,
-  RefreshCw,
   ExternalLink,
+  LockKeyhole,
 } from "lucide-react";
 
 type Step = "repo" | "settings";
@@ -52,19 +48,33 @@ export function CreateProjectWizard() {
   const [step, setStep] = useState<Step>("repo");
   const [repoUrl, setRepoUrl] = useState("");
   const [installationId, setInstallationId] = useState<string>("");
+  const [manualMode, setManualMode] = useState(false);
 
-  const { data: githubStatus } = useGitHubStatus();
-  const {
-    data: installations,
-    isFetching: installationsFetching,
-    refetch: refetchInstallations,
-  } = useGitHubInstallations(!!githubStatus?.configured);
+  const createManifest = useCreateGitHubManifest();
+  const { data: githubStatus, isLoading: githubStatusLoading } =
+    useGitHubStatus();
+  const { data: installations } = useGitHubInstallations(
+    !!githubStatus?.configured,
+  );
   const { data: repos } = useGitHubRepos(
     installationId
       ? { installation_id: Number(installationId), per_page: 100 }
       : undefined,
   );
   const hasInstallations = !!installations?.installations?.length;
+  const canContinue = repoUrl.trim().length > 0;
+
+  const handleConnectGitHub = () => {
+    if (githubStatus?.configured && githubStatus.install_url) {
+      window.location.href = githubStatus.install_url;
+      return;
+    }
+
+    createManifest.mutate(undefined, {
+      onSuccess: (data) => submitGitHubManifest(data.action_url, data.manifest),
+      onError: (err) => toast.error(getApiErrorMessage(err)),
+    });
+  };
 
   const handleSubmit = (values: BuildSettingsValues) => {
     createProject.mutate(
@@ -118,78 +128,52 @@ export function CreateProjectWizard() {
       {step === "repo" && (
         <Card>
           <CardHeader>
-            <CardTitle>Connect Repository</CardTitle>
+            <CardTitle>Import from GitHub</CardTitle>
             <CardDescription>
-              Pick a repository from a GitHub App installation or enter one
-              manually.
+              Connect your GitHub account, choose which repositories Hostbox can
+              access, then pick a project to deploy.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {githubStatus?.configured && !hasInstallations ? (
-              <Alert>
-                <Github className="h-4 w-4" />
-                <AlertTitle>No GitHub account connected</AlertTitle>
-                <AlertDescription className="space-y-3">
-                  <p>
-                    Install the Hostbox GitHub App to select private
-                    repositories and enable push deployments.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {githubStatus.install_url ? (
-                      <Button asChild size="sm">
-                        <a href={githubStatus.install_url}>
-                          <Github className="h-4 w-4" />
-                          Connect GitHub
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Set GITHUB_APP_SLUG to enable the install link.
-                      </p>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => refetchInstallations()}
-                      disabled={installationsFetching}
-                    >
-                      {installationsFetching ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" />
-                      )}
-                      Refresh
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            {githubStatus && !githubStatus.configured ? (
-              <Alert>
-                <Github className="h-4 w-4" />
-                <AlertTitle>GitHub App not configured</AlertTitle>
-                <AlertDescription>
-                  Add GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PEM, and
-                  GITHUB_WEBHOOK_SECRET to enable private repository selection.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
             {hasInstallations ? (
-              <>
+              <div className="space-y-4 rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md border bg-background">
+                      <Github className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-foreground">
+                        GitHub is connected
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Select an account and repository to deploy.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConnectGitHub}
+                  >
+                    Manage access
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </div>
+
                 <div className="space-y-2">
-                  <Label>GitHub Installation</Label>
+                  <Label>GitHub account</Label>
                   <Select
                     value={installationId}
                     onValueChange={(value) => {
                       setInstallationId(value);
                       setRepoUrl("");
+                      setManualMode(false);
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select an installation" />
+                      <SelectValue placeholder="Select an account" />
                     </SelectTrigger>
                     <SelectContent>
                       {installations.installations.map((installation) => (
@@ -204,44 +188,109 @@ export function CreateProjectWizard() {
                   </Select>
                 </div>
 
-                {installationId && (
-                  <div className="space-y-2">
-                    <Label>Repository</Label>
-                    <Select value={repoUrl} onValueChange={setRepoUrl}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a repository" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {repos?.repos?.map((repo) => (
-                          <SelectItem key={repo.full_name} value={repo.full_name}>
-                            {repo.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-2">
+                  <Label>Repository</Label>
+                  <Select
+                    value={repoUrl}
+                    onValueChange={(value) => {
+                      setRepoUrl(value);
+                      setManualMode(false);
+                    }}
+                    disabled={!installationId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          installationId
+                            ? "Select a repository"
+                            : "Select an account first"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {repos?.repos?.map((repo) => (
+                        <SelectItem key={repo.full_name} value={repo.full_name}>
+                          {repo.full_name}
+                          {repo.private ? " private" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border p-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-md border bg-background">
+                    <Github className="h-5 w-5" />
                   </div>
-                )}
-              </>
-            ) : null}
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <h3 className="font-medium text-foreground">
+                        Connect GitHub
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Hostbox will create a private GitHub App for this
+                        instance, then GitHub will ask which repositories you
+                        want to deploy.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleConnectGitHub}
+                      disabled={githubStatusLoading || createManifest.isPending}
+                    >
+                      {githubStatusLoading || createManifest.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Github className="h-4 w-4" />
+                      )}
+                      Connect GitHub
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="repo">GitHub Repository (manual)</Label>
-              <Input
-                id="repo"
-                placeholder="owner/repository"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Use this when GitHub App integration is not configured or you
-                want to test against a public repository directly.
-              </p>
+            <div className="border-t pt-4">
+              {!manualMode ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setManualMode(true);
+                    setInstallationId("");
+                    setRepoUrl("");
+                  }}
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  Use a public repository URL instead
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="repo">Public GitHub repository</Label>
+                  <Input
+                    id="repo"
+                    placeholder="owner/repository"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Public repositories can be deployed without connecting a
+                    GitHub account.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => navigate(-1)}>
                 Cancel
               </Button>
-              <Button onClick={() => setStep("settings")}>
+              <Button
+                onClick={() => setStep("settings")}
+                disabled={!canContinue}
+              >
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -282,4 +331,22 @@ export function CreateProjectWizard() {
       )}
     </div>
   );
+}
+
+function submitGitHubManifest(
+  actionURL: string,
+  manifest: Record<string, unknown>,
+) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = actionURL;
+
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "manifest";
+  input.value = JSON.stringify(manifest);
+
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
 }

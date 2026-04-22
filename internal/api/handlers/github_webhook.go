@@ -9,25 +9,22 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
 	"github.com/VatsalP117/hostbox/internal/services/github"
+	"github.com/labstack/echo/v4"
 )
 
 type GitHubWebhookHandler struct {
-	webhookSecret []byte
-	eventRouter   *github.GitHubEventRouter
-	logger        *slog.Logger
+	runtime *github.Runtime
+	logger  *slog.Logger
 }
 
 func NewGitHubWebhookHandler(
-	webhookSecret string,
-	eventRouter *github.GitHubEventRouter,
+	runtime *github.Runtime,
 	logger *slog.Logger,
 ) *GitHubWebhookHandler {
 	return &GitHubWebhookHandler{
-		webhookSecret: []byte(webhookSecret),
-		eventRouter:   eventRouter,
-		logger:        logger,
+		runtime: runtime,
+		logger:  logger,
 	}
 }
 
@@ -40,8 +37,15 @@ func (h *GitHubWebhookHandler) HandleWebhook(c echo.Context) error {
 		})
 	}
 
+	webhookSecret, eventRouter, ok := h.runtime.WebhookSecretAndRouter()
+	if !ok {
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{
+			"error": map[string]string{"code": "GITHUB_NOT_READY", "message": "GitHub webhook handling is not ready"},
+		})
+	}
+
 	signatureHeader := c.Request().Header.Get("X-Hub-Signature-256")
-	if !h.verifySignature(body, signatureHeader) {
+	if !h.verifySignature(body, signatureHeader, webhookSecret) {
 		h.logger.Warn("webhook signature verification failed",
 			"delivery_id", c.Request().Header.Get("X-GitHub-Delivery"),
 		)
@@ -59,7 +63,7 @@ func (h *GitHubWebhookHandler) HandleWebhook(c echo.Context) error {
 	)
 
 	go func() {
-		if err := h.eventRouter.Route(eventType, body, deliveryID); err != nil {
+		if err := eventRouter.Route(eventType, body, deliveryID); err != nil {
 			h.logger.Error("webhook event processing failed",
 				"event", eventType,
 				"delivery_id", deliveryID,
@@ -73,7 +77,7 @@ func (h *GitHubWebhookHandler) HandleWebhook(c echo.Context) error {
 	})
 }
 
-func (h *GitHubWebhookHandler) verifySignature(payload []byte, signatureHeader string) bool {
+func (h *GitHubWebhookHandler) verifySignature(payload []byte, signatureHeader string, webhookSecret string) bool {
 	if signatureHeader == "" || !strings.HasPrefix(signatureHeader, "sha256=") {
 		return false
 	}
@@ -84,7 +88,7 @@ func (h *GitHubWebhookHandler) verifySignature(payload []byte, signatureHeader s
 		return false
 	}
 
-	mac := hmac.New(sha256.New, h.webhookSecret)
+	mac := hmac.New(sha256.New, []byte(webhookSecret))
 	mac.Write(payload)
 	computedMAC := mac.Sum(nil)
 

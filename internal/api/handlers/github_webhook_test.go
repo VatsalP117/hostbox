@@ -2,22 +2,26 @@ package handlers
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/VatsalP117/hostbox/internal/services/github"
+	"github.com/labstack/echo/v4"
 )
 
 func TestGitHubWebhookHandler_ValidSignature(t *testing.T) {
 	secret := "test-secret"
 	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := NewGitHubWebhookHandler(secret, router, slog.Default())
+	handler := newWebhookHandlerForTest(t, secret, router)
 
 	body := `{"action":"ping"}`
 	mac := hmac.New(sha256.New, []byte(secret))
@@ -45,7 +49,7 @@ func TestGitHubWebhookHandler_ValidSignature(t *testing.T) {
 func TestGitHubWebhookHandler_InvalidSignature(t *testing.T) {
 	secret := "test-secret"
 	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := NewGitHubWebhookHandler(secret, router, slog.Default())
+	handler := newWebhookHandlerForTest(t, secret, router)
 
 	body := `{"action":"ping"}`
 
@@ -68,7 +72,7 @@ func TestGitHubWebhookHandler_InvalidSignature(t *testing.T) {
 
 func TestGitHubWebhookHandler_MissingSignature(t *testing.T) {
 	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := NewGitHubWebhookHandler("secret", router, slog.Default())
+	handler := newWebhookHandlerForTest(t, "secret", router)
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/github/webhook", strings.NewReader(`{}`))
@@ -83,4 +87,30 @@ func TestGitHubWebhookHandler_MissingSignature(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", rec.Code)
 	}
+}
+
+func newWebhookHandlerForTest(t *testing.T, secret string, router *github.GitHubEventRouter) *GitHubWebhookHandler {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate test key: %v", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+
+	runtime := github.NewRuntime(slog.Default())
+	if err := runtime.Configure(github.AppConfig{
+		AppID:         1,
+		AppSlug:       "hostbox-test",
+		PrivateKeyPEM: keyPEM,
+		WebhookSecret: secret,
+	}); err != nil {
+		t.Fatalf("configure github runtime: %v", err)
+	}
+	runtime.SetEventRouter(router)
+
+	return NewGitHubWebhookHandler(runtime, slog.Default())
 }

@@ -200,10 +200,10 @@ Hostbox reads runtime configuration from `.env`.
 | `DNS_PROVIDER` | No | `none`, `cloudflare`, `route53`, or `digitalocean`. |
 | `LOG_LEVEL` | No | `debug`, `info`, `warn`, or `error`. |
 | `BUILD_MEMORY_MB` | No | Per-build container memory limit in MB. Increase this for large Node.js workspaces if builds are killed with exit code `137`. |
-| `GITHUB_APP_ID` | No | Required only for GitHub App deployments. |
-| `GITHUB_APP_SLUG` | No | Required only for GitHub App deployments. |
-| `GITHUB_APP_PEM` | No | Required only for GitHub App deployments. |
-| `GITHUB_WEBHOOK_SECRET` | No | Required only for GitHub App deployments. |
+| `GITHUB_APP_ID` | No | Optional advanced override. The dashboard can create and store a GitHub App for you. |
+| `GITHUB_APP_SLUG` | No | Optional advanced override. |
+| `GITHUB_APP_PEM` | No | Optional advanced override. |
+| `GITHUB_WEBHOOK_SECRET` | No | Optional advanced override. |
 
 ### Why the path variables matter
 
@@ -252,25 +252,19 @@ In the production compose file:
 
 So from the VM host, use `docker compose exec ...` for direct API health checks instead of `curl http://localhost:8080/...`.
 
-## GitHub App setup
+## GitHub setup
 
-If you want repository-driven deployments:
+The dashboard handles GitHub setup for the normal single-user flow:
 
-1. Create a GitHub App at <https://github.com/settings/apps>.
-2. Use:
-   - **Homepage URL**: `https://hostbox.example.com`
-   - **Setup URL**: `https://hostbox.example.com/github/setup`
-   - **Webhook URL**: `https://hostbox.example.com/api/v1/github/webhook`
-3. Grant:
-   - Repository permissions: Contents `Read`, Pull requests `Read & write`, Commit statuses `Read & write`, Deployments `Read & write`
-   - Organization permission: Members `Read`
-4. Subscribe to `Push`, `Pull request`, and `Installation` events.
-5. Add the generated values to `.env`.
-6. Restart Hostbox:
+1. Open **New Project**.
+2. Click **Connect GitHub**.
+3. GitHub creates a private Hostbox GitHub App for this instance.
+4. Choose the repositories Hostbox can access.
+5. Return to Hostbox and select a repository from the dropdown.
 
-```bash
-docker compose up -d
-```
+Hostbox stores the generated GitHub App ID, slug, private key, and webhook secret in the database. The private key and webhook secret are encrypted with `ENCRYPTION_KEY`.
+
+You can still provide `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PEM`, and `GITHUB_WEBHOOK_SECRET` in `.env` if you want to manage the GitHub App manually.
 
 ## Operations
 
