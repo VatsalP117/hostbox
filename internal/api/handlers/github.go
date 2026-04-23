@@ -100,7 +100,6 @@ func (h *GitHubHandler) Manifest(c echo.Context) error {
 		"default_events": []string{
 			"push",
 			"pull_request",
-			"installation",
 		},
 		"default_permissions": map[string]string{
 			"contents":      "read",
