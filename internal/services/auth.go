@@ -328,7 +328,6 @@ func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
 	// TODO: Send email if SMTP configured
 	s.logger.Warn("password reset requested but SMTP not configured",
 		"user_id", user.ID,
-		"reset_token", rawToken,
 	)
 
 	s.logActivity(ctx, &user.ID, "user.forgot_password", "user", &user.ID, nil)
