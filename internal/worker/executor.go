@@ -109,6 +109,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	project, err := e.projectRepo.GetByID(ctx, deployment.ProjectID)
 	if err != nil {
 		slog.Error("executor: project not found", "id", deployment.ProjectID, "err", err)
+		e.failDeployment(ctx, deployment, "Internal error: failed to load project for build")
 		return
 	}
 
@@ -546,4 +547,8 @@ func (e *BuildExecutor) failDeployment(ctx context.Context, deployment *models.D
 	deployment.ErrorMessage = &errMsg
 	deployment.CompletedAt = &completedAt
 	_ = e.deploymentRepo.Update(ctx, deployment)
+	e.sseHub.PublishJSON(deployment.ID, SSEEventDone, map[string]interface{}{
+		"status":  "failed",
+		"message": errMsg,
+	})
 }

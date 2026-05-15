@@ -2,6 +2,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +28,7 @@ type BuildLogger struct {
 	sseHub       *SSEHub
 	maxSize      int64
 	currentSize  int64
+	lineCount    int64
 	mu           sync.Mutex
 }
 
@@ -78,8 +80,10 @@ func (l *BuildLogger) write(level LogLevel, msg string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	timestamp := time.Now().UTC().Format("2006-01-02 15:04:05")
-	line := fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, msg)
+	now := time.Now().UTC()
+	timestamp := now.Format("2006-01-02 15:04:05")
+	message := fmt.Sprintf("[%s] [%s] %s", timestamp, level, msg)
+	line := message + "\n"
 
 	lineBytes := int64(len(line))
 	if l.currentSize+lineBytes <= l.maxSize {
@@ -91,7 +95,17 @@ func (l *BuildLogger) write(level LogLevel, msg string) {
 		l.currentSize = l.maxSize
 	}
 
-	l.sseHub.Publish(l.deploymentID, SSEEventLog, line)
+	l.lineCount++
+	payload, _ := json.Marshal(struct {
+		Line      int64  `json:"line"`
+		Message   string `json:"message"`
+		Timestamp string `json:"timestamp"`
+	}{
+		Line:      l.lineCount,
+		Message:   message,
+		Timestamp: now.Format(time.RFC3339Nano),
+	})
+	l.sseHub.Publish(l.deploymentID, SSEEventLog, string(payload))
 }
 
 // StreamWriter returns an io.Writer that writes each line to the logger.

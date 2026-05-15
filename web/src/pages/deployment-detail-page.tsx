@@ -18,13 +18,26 @@ export function DeploymentDetailPage() {
   const { data, isLoading } = useDeployment(deploymentId!);
   const deployment = data?.deployment;
 
-  const isActive =
-    deployment?.status === "queued" || deployment?.status === "building";
+  const deploymentStatus = deployment?.status ?? "queued";
 
-  const { lines, status: phase, isConnected } = useDeploymentLogs(
+  const {
+    lines,
+    status: phase,
+    isConnected,
+    complete,
+    isLoadingHistory,
+  } = useDeploymentLogs(
     deploymentId!,
-    { enabled: !!deployment && isActive },
+    {
+      enabled: !!deployment,
+      liveEnabled:
+        deploymentStatus === "queued" || deploymentStatus === "building",
+    },
   );
+
+  const effectiveStatus = complete?.status ?? deploymentStatus;
+  const isActive =
+    effectiveStatus === "queued" || effectiveStatus === "building";
 
   if (isLoading) {
     return (
@@ -57,7 +70,7 @@ export function DeploymentDetailPage() {
 
       {/* Build Progress (only for active deployments) */}
       {isActive && (
-        <BuildProgress phase={phase} status={deployment.status} />
+        <BuildProgress phase={phase} status={effectiveStatus} />
       )}
 
       {/* Main Content Grid */}
@@ -65,7 +78,7 @@ export function DeploymentDetailPage() {
         {/* Left Column: Error Panel & Logs */}
         <div className="lg:col-span-2 space-y-6">
           {/* Error Panel (only for failed deployments) */}
-          {deployment.status === "failed" && deployment.error_message && (
+          {effectiveStatus === "failed" && deployment.error_message && (
             <div className="relative bg-[hsl(0,0%,11%)] rounded-xl border border-[hsl(0,84%,30%)]/30 overflow-hidden">
               <div className="absolute top-0 left-0 w-1 h-full bg-[hsl(0,84%,60%)]" />
               <div className="p-6">
@@ -89,6 +102,14 @@ export function DeploymentDetailPage() {
           <LogViewer
             lines={lines}
             isStreaming={isConnected}
+            isLoading={isLoadingHistory && lines.length === 0}
+            emptyMessage={
+              isActive
+                ? isConnected
+                  ? "Waiting for logs..."
+                  : "Connecting to live logs..."
+                : "No logs available for this deployment."
+            }
           />
         </div>
 
@@ -156,16 +177,16 @@ export function DeploymentDetailPage() {
                 </div>
                 <div>
                   <div className={`font-label font-bold ${
-                    deployment.status === "ready" ? "text-[hsl(142,76%,56%)]" :
-                    deployment.status === "failed" ? "text-[hsl(0,84%,60%)]" :
-                    deployment.status === "cancelled" ? "text-[hsl(0,0%,50%)]" :
+                    effectiveStatus === "ready" ? "text-[hsl(142,76%,56%)]" :
+                    effectiveStatus === "failed" ? "text-[hsl(0,84%,60%)]" :
+                    effectiveStatus === "cancelled" ? "text-[hsl(0,0%,50%)]" :
                     "text-[hsl(30,4%,50%)]"
                   }`}>
-                    {deployment.status === "ready" ? "Complete" :
-                     deployment.status === "failed" ? "Failed" :
-                     deployment.status === "cancelled" ? "Cancelled" :
-                     deployment.status === "building" ? "Building..." :
-                     deployment.status === "queued" ? "Waiting..." : deployment.status}
+                    {effectiveStatus === "ready" ? "Complete" :
+                     effectiveStatus === "failed" ? "Failed" :
+                     effectiveStatus === "cancelled" ? "Cancelled" :
+                     effectiveStatus === "building" ? "Building..." :
+                     effectiveStatus === "queued" ? "Waiting..." : effectiveStatus}
                   </div>
                   <div className="text-xs text-[hsl(30,4%,70%)] font-mono mt-1">
                     {deployment.completed_at ? new Date(deployment.completed_at).toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " UTC" : "-"}
@@ -181,7 +202,7 @@ export function DeploymentDetailPage() {
             <div className="space-y-4 font-label text-sm">
               <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
                 <span className="text-[hsl(30,4%,70%)]">Status</span>
-                <span className="text-[hsl(30,4%,90%)] capitalize">{deployment.status}</span>
+                <span className="text-[hsl(30,4%,90%)] capitalize">{effectiveStatus}</span>
               </div>
               {deployment.build_duration_ms && (
                 <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">

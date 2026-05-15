@@ -27,6 +27,10 @@ export function useDeployment(id: string) {
     queryKey: queryKeys.deployment(id),
     queryFn: () => api.get<DeploymentResponse>(`/deployments/${id}`),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.deployment.status;
+      return status === "queued" || status === "building" ? 3000 : false;
+    },
   });
 }
 

@@ -8,6 +8,8 @@ import { toast } from "sonner";
 interface LogViewerProps {
   lines: LogEvent[];
   isStreaming?: boolean;
+  isLoading?: boolean;
+  emptyMessage?: string;
 }
 
 // ANSI color codes for terminal-style coloring
@@ -80,7 +82,12 @@ function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-export function LogViewer({ lines, isStreaming = false }: LogViewerProps) {
+export function LogViewer({
+  lines,
+  isStreaming = false,
+  isLoading = false,
+  emptyMessage = "No logs available.",
+}: LogViewerProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -191,7 +198,9 @@ export function LogViewer({ lines, isStreaming = false }: LogViewerProps) {
         >
           <div className="p-4 font-[JetBrains_Mono] text-xs leading-relaxed">
             {lines.length === 0 && (
-              <p className="text-[hsl(30,4%,50%)] italic">Waiting for logs...</p>
+              <p className="text-[hsl(30,4%,50%)] italic">
+                {isLoading ? "Loading logs..." : emptyMessage}
+              </p>
             )}
             {lines.map((line, i) => {
               const { level, className: levelClass } = getLogLevel(line.message);

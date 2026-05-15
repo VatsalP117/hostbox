@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -256,6 +257,23 @@ func TestBuildLogger_PublishesToSSE(t *testing.T) {
 	case event := <-ch:
 		if !strings.Contains(event.Data, "[INFO] sse test") {
 			t.Errorf("expected sse event with log line, got: %s", event.Data)
+		}
+		var payload struct {
+			Line      int64  `json:"line"`
+			Message   string `json:"message"`
+			Timestamp string `json:"timestamp"`
+		}
+		if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
+			t.Fatalf("expected JSON SSE payload, got error: %v", err)
+		}
+		if payload.Line != 1 {
+			t.Errorf("expected line 1, got %d", payload.Line)
+		}
+		if payload.Message == "" {
+			t.Error("expected log message in SSE payload")
+		}
+		if payload.Timestamp == "" {
+			t.Error("expected timestamp in SSE payload")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for SSE event")

@@ -1,7 +1,7 @@
 export interface LogEvent {
   line: number;
   message: string;
-  timestamp: string;
+  timestamp?: string;
 }
 
 export interface StatusEvent {
@@ -15,10 +15,11 @@ export interface ErrorEvent {
 
 export interface CompleteEvent {
   status: "ready" | "failed" | "cancelled";
-  duration_ms: number;
+  duration_ms?: number;
   url?: string;
   artifact_size?: number;
   error?: string;
+  message?: string;
 }
 
 export type SSEEventType = "log" | "status" | "error" | "done" | "complete";

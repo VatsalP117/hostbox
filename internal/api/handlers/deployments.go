@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -326,7 +327,7 @@ func (h *DeploymentHandler) GetLogs(c echo.Context) error {
 		return apperrors.NewInternal(err)
 	}
 
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	lines := splitLogLines(data)
 
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
@@ -367,15 +368,15 @@ func (h *DeploymentHandler) StreamLogs(c echo.Context) error {
 		}
 		return apperrors.NewInternal(err)
 	}
+	if _, err := h.getOwnedProject(c, deployment.ProjectID); err != nil {
+		return err
+	}
 
 	c.Response().Header().Set("Content-Type", "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().Header().Set("X-Accel-Buffering", "no")
 	c.Response().WriteHeader(http.StatusOK)
-
-	lastEventIDStr := c.Request().Header.Get("Last-Event-ID")
-	lastEventID, _ := strconv.ParseInt(lastEventIDStr, 10, 64)
 
 	logPath := ""
 	if deployment.LogPath != nil {
@@ -384,15 +385,23 @@ func (h *DeploymentHandler) StreamLogs(c echo.Context) error {
 	if logPath == "" && h.logDir != "" {
 		logPath = filepath.Join(h.logDir, deploymentID+".log")
 	}
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	if offset < 0 {
+		offset = 0
+	}
 
 	if data, readErr := os.ReadFile(logPath); readErr == nil {
-		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+		lines := splitLogLines(data)
 		for i, line := range lines {
-			lineID := int64(i + 1)
-			if lineID <= lastEventID {
+			lineNumber := i + 1
+			if lineNumber <= offset {
 				continue
 			}
-			fmt.Fprintf(c.Response(), "id: %d\nevent: log\ndata: %s\n\n", lineID, line)
+			payload, _ := json.Marshal(map[string]interface{}{
+				"line":    lineNumber,
+				"message": line,
+			})
+			fmt.Fprintf(c.Response(), "event: log\ndata: %s\n\n", payload)
 		}
 		c.Response().Flush()
 	}
@@ -417,7 +426,7 @@ func (h *DeploymentHandler) StreamLogs(c echo.Context) error {
 			if !ok {
 				return nil
 			}
-			fmt.Fprintf(c.Response(), "id: %d\nevent: %s\ndata: %s\n\n", event.ID, event.Type, event.Data)
+			fmt.Fprintf(c.Response(), "event: %s\ndata: %s\n\n", event.Type, event.Data)
 			c.Response().Flush()
 
 			if event.Type == worker.SSEEventDone {
@@ -425,6 +434,14 @@ func (h *DeploymentHandler) StreamLogs(c echo.Context) error {
 			}
 		}
 	}
+}
+
+func splitLogLines(data []byte) []string {
+	trimmed := strings.TrimRight(string(data), "\n")
+	if trimmed == "" {
+		return []string{}
+	}
+	return strings.Split(trimmed, "\n")
 }
 
 func (h *DeploymentHandler) Get(c echo.Context) error {
@@ -464,19 +481,19 @@ func (h *DeploymentHandler) getOwnedProject(c echo.Context, projectID string) (*
 
 func toDeploymentResponse(d *models.Deployment) dto.DeploymentResponse {
 	resp := dto.DeploymentResponse{
-		ID:           d.ID,
-		ProjectID:    d.ProjectID,
-		CommitSHA:    d.CommitSHA,
-		CommitMessage: d.CommitMessage,
-		CommitAuthor: d.CommitAuthor,
-		Branch:       d.Branch,
-		Status:       string(d.Status),
-		IsProduction: d.IsProduction,
-		DeploymentURL: d.DeploymentURL,
+		ID:                d.ID,
+		ProjectID:         d.ProjectID,
+		CommitSHA:         d.CommitSHA,
+		CommitMessage:     d.CommitMessage,
+		CommitAuthor:      d.CommitAuthor,
+		Branch:            d.Branch,
+		Status:            string(d.Status),
+		IsProduction:      d.IsProduction,
+		DeploymentURL:     d.DeploymentURL,
 		ArtifactSizeBytes: d.ArtifactSizeBytes,
-		ErrorMessage: d.ErrorMessage,
-		BuildDurationMs: d.BuildDurationMs,
-		CreatedAt:    d.CreatedAt.Format(time.RFC3339),
+		ErrorMessage:      d.ErrorMessage,
+		BuildDurationMs:   d.BuildDurationMs,
+		CreatedAt:         d.CreatedAt.Format(time.RFC3339),
 	}
 	if d.StartedAt != nil {
 		s := d.StartedAt.Format(time.RFC3339)
