@@ -85,8 +85,9 @@ type CaddyUpstream struct {
 }
 
 type CaddyEncodings struct {
-	Gzip *struct{} `json:"gzip,omitempty"`
-	Zstd *struct{} `json:"zstd,omitempty"`
+	Gzip   *struct{} `json:"gzip,omitempty"`
+	Zstd   *struct{} `json:"zstd,omitempty"`
+	Brotli *struct{} `json:"brotli,omitempty"`
 }
 
 type CaddyHeaderOps struct {

@@ -176,7 +176,7 @@ func (b *ConfigBuilder) buildFileServerHandlers(artifactPath, framework string) 
 	handlers := []CaddyHandler{
 		{
 			Handler:   "encode",
-			Encodings: &CaddyEncodings{Gzip: &struct{}{}, Zstd: &struct{}{}},
+			Encodings: &CaddyEncodings{Brotli: &struct{}{}, Zstd: &struct{}{}, Gzip: &struct{}{}},
 		},
 		{
 			Handler: "headers",
