@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,6 +18,7 @@ type Client struct {
 	httpClient *http.Client
 	logger     *slog.Logger
 	baseURL    string
+	breaker    *circuitBreaker
 }
 
 func NewClient(tokens *TokenProvider, logger *slog.Logger) *Client {
@@ -29,10 +31,28 @@ func NewClientWithBaseURL(tokens *TokenProvider, logger *slog.Logger, baseURL st
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		logger:     logger,
 		baseURL:    baseURL,
+		breaker:    newCircuitBreaker(5, 30*time.Second, logger),
 	}
 }
 
+func (c *Client) doWithBreaker(fn func() error) error {
+	if c.breaker == nil {
+		return fn()
+	}
+	err := c.breaker.call(fn)
+	if errors.Is(err, ErrCircuitOpen) {
+		c.logger.Warn("github circuit breaker is open, rejecting request")
+	}
+	return err
+}
+
 func (c *Client) doInstallationRequest(ctx context.Context, installationID int64, method, url string, body interface{}, result interface{}) error {
+	return c.doWithBreaker(func() error {
+		return c.doInstallationRequestRaw(ctx, installationID, method, url, body, result)
+	})
+}
+
+func (c *Client) doInstallationRequestRaw(ctx context.Context, installationID int64, method, url string, body interface{}, result interface{}) error {
 	for attempt := 0; attempt < 2; attempt++ {
 		token, err := c.tokens.GetInstallationToken(installationID)
 		if err != nil {
@@ -103,35 +123,38 @@ type Installation struct {
 
 // ListInstallations returns all installations of the GitHub App.
 func (c *Client) ListInstallations(ctx context.Context) ([]Installation, error) {
-	appJWT, err := c.tokens.GenerateAppJWT()
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/app/installations", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+appJWT)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("list installations: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("list installations returned %d: %s", resp.StatusCode, string(body))
-	}
-
 	var installations []Installation
-	if err := json.NewDecoder(resp.Body).Decode(&installations); err != nil {
-		return nil, fmt.Errorf("decode installations: %w", err)
-	}
-	return installations, nil
+	err := c.doWithBreaker(func() error {
+		appJWT, err := c.tokens.GenerateAppJWT()
+		if err != nil {
+			return err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/app/installations", nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+appJWT)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("list installations: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("list installations returned %d: %s", resp.StatusCode, string(body))
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&installations); err != nil {
+			return fmt.Errorf("decode installations: %w", err)
+		}
+		return nil
+	})
+	return installations, err
 }
 
 // --- Repositories ---

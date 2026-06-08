@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -218,5 +219,91 @@ func TestClient_PRComments(t *testing.T) {
 	err = client.UpdateComment(ctx, 99, "user", "repo1", 1, "updated")
 	if err != nil {
 		t.Fatalf("UpdateComment failed: %v", err)
+	}
+}
+
+func TestClient_CircuitBreakerTripsOnRepeatedFailures(t *testing.T) {
+	callCount := 0
+	client, server := setupTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"message": "GitHub is down"}`))
+	})
+	defer server.Close()
+
+	ctx := context.Background()
+
+	// First 5 calls should hit the server and return the error
+	for i := 0; i < 5; i++ {
+		_, err := client.GetRepo(ctx, 99, "user", "repo1")
+		if err == nil {
+			t.Fatalf("expected error on call %d", i+1)
+		}
+	}
+
+	if callCount != 5 {
+		t.Fatalf("expected 5 server calls, got %d", callCount)
+	}
+
+	// 6th call should be rejected by the circuit breaker (no server hit)
+	_, err := client.GetRepo(ctx, 99, "user", "repo1")
+	if !errors.Is(err, ErrCircuitOpen) {
+		t.Fatalf("expected ErrCircuitOpen, got %v", err)
+	}
+
+	if callCount != 5 {
+		t.Fatalf("expected still 5 server calls after circuit open, got %d", callCount)
+	}
+}
+
+func TestClient_CircuitBreakerRecoversAfterTimeout(t *testing.T) {
+	callCount := 0
+	client, server := setupTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		json.NewEncoder(w).Encode(Repository{FullName: "user/repo1"})
+	})
+	defer server.Close()
+
+	// Manually replace the breaker with a short timeout for the test
+	client.breaker = newCircuitBreaker(2, 50*time.Millisecond, slog.Default())
+
+	ctx := context.Background()
+
+	// Trip the breaker
+	for i := 0; i < 2; i++ {
+		_, err := client.GetRepo(ctx, 99, "user", "repo1")
+		if err == nil {
+			t.Fatalf("expected error on call %d", i+1)
+		}
+	}
+
+	_, err := client.GetRepo(ctx, 99, "user", "repo1")
+	if !errors.Is(err, ErrCircuitOpen) {
+		t.Fatalf("expected ErrCircuitOpen, got %v", err)
+	}
+
+	// Wait for the timeout
+	time.Sleep(60 * time.Millisecond)
+
+	// The next call should be a probe that succeeds
+	repo, err := client.GetRepo(ctx, 99, "user", "repo1")
+	if err != nil {
+		t.Fatalf("expected recovery after timeout, got %v", err)
+	}
+	if repo.FullName != "user/repo1" {
+		t.Errorf("repo = %q, want user/repo1", repo.FullName)
+	}
+
+	// And now the breaker should be closed again
+	repo, err = client.GetRepo(ctx, 99, "user", "repo1")
+	if err != nil {
+		t.Fatalf("expected success on closed breaker, got %v", err)
+	}
+	if repo.FullName != "user/repo1" {
+		t.Errorf("repo = %q, want user/repo1", repo.FullName)
 	}
 }
