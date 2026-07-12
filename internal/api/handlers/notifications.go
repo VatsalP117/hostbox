@@ -12,6 +12,7 @@ import (
 	"github.com/VatsalP117/hostbox/internal/dto"
 	apperrors "github.com/VatsalP117/hostbox/internal/errors"
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/sanitize"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	notificationsvc "github.com/VatsalP117/hostbox/internal/services/notification"
 )
@@ -72,6 +73,9 @@ func (h *NotificationHandler) Create(c echo.Context) error {
 	if err := dto.ValidateStruct(&req); err != nil {
 		return err
 	}
+	if err := validateNotificationWebhookURL(req.WebhookURL); err != nil {
+		return err
+	}
 
 	events := "all"
 	if req.Events != nil && *req.Events != "" {
@@ -128,9 +132,14 @@ func (h *NotificationHandler) Update(c echo.Context) error {
 		return err
 	}
 
+	webhookURL := config.WebhookURL
 	if req.WebhookURL != nil {
-		config.WebhookURL = *req.WebhookURL
+		webhookURL = *req.WebhookURL
 	}
+	if err := validateNotificationWebhookURL(webhookURL); err != nil {
+		return err
+	}
+	config.WebhookURL = webhookURL
 	if req.Events != nil {
 		config.Events = *req.Events
 	}
@@ -188,6 +197,9 @@ func (h *NotificationHandler) Test(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := validateNotificationWebhookURL(config.WebhookURL); err != nil {
+		return err
+	}
 
 	payload := notificationsvc.NotificationPayload{
 		Event: notificationsvc.EventDeploySuccess,
@@ -212,6 +224,13 @@ func (h *NotificationHandler) Test(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, dto.SuccessResponse{Success: true})
+}
+
+func validateNotificationWebhookURL(rawURL string) error {
+	if err := sanitize.ValidateWebhookURL(rawURL); err != nil {
+		return apperrors.NewBadRequest("Invalid webhook URL: " + err.Error())
+	}
+	return nil
 }
 
 func (h *NotificationHandler) getOwnedProject(c echo.Context, projectID string) (*models.Project, error) {

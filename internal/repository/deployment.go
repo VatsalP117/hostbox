@@ -94,6 +94,47 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *models.De
 	return nil
 }
 
+// UpdateIfStatus atomically updates a deployment only while it is in the
+// expected state. Build workers use this compare-and-set operation so a
+// terminal cancellation cannot be overwritten by a concurrent failure or
+// success update.
+func (r *DeploymentRepository) UpdateIfStatus(ctx context.Context, deployment *models.Deployment, expected models.DeploymentStatus) (bool, error) {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
+		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
+		  github_deploy_id = ?, build_duration_ms = ?, started_at = ?, completed_at = ?
+		 WHERE id = ? AND status = ?`,
+		deployment.Status, deployment.DeploymentURL, deployment.ArtifactPath,
+		deployment.ArtifactSizeBytes, deployment.LogPath, deployment.ErrorMessage,
+		deployment.GitHubDeployID, deployment.BuildDurationMs,
+		formatNullableTime(deployment.StartedAt),
+		formatNullableTime(deployment.CompletedAt),
+		deployment.ID, expected,
+	)
+	if err != nil {
+		return false, fmt.Errorf("conditionally update deployment: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("conditionally update deployment rows: %w", err)
+	}
+	return rows == 1, nil
+}
+
+// UpdateResolvedCommit records the full commit selected by the worker when a
+// deployment was requested without an explicit SHA.
+func (r *DeploymentRepository) UpdateResolvedCommit(ctx context.Context, deploymentID, commitSHA string) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE deployments SET commit_sha = ? WHERE id = ?`, commitSHA, deploymentID)
+	if err != nil {
+		return fmt.Errorf("update resolved deployment commit: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status models.DeploymentStatus, errorMsg *string) error {
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, error_message = ? WHERE id = ?`,

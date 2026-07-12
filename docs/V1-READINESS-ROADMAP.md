@@ -96,6 +96,21 @@ The table above preserves the original v0 audit baseline. The first implementati
 
 Remaining build-tool advisories in the static marketing toolchain require a separate Astro/Tailwind major migration; they are not part of the deployed static output. All security gates still apply to that migration before v1.
 
+### Milestone 1 core-security progress — 2026-07-12
+
+The first core-security slice has now:
+
+- constrained clone, project root, output, log, and deployment paths with lexical and canonical symlink containment;
+- rejected symlinks and non-regular files when copying plain static sites, including a host-file exfiltration regression test;
+- fetched, detached, and verified the exact recorded 40-character commit SHA, while resolving manual deployments to a persisted full SHA;
+- removed GitHub installation credentials from clone URLs, command arguments, and repository configuration by using process-scoped Git configuration;
+- persisted detected framework metadata for correct immediate Caddy SPA/static routing;
+- made queued/building terminal transitions compare-and-set so cancellation cannot be overwritten by ready/failed state;
+- made rollback and promote validate their artifacts and synchronously activate production routing before returning success; and
+- enforced notification webhook URL validation before persistence, test sends, and asynchronous delivery.
+
+The remaining bounded risks—same-UID visibility of short-lived Git child-process environment, path-check TOCTOU, Caddy/SQLite non-atomicity, Caddy route replacement ordering, and DNS rebinding—remain explicit later hardening items.
+
 ## 4. Priority model
 
 - **P0 — v1 blocker:** security boundary, data loss, incorrect deployment, broken primary journey, broken release/install, or no proof of the promise.

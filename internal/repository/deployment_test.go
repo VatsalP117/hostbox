@@ -50,6 +50,62 @@ func TestDeploymentRepository_CreateAndGetByID(t *testing.T) {
 	}
 }
 
+func TestDeploymentRepository_UpdateIfStatusIsCompareAndSet(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "abc123def456abc123def456abc123def456abc1",
+		Branch: "main", Status: models.DeploymentStatusBuilding,
+	}
+	if err := repo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateStatus(ctx, deployment.ID, models.DeploymentStatusCancelled, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	deployment.Status = models.DeploymentStatusFailed
+	updated, err := repo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated {
+		t.Fatal("cancelled deployment must not be overwritten")
+	}
+	got, err := repo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("status = %q, want cancelled", got.Status)
+	}
+}
+
+func TestDeploymentRepository_UpdateResolvedCommit(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: "manual", Branch: "main", Status: models.DeploymentStatusQueued}
+	if err := repo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	if err := repo.UpdateResolvedCommit(ctx, deployment.ID, sha); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CommitSHA != sha {
+		t.Fatalf("commit SHA = %q, want %q", got.CommitSHA, sha)
+	}
+}
+
 func TestDeploymentRepository_UpdateStatus(t *testing.T) {
 	db := setupTestDB(t)
 	_, project := createTestProject(t, db)

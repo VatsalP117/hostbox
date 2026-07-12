@@ -5,6 +5,7 @@ import (
 	"html"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -18,14 +19,84 @@ func SanitizeLogLine(line string) string {
 // SafeJoinPath joins path components and ensures the result is under the base directory.
 // Returns an error if the resolved path escapes the base directory.
 func SafeJoinPath(base string, components ...string) (string, error) {
+	base, err := filepath.Abs(base)
+	if err != nil {
+		return "", fmt.Errorf("resolve base directory: %w", err)
+	}
 	base = filepath.Clean(base)
 	joined := filepath.Join(append([]string{base}, components...)...)
 	resolved := filepath.Clean(joined)
 
-	if !strings.HasPrefix(resolved, base+string(filepath.Separator)) && resolved != base {
+	if !pathWithinBase(base, resolved) {
 		return "", fmt.Errorf("path %q escapes base directory %q", joined, base)
 	}
+
+	canonicalBase, err := canonicalizeExistingPath(base)
+	if err != nil {
+		return "", fmt.Errorf("resolve base directory: %w", err)
+	}
+	canonicalResolved, err := canonicalizeExistingPath(resolved)
+	if err != nil {
+		return "", fmt.Errorf("resolve path %q: %w", resolved, err)
+	}
+	if !pathWithinBase(canonicalBase, canonicalResolved) {
+		return "", fmt.Errorf("path %q escapes base directory %q through a symbolic link", joined, base)
+	}
 	return resolved, nil
+}
+
+// SafeRelativePath normalizes a user-configured relative path and rejects
+// absolute paths and traversal. A leading slash is accepted for project root
+// compatibility and is interpreted relative to base ("/apps/web" => "apps/web").
+func SafeRelativePath(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "/" || raw == "." {
+		return ".", nil
+	}
+
+	rel := strings.TrimLeft(raw, `/\\`)
+	clean := filepath.Clean(rel)
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.IsAbs(clean) {
+		return "", fmt.Errorf("path %q must stay within its configured root", raw)
+	}
+	return clean, nil
+}
+
+func pathWithinBase(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// canonicalizeExistingPath resolves symlinks in every existing component while
+// retaining a possibly non-existent suffix (needed for build output directories).
+func canonicalizeExistingPath(path string) (string, error) {
+	path = filepath.Clean(path)
+	existing := path
+	var suffix []string
+	for {
+		_, err := os.Lstat(existing)
+		if err == nil {
+			break
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			return "", err
+		}
+		suffix = append(suffix, filepath.Base(existing))
+		existing = parent
+	}
+
+	resolved, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return "", err
+	}
+	for i := len(suffix) - 1; i >= 0; i-- {
+		resolved = filepath.Join(resolved, suffix[i])
+	}
+	return filepath.Clean(resolved), nil
 }
 
 // ValidateWebhookURL ensures URL is HTTPS and not targeting internal/private IPs.

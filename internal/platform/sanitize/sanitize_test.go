@@ -1,6 +1,8 @@
 package sanitize
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -22,6 +24,50 @@ func TestSanitizeLogLine(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("SanitizeLogLine(%q) = %q, want %q", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestSafeJoinPathRejectsSymlinkEscape(t *testing.T) {
+	base := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(base, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SafeJoinPath(base, "escape", "artifact"); err == nil {
+		t.Fatal("expected symlink escape to be rejected")
+	}
+}
+
+func TestSafeJoinPathAllowsNonExistentPathUnderBase(t *testing.T) {
+	base := t.TempDir()
+	got, err := SafeJoinPath(base, "project", "deployment")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(base, "project", "deployment")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestSafeRelativePath(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{"/apps/web", filepath.Join("apps", "web"), false},
+		{"dist", "dist", false},
+		{".", ".", false},
+		{"../secret", "", true},
+		{"apps/../../secret", "", true},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got, err := SafeRelativePath(tc.raw)
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("SafeRelativePath(%q) = %q, %v; want %q, error=%v", tc.raw, got, err, tc.want, tc.wantErr)
+			}
+		})
 	}
 }
 

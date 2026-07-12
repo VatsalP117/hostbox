@@ -187,14 +187,18 @@ func scanProjectRows(rows *sql.Rows) (*models.Project, error) {
 	return scanProject(rows)
 }
 
-// UpdateBuildMeta updates the detected package manager and lock file hash for a project.
-func (r *ProjectRepository) UpdateBuildMeta(ctx context.Context, projectID, pkgManager, lockHash string) error {
-	_, err := r.db.ExecContext(ctx,
-		`UPDATE projects SET detected_package_manager = ?, lock_file_hash = ?, updated_at = ? WHERE id = ?`,
-		pkgManager, lockHash, time.Now().UTC().Format(time.RFC3339), projectID,
+// UpdateBuildMeta updates metadata detected from the exact source revision being built.
+func (r *ProjectRepository) UpdateBuildMeta(ctx context.Context, projectID, framework, pkgManager, lockHash string) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE projects SET framework = ?, detected_package_manager = ?, lock_file_hash = ?, updated_at = ? WHERE id = ?`,
+		framework, pkgManager, lockHash, time.Now().UTC().Format(time.RFC3339), projectID,
 	)
 	if err != nil {
 		return fmt.Errorf("update build meta: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return sql.ErrNoRows
 	}
 	return nil
 }

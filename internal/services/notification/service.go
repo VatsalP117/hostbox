@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/VatsalP117/hostbox/internal/models"
+	"github.com/VatsalP117/hostbox/internal/platform/sanitize"
 	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
@@ -94,6 +95,13 @@ func (s *Service) Dispatch(ctx context.Context, event string, payload Notificati
 
 	for _, cfg := range configs {
 		if !cfg.Enabled {
+			continue
+		}
+		if err := sanitize.ValidateWebhookURL(cfg.WebhookURL); err != nil {
+			s.logger.Warn("notification webhook URL rejected",
+				"channel", cfg.Channel,
+				"error", err,
+			)
 			continue
 		}
 
@@ -184,6 +192,10 @@ func (s *Service) sendWithRetry(
 }
 
 func (s *Service) SendTest(ctx context.Context, config *models.NotificationConfig, payload NotificationPayload) error {
+	if err := sanitize.ValidateWebhookURL(config.WebhookURL); err != nil {
+		return fmt.Errorf("invalid webhook URL: %w", err)
+	}
+
 	client, ok := s.clients[config.Channel]
 	if !ok {
 		return fmt.Errorf("unknown notification channel %q", config.Channel)

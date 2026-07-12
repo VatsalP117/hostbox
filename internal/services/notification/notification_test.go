@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/VatsalP117/hostbox/internal/database"
 	"github.com/VatsalP117/hostbox/internal/logger"
 	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	"github.com/VatsalP117/hostbox/internal/util"
 	"github.com/VatsalP117/hostbox/migrations"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
@@ -44,6 +44,15 @@ func setupNotifTest(t *testing.T) (*repository.NotificationRepository, *reposito
 		"user-1", "test@example.com", "hash", "Test User", 1, now, now)
 
 	return repos.Notification, repos.Project, db
+}
+
+type recordingNotificationClient struct {
+	calls chan string
+}
+
+func (c *recordingNotificationClient) Send(_ context.Context, webhookURL string, _ NotificationPayload) error {
+	c.calls <- webhookURL
+	return nil
 }
 
 func TestDiscordClient_Send(t *testing.T) {
@@ -188,24 +197,14 @@ func TestService_Dispatch(t *testing.T) {
 	p := &models.Project{Name: "Test App", Slug: "test-app", OwnerID: "user-1"}
 	projectRepo.Create(context.Background(), p)
 
-	// Track webhook calls
-	var mu sync.Mutex
-	var calls int
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		calls++
-		mu.Unlock()
-		w.WriteHeader(200)
-	}))
-	defer srv.Close()
+	const webhookURL = "https://198.51.100.10/hook"
 
 	// Create notification configs: one project-level, one global
 	notifRepo.Create(context.Background(), &models.NotificationConfig{
 		ID:         util.NewID(),
 		ProjectID:  &p.ID,
 		Channel:    "webhook",
-		WebhookURL: srv.URL,
+		WebhookURL: webhookURL,
 		Events:     "all",
 		Enabled:    true,
 	})
@@ -213,15 +212,15 @@ func TestService_Dispatch(t *testing.T) {
 		ID:         util.NewID(),
 		ProjectID:  nil,
 		Channel:    "webhook",
-		WebhookURL: srv.URL,
+		WebhookURL: webhookURL,
 		Events:     "deploy_success,deploy_failure",
 		Enabled:    true,
 	})
 
 	l := logger.Setup("error", "text")
 	svc := NewService(notifRepo, l)
-	// Override webhook client to use test server's http client
-	svc.clients["webhook"] = &WebhookClient{httpClient: srv.Client()}
+	calls := make(chan string, 2)
+	svc.clients["webhook"] = &recordingNotificationClient{calls: calls}
 
 	payload := NotificationPayload{
 		Project: ProjectInfo{ID: p.ID, Name: p.Name, Slug: p.Slug},
@@ -234,14 +233,78 @@ func TestService_Dispatch(t *testing.T) {
 
 	svc.Dispatch(context.Background(), EventDeploySuccess, payload)
 
-	// Wait for async goroutines to complete
-	time.Sleep(500 * time.Millisecond)
-
-	mu.Lock()
-	if calls < 2 {
-		t.Errorf("expected at least 2 webhook calls (project + global), got %d", calls)
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-calls:
+			if got != webhookURL {
+				t.Errorf("webhook URL = %q, want %q", got, webhookURL)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for project and global notification sends")
+		}
 	}
-	mu.Unlock()
+}
+
+func TestService_Dispatch_RejectsUnsafeStoredURL(t *testing.T) {
+	notifRepo, projectRepo, _ := setupNotifTest(t)
+	p := &models.Project{Name: "Test App", Slug: "test-app", OwnerID: "user-1"}
+	if err := projectRepo.Create(context.Background(), p); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if err := notifRepo.Create(context.Background(), &models.NotificationConfig{
+		ID:         util.NewID(),
+		ProjectID:  &p.ID,
+		Channel:    "webhook",
+		WebhookURL: "https://127.0.0.1/hook",
+		Events:     "all",
+		Enabled:    true,
+	}); err != nil {
+		t.Fatalf("create notification: %v", err)
+	}
+
+	svc := NewService(notifRepo, logger.Setup("error", "text"))
+	calls := make(chan string, 1)
+	svc.clients["webhook"] = &recordingNotificationClient{calls: calls}
+	svc.Dispatch(context.Background(), EventDeploySuccess, NotificationPayload{
+		Project: ProjectInfo{ID: p.ID, Name: p.Name, Slug: p.Slug},
+	})
+
+	select {
+	case got := <-calls:
+		t.Fatalf("unsafe webhook reached client: %q", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestService_SendTest_ValidatesWebhookURL(t *testing.T) {
+	notifRepo, _, _ := setupNotifTest(t)
+	svc := NewService(notifRepo, logger.Setup("error", "text"))
+	calls := make(chan string, 1)
+	svc.clients["webhook"] = &recordingNotificationClient{calls: calls}
+
+	unsafeConfig := &models.NotificationConfig{Channel: "webhook", WebhookURL: "http://198.51.100.10/hook"}
+	if err := svc.SendTest(context.Background(), unsafeConfig, NotificationPayload{}); err == nil {
+		t.Fatal("SendTest accepted an insecure HTTP URL")
+	}
+	select {
+	case got := <-calls:
+		t.Fatalf("unsafe webhook reached client: %q", got)
+	default:
+	}
+
+	const validURL = "https://198.51.100.10/hook"
+	validConfig := &models.NotificationConfig{Channel: "webhook", WebhookURL: validURL}
+	if err := svc.SendTest(context.Background(), validConfig, NotificationPayload{}); err != nil {
+		t.Fatalf("SendTest rejected valid HTTPS URL: %v", err)
+	}
+	select {
+	case got := <-calls:
+		if got != validURL {
+			t.Fatalf("webhook URL = %q, want %q", got, validURL)
+		}
+	default:
+		t.Fatal("valid HTTPS webhook did not reach client")
+	}
 }
 
 func TestService_Dispatch_DisabledConfig(t *testing.T) {

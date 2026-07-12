@@ -1,5 +1,22 @@
 package deployment
 
+import "context"
+
+// ProductionActivation identifies the artifact that should serve a project's
+// production hostname.
+type ProductionActivation struct {
+	ProjectID    string
+	ProjectSlug  string
+	ArtifactPath string
+	Framework    string
+}
+
+// ProductionActivator applies a production route change before rollback or
+// promotion is reported as successful.
+type ProductionActivator interface {
+	ActivateProduction(ctx context.Context, activation ProductionActivation) error
+}
+
 // TriggerRequest holds the data needed to trigger a deployment.
 type TriggerRequest struct {
 	ProjectID     string

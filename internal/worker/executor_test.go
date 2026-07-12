@@ -1,12 +1,21 @@
 package worker
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/VatsalP117/hostbox/internal/database"
 	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/platform/detect"
+	"github.com/VatsalP117/hostbox/internal/repository"
+	"github.com/VatsalP117/hostbox/migrations"
 )
 
 func TestEffectiveBuildMemoryMB_BumpsWorkspaceDefaults(t *testing.T) {
@@ -19,6 +28,186 @@ func TestEffectiveBuildMemoryMB_BumpsWorkspaceDefaults(t *testing.T) {
 	if got != 1024 {
 		t.Fatalf("expected workspace build memory to be bumped to 1024, got %d", got)
 	}
+}
+
+func TestCheckoutRepositoryChecksOutRequestedCommit(t *testing.T) {
+	remote, firstSHA, secondSHA := createGitRemote(t)
+	cloneDir := filepath.Join(t.TempDir(), "checkout")
+	if err := os.MkdirAll(cloneDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, _, err := checkoutRepository(context.Background(), cloneDir, remote, "main", firstSHA, nil)
+	if err != nil {
+		t.Fatalf("checkoutRepository: %v", err)
+	}
+	if resolved != firstSHA || resolved == secondSHA {
+		t.Fatalf("resolved %q, want exact requested commit %q (branch head %q)", resolved, firstSHA, secondSHA)
+	}
+}
+
+func TestCheckoutRepositoryResolvesManualDeploymentToBranchHead(t *testing.T) {
+	remote, _, headSHA := createGitRemote(t)
+	cloneDir := filepath.Join(t.TempDir(), "checkout")
+	if err := os.MkdirAll(cloneDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, _, err := checkoutRepository(context.Background(), cloneDir, remote, "main", "manual", nil)
+	if err != nil {
+		t.Fatalf("checkoutRepository: %v", err)
+	}
+	if resolved != headSHA {
+		t.Fatalf("resolved %q, want branch head %q", resolved, headSHA)
+	}
+}
+
+func TestIsUnresolvedCommitAcceptsManualAndEmptySentinels(t *testing.T) {
+	for _, value := range []string{"", "   ", "manual", "MANUAL"} {
+		if !isUnresolvedCommit(value) {
+			t.Fatalf("expected %q to request branch-head resolution", value)
+		}
+	}
+	if isUnresolvedCommit(strings.Repeat("a", 40)) {
+		t.Fatal("full SHA must not be treated as unresolved")
+	}
+}
+
+func TestCheckoutRepositoryRejectsInvalidCommit(t *testing.T) {
+	remote, _, _ := createGitRemote(t)
+	cloneDir := filepath.Join(t.TempDir(), "checkout")
+	if err := os.MkdirAll(cloneDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := checkoutRepository(context.Background(), cloneDir, remote, "main", "abc123", nil)
+	if err == nil || !strings.Contains(err.Error(), "full 40-character") {
+		t.Fatalf("expected full SHA validation error, got %v", err)
+	}
+}
+
+func TestGitAuthenticationEnvDoesNotExposeRawToken(t *testing.T) {
+	token := "installation-secret-token"
+	env := gitAuthenticationEnv(token)
+	for _, value := range env {
+		if strings.Contains(value, token) {
+			t.Fatalf("raw token exposed in git environment entry %q", value)
+		}
+	}
+	if len(env) != 3 || env[0] != "GIT_CONFIG_COUNT=1" {
+		t.Fatalf("unexpected authentication environment: %v", env)
+	}
+}
+
+func TestHandleFailureKeepsCancellationTerminalAndSkipsFailureHook(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "worker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	userRepo := repository.NewUserRepository(db)
+	user := &models.User{Email: "cancel@hostbox.local", PasswordHash: "hash"}
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	projectRepo := repository.NewProjectRepository(db)
+	project := &models.Project{OwnerID: user.ID, Name: "Cancel", Slug: "cancel", ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20"}
+	if err := projectRepo.Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "main", Status: models.DeploymentStatusBuilding}
+	if err := deploymentRepo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	hub := NewSSEHub()
+	events, unsubscribe := hub.Subscribe(deployment.ID)
+	defer unsubscribe()
+	hook := &recordingPostBuildHook{}
+	executor := &BuildExecutor{deploymentRepo: deploymentRepo, sseHub: hub, postBuild: hook}
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "cancel.log"), hub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	executor.handleFailure(cancelledCtx, deployment, project, logger, "Install failed: context canceled")
+
+	got, err := deploymentRepo.GetByID(context.Background(), deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("status = %q, want cancelled", got.Status)
+	}
+	if hook.failures != 0 {
+		t.Fatalf("failure hook called %d times, want 0", hook.failures)
+	}
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case event := <-events:
+			if event.Type == SSEEventDone {
+				if !strings.Contains(event.Data, `"status":"cancelled"`) {
+					t.Fatalf("unexpected done event: %s", event.Data)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for cancelled event")
+		}
+	}
+}
+
+type recordingPostBuildHook struct {
+	failures int
+}
+
+func (h *recordingPostBuildHook) OnBuildSuccess(context.Context, *models.Project, *models.Deployment) error {
+	return nil
+}
+
+func (h *recordingPostBuildHook) OnBuildFailure(context.Context, *models.Project, *models.Deployment, error) error {
+	h.failures++
+	return nil
+}
+
+func createGitRemote(t *testing.T) (remoteURL, firstSHA, headSHA string) {
+	t.Helper()
+	work := filepath.Join(t.TempDir(), "work")
+	runGitTest(t, "init", "--quiet", "--initial-branch=main", work)
+	runGitTest(t, "-C", work, "config", "user.email", "test@hostbox.local")
+	runGitTest(t, "-C", work, "config", "user.name", "Hostbox Test")
+	if err := os.WriteFile(filepath.Join(work, "index.html"), []byte("first"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGitTest(t, "-C", work, "add", "index.html")
+	runGitTest(t, "-C", work, "commit", "--quiet", "-m", "first")
+	firstSHA = strings.TrimSpace(runGitTest(t, "-C", work, "rev-parse", "HEAD"))
+	if err := os.WriteFile(filepath.Join(work, "index.html"), []byte("second"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGitTest(t, "-C", work, "commit", "--quiet", "-am", "second")
+	headSHA = strings.TrimSpace(runGitTest(t, "-C", work, "rev-parse", "HEAD"))
+
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	runGitTest(t, "clone", "--quiet", "--bare", work, bare)
+	return "file://" + bare, firstSHA, headSHA
+}
+
+func runGitTest(t *testing.T, args ...string) string {
+	t.Helper()
+	output, err := exec.Command("git", args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, output)
+	}
+	return string(output)
 }
 
 func TestEffectiveBuildMemoryMB_PreservesConfiguredMemory(t *testing.T) {

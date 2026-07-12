@@ -2,11 +2,13 @@ package worker
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/platform/detect"
 	dockerpkg "github.com/VatsalP117/hostbox/internal/platform/docker"
+	"github.com/VatsalP117/hostbox/internal/platform/sanitize"
 	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
@@ -113,7 +116,12 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		return
 	}
 
-	logPath := filepath.Join(e.cfg.LogBaseDir, deploymentID+".log")
+	logPath, err := sanitize.SafeJoinPath(e.cfg.LogBaseDir, deploymentID+".log")
+	if err != nil {
+		slog.Error("executor: unsafe log path", "id", deploymentID, "err", err)
+		e.failDeployment(context.Background(), deployment, "Internal error: invalid build log path")
+		return
+	}
 	logger, err := NewBuildLogger(logPath, e.sseHub, deploymentID, e.cfg.MaxLogFileSizeBytes)
 	if err != nil {
 		slog.Error("executor: failed to create logger", "err", err)
@@ -127,8 +135,14 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	deployment.Status = models.DeploymentStatusBuilding
 	deployment.StartedAt = &now
 	deployment.LogPath = &logPath
-	if err := e.deploymentRepo.Update(ctx, deployment); err != nil {
+	updated, err := e.deploymentRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusQueued)
+	if err != nil {
 		logger.Errorf("Failed to update status: %v", err)
+		return
+	}
+	if !updated {
+		logger.Info("Build skipped because deployment is no longer queued")
+		e.publishCancelledIfCurrent(context.Background(), deployment.ID)
 		return
 	}
 	e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building"})
@@ -146,14 +160,20 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	defer os.RemoveAll(cloneDir)
 
 	// Resolve source directory (monorepo support)
-	sourceDir := cloneDir
-	if project.RootDirectory != "" && project.RootDirectory != "/" {
-		sourceDir = filepath.Join(cloneDir, strings.TrimPrefix(project.RootDirectory, "/"))
-		if _, err := os.Stat(sourceDir); err != nil {
-			e.handleFailure(ctx, deployment, project, logger,
-				fmt.Sprintf("Root directory %q not found in repository", project.RootDirectory))
-			return
-		}
+	rootDirectory, err := sanitize.SafeRelativePath(project.RootDirectory)
+	if err != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Invalid root directory: "+err.Error())
+		return
+	}
+	sourceDir, err := sanitize.SafeJoinPath(cloneDir, rootDirectory)
+	if err != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Invalid root directory: "+err.Error())
+		return
+	}
+	if info, err := os.Stat(sourceDir); err != nil || !info.IsDir() {
+		e.handleFailure(ctx, deployment, project, logger,
+			fmt.Sprintf("Root directory %q not found in repository", project.RootDirectory))
+		return
 	}
 
 	// === STEP 2: Detect Framework ===
@@ -175,6 +195,12 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		outputDir = *project.OutputDirectory
 	}
 	fw = detect.ApplyOverrides(fw, buildCmdOverride, "", outputDir)
+	outputDirectory, err := sanitize.SafeRelativePath(fw.OutputDirectory)
+	if err != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Invalid output directory: "+err.Error())
+		return
+	}
+	fw.OutputDirectory = outputDirectory
 
 	pm := detect.DetectPackageManager(sourceDir)
 	installCmd := pm.InstallCommand
@@ -212,11 +238,19 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		e.invalidateCache(ctx, project.ID)
 	}
 
-	_ = e.projectRepo.UpdateBuildMeta(ctx, project.ID, pm.Name, lockHash)
+	if err := e.projectRepo.UpdateBuildMeta(ctx, project.ID, fw.Name, pm.Name, lockHash); err != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Failed to persist detected build metadata: "+err.Error())
+		return
+	}
+	project.Framework = &fw.Name
 
 	// === STEP 3: Create Docker Container ===
 	logger.Info("▶ Creating build container...")
-	deployOutputDir := filepath.Join(e.cfg.DeploymentBaseDir, project.ID, deploymentID)
+	deployOutputDir, err := sanitize.SafeJoinPath(e.cfg.DeploymentBaseDir, project.ID, deploymentID)
+	if err != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Invalid deployment output path: "+err.Error())
+		return
+	}
 	if err := os.MkdirAll(deployOutputDir, 0755); err != nil {
 		e.handleFailure(ctx, deployment, project, logger, "Failed to create output directory: "+err.Error())
 		return
@@ -285,7 +319,11 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	if fw.Name == "static" && fw.OutputDirectory == "." {
 		artifactSize, err = copyDir(sourceDir, deployOutputDir)
 	} else {
-		containerOutputPath := filepath.Join("/app/src", fw.OutputDirectory)
+		containerOutputPath, err := sanitize.SafeJoinPath("/app/src", fw.OutputDirectory)
+		if err != nil {
+			e.handleFailure(ctx, deployment, project, logger, "Invalid output directory: "+err.Error())
+			return
+		}
 		artifactSize, err = e.docker.CopyFromContainer(ctx, containerID, containerOutputPath, deployOutputDir)
 	}
 
@@ -297,6 +335,11 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	if isEmpty, _ := isDirEmpty(deployOutputDir); isEmpty {
 		e.handleFailure(ctx, deployment, project, logger,
 			fmt.Sprintf("Build output directory %q is empty — check your build command and output directory setting", fw.OutputDirectory))
+		return
+	}
+
+	if ctx.Err() != nil {
+		e.handleFailure(ctx, deployment, project, logger, "Build cancelled")
 		return
 	}
 
@@ -315,8 +358,15 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	deployment.DeploymentURL = &deploymentURL
 	deployment.CompletedAt = &completedAt
 
-	if err := e.deploymentRepo.Update(ctx, deployment); err != nil {
+	updated, err = e.deploymentRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if err != nil {
 		logger.Errorf("Failed to update deployment record: %v", err)
+		return
+	}
+	if !updated {
+		logger.Info("Build finalization skipped because deployment is no longer building")
+		e.publishCancelledIfCurrent(context.Background(), deployment.ID)
+		return
 	}
 
 	logger.Infof("▶ Build complete (%s)", duration.Round(time.Second))
@@ -358,7 +408,13 @@ func (e *BuildExecutor) stepClone(
 	deployment *models.Deployment,
 	logger *BuildLogger,
 ) (string, error) {
-	cloneDir := filepath.Join(e.cfg.CloneBaseDir, "clone-"+deployment.ID)
+	cloneDir, err := sanitize.SafeJoinPath(e.cfg.CloneBaseDir, "clone-"+deployment.ID)
+	if err != nil {
+		return "", fmt.Errorf("resolve clone dir: %w", err)
+	}
+	if err := os.RemoveAll(cloneDir); err != nil {
+		return "", fmt.Errorf("clean clone dir: %w", err)
+	}
 	if err := os.MkdirAll(cloneDir, 0755); err != nil {
 		return "", fmt.Errorf("mkdir clone dir: %w", err)
 	}
@@ -370,6 +426,9 @@ func (e *BuildExecutor) stepClone(
 	if repoName == "" {
 		return "", fmt.Errorf("project is not linked to a GitHub repository")
 	}
+	if err := validateGitHubRepository(repoName); err != nil {
+		return "", err
+	}
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", repoName)
 	cloneToken := ""
 	if project.GitHubInstallationID != nil && e.tokenProvider != nil {
@@ -378,8 +437,8 @@ func (e *BuildExecutor) stepClone(
 			return "", fmt.Errorf("get github installation token: %w", err)
 		}
 		cloneToken = token
-		cloneURL = fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", token, repoName)
 	}
+	gitEnv := gitAuthenticationEnv(cloneToken)
 
 	cloneTimeout := time.Duration(e.cfg.CloneTimeoutSeconds) * time.Second
 	maxRetries := e.cfg.CloneMaxRetries
@@ -400,35 +459,120 @@ func (e *BuildExecutor) stepClone(
 
 		cloneCtx, cloneCancel := context.WithTimeout(ctx, cloneTimeout)
 
-		args := []string{
-			"clone",
-			"--depth=1",
-			"--single-branch",
-			"--branch", deployment.Branch,
-			cloneURL,
-			cloneDir,
-		}
-
-		cmd := exec.CommandContext(cloneCtx, "git", args...)
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-
-		output, err := cmd.CombinedOutput()
+		resolvedSHA, output, err := checkoutRepository(cloneCtx, cloneDir, cloneURL, deployment.Branch, deployment.CommitSHA, gitEnv)
 		cloneCancel()
 
 		if err == nil {
-			logger.Infof("  Cloned %s@%s", repoName, deployment.Branch)
+			if err := e.deploymentRepo.UpdateResolvedCommit(ctx, deployment.ID, resolvedSHA); err != nil {
+				return "", fmt.Errorf("record resolved commit: %w", err)
+			}
+			deployment.CommitSHA = resolvedSHA
+			logger.Infof("  Checked out %s@%s (%s)", repoName, deployment.Branch, resolvedSHA[:12])
 			return cloneDir, nil
 		}
 
 		outputText := string(output)
 		if cloneToken != "" {
 			outputText = strings.ReplaceAll(outputText, cloneToken, "***")
+			encodedCredential := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + cloneToken))
+			outputText = strings.ReplaceAll(outputText, encodedCredential, "***")
 		}
 		lastErr = fmt.Errorf("git clone (attempt %d): %w\n%s", attempt, err, outputText)
 		logger.Warn(fmt.Sprintf("  Clone attempt %d failed: %v", attempt, err))
 	}
 
 	return "", lastErr
+}
+
+func checkoutRepository(ctx context.Context, cloneDir, cloneURL, branch, requestedSHA string, gitEnv []string) (string, []byte, error) {
+	if strings.HasPrefix(branch, "-") || strings.TrimSpace(branch) == "" {
+		return "", nil, fmt.Errorf("invalid branch %q", branch)
+	}
+	if _, output, err := runGit(ctx, gitEnv, "check-ref-format", "refs/heads/"+branch); err != nil {
+		return "", output, fmt.Errorf("invalid branch %q: %w", branch, err)
+	}
+	if _, output, err := runGit(ctx, gitEnv, "-C", cloneDir, "init", "--quiet"); err != nil {
+		return "", output, err
+	}
+	if _, output, err := runGit(ctx, gitEnv, "-C", cloneDir, "remote", "add", "origin", cloneURL); err != nil {
+		return "", output, err
+	}
+
+	fetchRef := "refs/heads/" + branch
+	if !isUnresolvedCommit(requestedSHA) {
+		if !isFullCommitSHA(requestedSHA) {
+			return "", nil, fmt.Errorf("commit SHA must be a full 40-character hexadecimal value")
+		}
+		fetchRef = strings.ToLower(requestedSHA)
+	}
+	if _, output, err := runGit(ctx, gitEnv, "-C", cloneDir, "fetch", "--quiet", "--depth=1", "origin", fetchRef); err != nil {
+		return "", output, err
+	}
+	if _, output, err := runGit(ctx, gitEnv, "-C", cloneDir, "checkout", "--quiet", "--detach", "FETCH_HEAD"); err != nil {
+		return "", output, err
+	}
+	resolved, output, err := runGit(ctx, gitEnv, "-C", cloneDir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", output, err
+	}
+	resolved = strings.TrimSpace(resolved)
+	if !isFullCommitSHA(resolved) {
+		return "", output, fmt.Errorf("git resolved invalid commit %q", resolved)
+	}
+	if !isUnresolvedCommit(requestedSHA) && !strings.EqualFold(resolved, requestedSHA) {
+		return "", output, fmt.Errorf("checked out commit %s does not match requested commit %s", resolved, requestedSHA)
+	}
+	return strings.ToLower(resolved), output, nil
+}
+
+func runGit(ctx context.Context, extraEnv []string, args ...string) (string, []byte, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Env = append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0"), extraEnv...)
+	output, err := cmd.CombinedOutput()
+	return string(output), output, err
+}
+
+func gitAuthenticationEnv(token string) []string {
+	if token == "" {
+		return nil
+	}
+	credential := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
+	return []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
+		"GIT_CONFIG_VALUE_0=AUTHORIZATION: basic " + credential,
+	}
+}
+
+func isUnresolvedCommit(sha string) bool {
+	sha = strings.TrimSpace(sha)
+	return sha == "" || strings.EqualFold(sha, "manual")
+}
+
+func isFullCommitSHA(sha string) bool {
+	if len(sha) != 40 {
+		return false
+	}
+	_, err := hex.DecodeString(sha)
+	return err == nil
+}
+
+func validateGitHubRepository(repo string) error {
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid GitHub repository %q", repo)
+	}
+	for _, part := range parts {
+		if part == "." || part == ".." || strings.HasPrefix(part, "-") {
+			return fmt.Errorf("invalid GitHub repository %q", repo)
+		}
+		for _, r := range part {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+				return fmt.Errorf("invalid GitHub repository %q", repo)
+			}
+		}
+	}
+	return nil
 }
 
 func (e *BuildExecutor) execInContainer(
@@ -525,28 +669,84 @@ func (e *BuildExecutor) handleFailure(
 	logger *BuildLogger,
 	errMsg string,
 ) {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		e.cancelDeployment(deployment, logger)
+		return
+	}
 	logger.Errorf("❌ %s", errMsg)
 
+	updateCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		updateCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+	}
 	completedAt := time.Now().UTC()
 	deployment.Status = models.DeploymentStatusFailed
 	deployment.ErrorMessage = &errMsg
 	deployment.CompletedAt = &completedAt
-	_ = e.deploymentRepo.Update(ctx, deployment)
+	updated, updateErr := e.deploymentRepo.UpdateIfStatus(updateCtx, deployment, models.DeploymentStatusBuilding)
+	if updateErr != nil {
+		logger.Errorf("Failed to persist failed status: %v", updateErr)
+		return
+	}
+	if !updated {
+		logger.Info("Failure ignored because deployment is already terminal")
+		e.publishCancelledIfCurrent(updateCtx, deployment.ID)
+		return
+	}
 
 	e.sseHub.PublishJSON(deployment.ID, SSEEventDone, map[string]interface{}{
 		"status":  "failed",
 		"message": errMsg,
 	})
 
-	_ = e.postBuild.OnBuildFailure(ctx, project, deployment, fmt.Errorf("%s", errMsg))
+	_ = e.postBuild.OnBuildFailure(updateCtx, project, deployment, fmt.Errorf("%s", errMsg))
+}
+
+func (e *BuildExecutor) cancelDeployment(deployment *models.Deployment, logger *BuildLogger) {
+	completedAt := time.Now().UTC()
+	deployment.Status = models.DeploymentStatusCancelled
+	deployment.ErrorMessage = nil
+	deployment.CompletedAt = &completedAt
+	updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	updated, err := e.deploymentRepo.UpdateIfStatus(updateCtx, deployment, models.DeploymentStatusBuilding)
+	if err != nil {
+		logger.Errorf("Failed to persist cancelled status: %v", err)
+	}
+	if !updated && err == nil {
+		logger.Info("Deployment was already terminal when cancellation completed")
+	}
+	logger.Info("Build cancelled")
+	e.sseHub.PublishJSON(deployment.ID, SSEEventDone, map[string]interface{}{"status": "cancelled"})
+}
+
+func (e *BuildExecutor) publishCancelledIfCurrent(ctx context.Context, deploymentID string) {
+	current, err := e.deploymentRepo.GetByID(ctx, deploymentID)
+	if err == nil && current.Status == models.DeploymentStatusCancelled {
+		e.sseHub.PublishJSON(deploymentID, SSEEventDone, map[string]interface{}{"status": "cancelled"})
+	}
 }
 
 func (e *BuildExecutor) failDeployment(ctx context.Context, deployment *models.Deployment, errMsg string) {
+	updateCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		updateCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+	}
 	completedAt := time.Now().UTC()
 	deployment.Status = models.DeploymentStatusFailed
 	deployment.ErrorMessage = &errMsg
 	deployment.CompletedAt = &completedAt
-	_ = e.deploymentRepo.Update(ctx, deployment)
+	updated, _ := e.deploymentRepo.UpdateIfStatus(updateCtx, deployment, models.DeploymentStatusQueued)
+	if !updated {
+		updated, _ = e.deploymentRepo.UpdateIfStatus(updateCtx, deployment, models.DeploymentStatusBuilding)
+	}
+	if !updated {
+		return
+	}
 	e.sseHub.PublishJSON(deployment.ID, SSEEventDone, map[string]interface{}{
 		"status":  "failed",
 		"message": errMsg,

@@ -1,8 +1,10 @@
 package worker
 
 import (
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/VatsalP117/hostbox/internal/models"
@@ -16,6 +18,47 @@ func TestGenerateDeploymentURL_Production(t *testing.T) {
 	expected := "https://my-app.example.com"
 	if url != expected {
 		t.Errorf("got %s, want %s", url, expected)
+	}
+}
+
+func TestCopyDirRejectsSymlink(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("host secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(src, "leak.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := copyDir(src, dst)
+	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("expected symbolic-link rejection, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "leak.txt")); !os.IsNotExist(err) {
+		t.Fatalf("symlink target must not be copied, stat error = %v", err)
+	}
+}
+
+func TestCopyDirRejectsNonRegularEntry(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	socketPath := filepath.Join(src, "build.sock")
+	addr, err := net.ResolveUnixAddr("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.ListenUnix("unix", addr)
+	if err != nil {
+		t.Skipf("unix sockets unavailable: %v", err)
+	}
+	listener.SetUnlinkOnClose(false)
+	defer listener.Close()
+
+	_, err = copyDir(src, dst)
+	if err == nil || !strings.Contains(err.Error(), "non-regular") {
+		t.Fatalf("expected non-regular entry rejection, got %v", err)
 	}
 }
 

@@ -2,8 +2,12 @@ package deployment
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/VatsalP117/hostbox/internal/models"
@@ -19,6 +23,7 @@ type Service struct {
 	projectRepo    *repository.ProjectRepository
 	pool           *worker.Pool
 	executor       *worker.BuildExecutor
+	activator      ProductionActivator
 	platformDomain string
 	logger         *slog.Logger
 }
@@ -28,6 +33,7 @@ func NewService(
 	projectRepo *repository.ProjectRepository,
 	pool *worker.Pool,
 	executor *worker.BuildExecutor,
+	activator ProductionActivator,
 	platformDomain string,
 	logger *slog.Logger,
 ) *Service {
@@ -36,6 +42,7 @@ func NewService(
 		projectRepo:    projectRepo,
 		pool:           pool,
 		executor:       executor,
+		activator:      activator,
 		platformDomain: platformDomain,
 		logger:         logger,
 	}
@@ -53,7 +60,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 	// Deduplication: cancel any existing queued/building deploy for this project+branch
 	existing, _ := s.deployRepo.FindQueuedOrBuilding(ctx, req.ProjectID, req.Branch)
 	if existing != nil {
-		s.cancelDeployment(ctx, existing)
+		if _, err := s.cancelDeployment(ctx, existing); err != nil {
+			return nil, fmt.Errorf("cancel superseded deployment: %w", err)
+		}
 	}
 
 	deployment := &models.Deployment{
@@ -90,21 +99,35 @@ func (s *Service) CancelDeployment(ctx context.Context, deploymentID string) (*m
 		return nil, fmt.Errorf("cannot cancel deployment in %q status", deployment.Status)
 	}
 
-	s.cancelDeployment(ctx, deployment)
+	cancelled, err := s.cancelDeployment(ctx, deployment)
+	if err != nil {
+		return nil, fmt.Errorf("cancel deployment: %w", err)
+	}
+	if !cancelled {
+		current, getErr := s.deployRepo.GetByID(ctx, deployment.ID)
+		if getErr != nil {
+			return nil, fmt.Errorf("deployment state changed while cancelling")
+		}
+		return nil, fmt.Errorf("cannot cancel deployment in %q status", current.Status)
+	}
 	return deployment, nil
 }
 
-func (s *Service) cancelDeployment(ctx context.Context, deployment *models.Deployment) {
-	if deployment.Status == models.DeploymentStatusBuilding {
-		s.executor.CancelBuild(deployment.ID)
-	}
-
+func (s *Service) cancelDeployment(ctx context.Context, deployment *models.Deployment) (bool, error) {
+	expectedStatus := deployment.Status
 	now := time.Now().UTC()
 	deployment.Status = models.DeploymentStatusCancelled
+	deployment.ErrorMessage = nil
 	deployment.CompletedAt = &now
-	if err := s.deployRepo.Update(ctx, deployment); err != nil {
-		s.logger.Error("failed to cancel deployment", "id", deployment.ID, "err", err)
+	updated, err := s.deployRepo.UpdateIfStatus(ctx, deployment, expectedStatus)
+	if err != nil || !updated {
+		return updated, err
 	}
+
+	if expectedStatus == models.DeploymentStatusBuilding && s.executor != nil {
+		s.executor.CancelBuild(deployment.ID)
+	}
+	return true, nil
 }
 
 // GetDeployment returns a single deployment by ID.
@@ -135,6 +158,14 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 		return nil, fmt.Errorf("project not found: %w", err)
 	}
 
+	artifactPath, err := validateArtifact(target.ArtifactPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid rollback artifact: %w", err)
+	}
+	if s.activator == nil {
+		return nil, fmt.Errorf("production activation is unavailable")
+	}
+
 	now := time.Now().UTC()
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	deployment := &models.Deployment{
@@ -146,7 +177,7 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 		Branch:            target.Branch,
 		Status:            models.DeploymentStatusReady,
 		IsProduction:      true,
-		ArtifactPath:      target.ArtifactPath,
+		ArtifactPath:      &artifactPath,
 		ArtifactSizeBytes: target.ArtifactSizeBytes,
 		DeploymentURL:     &deploymentURL,
 		IsRollback:        true,
@@ -159,7 +190,10 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 		return nil, fmt.Errorf("create rollback deployment: %w", err)
 	}
 
-	// TODO (Phase 5): Update Caddy routes to point to this deployment
+	if err := s.activateProduction(ctx, project, deployment); err != nil {
+		return nil, err
+	}
+
 	s.logger.Info("rollback created", "id", deployment.ID, "source", target.ID)
 	return deployment, nil
 }
@@ -182,6 +216,14 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 		return nil, fmt.Errorf("project not found: %w", err)
 	}
 
+	artifactPath, err := validateArtifact(source.ArtifactPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid promotion artifact: %w", err)
+	}
+	if s.activator == nil {
+		return nil, fmt.Errorf("production activation is unavailable")
+	}
+
 	now := time.Now().UTC()
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	promoted := &models.Deployment{
@@ -193,7 +235,7 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 		Branch:            project.ProductionBranch,
 		Status:            models.DeploymentStatusReady,
 		IsProduction:      true,
-		ArtifactPath:      source.ArtifactPath,
+		ArtifactPath:      &artifactPath,
 		ArtifactSizeBytes: source.ArtifactSizeBytes,
 		DeploymentURL:     &deploymentURL,
 		CompletedAt:       &now,
@@ -204,7 +246,10 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 		return nil, fmt.Errorf("create promoted deployment: %w", err)
 	}
 
-	// TODO (Phase 5): Update Caddy routes
+	if err := s.activateProduction(ctx, project, promoted); err != nil {
+		return nil, err
+	}
+
 	s.logger.Info("deployment promoted", "id", promoted.ID, "source", source.ID)
 	return promoted, nil
 }
@@ -258,4 +303,66 @@ func (s *Service) CreateFromWebhook(ctx context.Context, params ghsvc.WebhookTri
 // DeactivateBranchDeployments marks all ready deployments for a branch as cancelled.
 func (s *Service) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
 	return s.deployRepo.DeactivateBranchDeployments(ctx, projectID, branch)
+}
+
+func (s *Service) activateProduction(ctx context.Context, project *models.Project, deployment *models.Deployment) error {
+	framework := ""
+	if project.Framework != nil {
+		framework = *project.Framework
+	}
+
+	err := s.activator.ActivateProduction(ctx, ProductionActivation{
+		ProjectID:    project.ID,
+		ProjectSlug:  project.Slug,
+		ArtifactPath: *deployment.ArtifactPath,
+		Framework:    framework,
+	})
+	if err == nil {
+		return nil
+	}
+
+	activationErr := fmt.Errorf("activate production deployment: %w", err)
+	errorMessage := activationErr.Error()
+	deployment.Status = models.DeploymentStatusFailed
+	deployment.ErrorMessage = &errorMessage
+	if updateErr := s.deployRepo.Update(ctx, deployment); updateErr != nil {
+		s.logger.Error("failed to mark deployment failed after activation error",
+			"deployment_id", deployment.ID,
+			"activation_error", err,
+			"update_error", updateErr,
+		)
+		return fmt.Errorf("%w; additionally failed to persist failed status: %v", activationErr, updateErr)
+	}
+
+	return activationErr
+}
+
+func validateArtifact(artifactPath *string) (string, error) {
+	if artifactPath == nil || strings.TrimSpace(*artifactPath) == "" {
+		return "", fmt.Errorf("artifact path is empty")
+	}
+
+	path := strings.TrimSpace(*artifactPath)
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("stat artifact path: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("artifact path is not a directory")
+	}
+
+	dir, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open artifact directory: %w", err)
+	}
+	defer dir.Close()
+
+	if _, err := dir.Readdirnames(1); err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("artifact directory is empty")
+		}
+		return "", fmt.Errorf("read artifact directory: %w", err)
+	}
+
+	return path, nil
 }

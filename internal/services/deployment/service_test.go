@@ -3,7 +3,11 @@ package deployment
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +17,16 @@ import (
 	"github.com/VatsalP117/hostbox/internal/util"
 	"github.com/VatsalP117/hostbox/migrations"
 )
+
+type recordingActivator struct {
+	activations []ProductionActivation
+	err         error
+}
+
+func (a *recordingActivator) ActivateProduction(_ context.Context, activation ProductionActivation) error {
+	a.activations = append(a.activations, activation)
+	return a.err
+}
 
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -71,7 +85,10 @@ func createTestDeployment(t *testing.T, repo *repository.DeploymentRepository, p
 	}
 	if status == "ready" {
 		d.CompletedAt = &now
-		path := "/tmp/artifacts"
+		path := t.TempDir()
+		if err := os.WriteFile(filepath.Join(path, "index.html"), []byte("ready"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 		d.ArtifactPath = &path
 		url := "https://test-project.example.com"
 		d.DeploymentURL = &url
@@ -93,6 +110,7 @@ func newTestService(t *testing.T) (*Service, *repository.DeploymentRepository, *
 	svc := &Service{
 		deployRepo:     deployRepo,
 		projectRepo:    projectRepo,
+		activator:      &recordingActivator{},
 		platformDomain: "example.com",
 		logger:         logger,
 	}
@@ -170,6 +188,18 @@ func TestService_Rollback(t *testing.T) {
 	if rolled.DeploymentURL == nil || *rolled.DeploymentURL != "https://test-project.example.com" {
 		t.Errorf("unexpected deployment URL: %v", rolled.DeploymentURL)
 	}
+
+	activator := svc.activator.(*recordingActivator)
+	if len(activator.activations) != 1 {
+		t.Fatalf("activation count = %d, want 1", len(activator.activations))
+	}
+	activation := activator.activations[0]
+	if activation.ProjectID != project.ID || activation.ProjectSlug != project.Slug {
+		t.Errorf("unexpected activation project: %+v", activation)
+	}
+	if activation.ArtifactPath != *target.ArtifactPath || activation.Framework != *project.Framework {
+		t.Errorf("unexpected activation artifact: %+v", activation)
+	}
 }
 
 func TestService_Rollback_NotReady(t *testing.T) {
@@ -219,6 +249,18 @@ func TestService_Promote(t *testing.T) {
 	if promoted.DeploymentURL == nil || *promoted.DeploymentURL != "https://test-project.example.com" {
 		t.Errorf("unexpected URL: %v", promoted.DeploymentURL)
 	}
+
+	activator := svc.activator.(*recordingActivator)
+	if len(activator.activations) != 1 {
+		t.Fatalf("activation count = %d, want 1", len(activator.activations))
+	}
+	activation := activator.activations[0]
+	if activation.ProjectID != project.ID || activation.ProjectSlug != project.Slug {
+		t.Errorf("unexpected activation project: %+v", activation)
+	}
+	if activation.ArtifactPath != *source.ArtifactPath || activation.Framework != *project.Framework {
+		t.Errorf("unexpected activation artifact: %+v", activation)
+	}
 }
 
 func TestService_Promote_NotReady(t *testing.T) {
@@ -232,6 +274,119 @@ func TestService_Promote_NotReady(t *testing.T) {
 	}
 }
 
+func TestService_RollbackAndPromote_RejectInvalidArtifactsBeforeCreateOrActivate(t *testing.T) {
+	operations := map[string]func(*Service, context.Context, string, string) (*models.Deployment, error){
+		"rollback": (*Service).Rollback,
+		"promote":  (*Service).Promote,
+	}
+
+	artifactCases := map[string]func(*testing.T) *string{
+		"nil": func(*testing.T) *string { return nil },
+		"blank": func(*testing.T) *string {
+			path := "  "
+			return &path
+		},
+		"missing": func(t *testing.T) *string {
+			path := filepath.Join(t.TempDir(), "missing")
+			return &path
+		},
+		"empty directory": func(t *testing.T) *string {
+			path := t.TempDir()
+			return &path
+		},
+		"file": func(t *testing.T) *string {
+			path := filepath.Join(t.TempDir(), "artifact.txt")
+			if err := os.WriteFile(path, []byte("not a directory"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return &path
+		},
+	}
+
+	for operationName, operation := range operations {
+		for caseName, artifact := range artifactCases {
+			t.Run(operationName+"/"+caseName, func(t *testing.T) {
+				svc, deployRepo, projectRepo, userID := newTestService(t)
+				project := createTestProject(t, projectRepo, userID)
+				source := createTestDeployment(t, deployRepo, project.ID, "ready", false)
+				source.ArtifactPath = artifact(t)
+				if err := deployRepo.Update(context.Background(), source); err != nil {
+					t.Fatal(err)
+				}
+
+				before, err := deployRepo.CountByProject(context.Background(), project.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if _, err := operation(svc, context.Background(), project.ID, source.ID); err == nil {
+					t.Fatal("expected invalid artifact error")
+				}
+
+				after, err := deployRepo.CountByProject(context.Background(), project.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if after != before {
+					t.Errorf("deployment count = %d, want unchanged %d", after, before)
+				}
+				if got := len(svc.activator.(*recordingActivator).activations); got != 0 {
+					t.Errorf("activation count = %d, want 0", got)
+				}
+			})
+		}
+	}
+}
+
+func TestService_RollbackAndPromote_ActivationFailureIsReturnedAndRecorded(t *testing.T) {
+	operations := map[string]func(*Service, context.Context, string, string) (*models.Deployment, error){
+		"rollback": (*Service).Rollback,
+		"promote":  (*Service).Promote,
+	}
+
+	for name, operation := range operations {
+		t.Run(name, func(t *testing.T) {
+			svc, deployRepo, projectRepo, userID := newTestService(t)
+			project := createTestProject(t, projectRepo, userID)
+			source := createTestDeployment(t, deployRepo, project.ID, "ready", false)
+			activationErr := errors.New("caddy unavailable")
+			svc.activator.(*recordingActivator).err = activationErr
+
+			deployment, err := operation(svc, context.Background(), project.ID, source.ID)
+			if !errors.Is(err, activationErr) {
+				t.Fatalf("error = %v, want wrapped activation error", err)
+			}
+			if deployment != nil {
+				t.Fatalf("deployment = %+v, want nil on activation failure", deployment)
+			}
+
+			deployments, total, err := deployRepo.ListByProject(context.Background(), project.ID, 1, 10, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if total != 2 {
+				t.Fatalf("deployment total = %d, want 2", total)
+			}
+			var failed *models.Deployment
+			for i := range deployments {
+				if deployments[i].ID != source.ID {
+					failed = &deployments[i]
+					break
+				}
+			}
+			if failed == nil {
+				t.Fatal("created deployment not found")
+			}
+			if failed.Status != models.DeploymentStatusFailed {
+				t.Errorf("status = %s, want failed", failed.Status)
+			}
+			if failed.ErrorMessage == nil || !strings.Contains(*failed.ErrorMessage, activationErr.Error()) {
+				t.Errorf("error message = %v, want activation failure", failed.ErrorMessage)
+			}
+		})
+	}
+}
+
 func TestService_CancelDeployment_InvalidStatus(t *testing.T) {
 	svc, deployRepo, projectRepo, userID := newTestService(t)
 	project := createTestProject(t, projectRepo, userID)
@@ -240,6 +395,27 @@ func TestService_CancelDeployment_InvalidStatus(t *testing.T) {
 	_, err := svc.CancelDeployment(context.Background(), dep.ID)
 	if err == nil {
 		t.Fatal("expected error when cancelling a ready deployment")
+	}
+}
+
+func TestService_CancelDeployment_UsesTerminalCompareAndSet(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	dep := createTestDeployment(t, deployRepo, project.ID, "queued", false)
+
+	cancelled, err := svc.CancelDeployment(context.Background(), dep.ID)
+	if err != nil {
+		t.Fatalf("CancelDeployment: %v", err)
+	}
+	if cancelled.Status != models.DeploymentStatusCancelled || cancelled.CompletedAt == nil {
+		t.Fatalf("cancelled deployment = %+v", cancelled)
+	}
+	stored, err := deployRepo.GetByID(context.Background(), dep.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("stored status = %q, want cancelled", stored.Status)
 	}
 }
 

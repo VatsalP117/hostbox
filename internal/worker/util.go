@@ -29,11 +29,24 @@ func copyDir(src, dst string) (int64, error) {
 			return err
 		}
 
-		relPath, _ := filepath.Rel(src, path)
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return fmt.Errorf("resolve source path %q: %w", path, err)
+		}
 		targetPath := filepath.Join(dst, relPath)
 
 		if d.IsDir() {
 			return os.MkdirAll(targetPath, 0755)
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to copy symbolic link %q", relPath)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("inspect source entry %q: %w", relPath, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing to copy non-regular entry %q", relPath)
 		}
 
 		data, err := os.ReadFile(path)

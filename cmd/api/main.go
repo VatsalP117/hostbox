@@ -107,6 +107,7 @@ func main() {
 	})
 
 	routeManager := caddysvc.NewRouteManager(caddyClient, configBuilder, l)
+	productionActivator := &caddysvc.ProductionActivatorAdapter{Manager: routeManager}
 
 	deployAdapter := &caddysvc.DeploymentRepoAdapter{Repo: repos.Deployment}
 	domainAdapter := &caddysvc.DomainRepoAdapter{Repo: repos.Domain}
@@ -208,6 +209,7 @@ func main() {
 			repos.Project,
 			pool,
 			executor,
+			productionActivator,
 			cfg.PlatformDomain,
 			l,
 		)

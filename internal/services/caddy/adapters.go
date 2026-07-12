@@ -4,7 +4,26 @@ import (
 	"context"
 
 	"github.com/VatsalP117/hostbox/internal/repository"
+	deploysvc "github.com/VatsalP117/hostbox/internal/services/deployment"
 )
+
+// ProductionActivatorAdapter connects deployment activation to the existing
+// Caddy production-route manager.
+type ProductionActivatorAdapter struct {
+	Manager *RouteManager
+}
+
+var _ deploysvc.ProductionActivator = (*ProductionActivatorAdapter)(nil)
+
+func (a *ProductionActivatorAdapter) ActivateProduction(ctx context.Context, activation deploysvc.ProductionActivation) error {
+	return a.Manager.UpdateProductionRoute(
+		ctx,
+		activation.ProjectSlug,
+		activation.ProjectID,
+		activation.ArtifactPath,
+		activation.Framework,
+	)
+}
 
 // DeploymentRepoAdapter adapts the DeploymentRepository to the DeploymentQuerier interface.
 type DeploymentRepoAdapter struct {

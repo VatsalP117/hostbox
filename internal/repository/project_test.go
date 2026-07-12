@@ -200,3 +200,25 @@ func TestProjectRepository_CountByOwner(t *testing.T) {
 		t.Errorf("count = %d, want 1", count)
 	}
 }
+
+func TestProjectRepository_UpdateBuildMetaPersistsFramework(t *testing.T) {
+	db := setupTestDB(t)
+	user := createTestUserForProject(t, db, "meta@test.com")
+	repo := NewProjectRepository(db)
+	ctx := context.Background()
+	project := &models.Project{OwnerID: user.ID, Name: "Meta", Slug: "meta", ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20"}
+	if err := repo.Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.UpdateBuildMeta(ctx, project.ID, "vite", "pnpm", "lock-hash"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetByID(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Framework == nil || *got.Framework != "vite" || got.DetectedPackageManager != "pnpm" || got.LockFileHash != "lock-hash" {
+		t.Fatalf("unexpected build metadata: %#v", got)
+	}
+}
