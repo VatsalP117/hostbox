@@ -27,9 +27,7 @@ func NewGitHubEventRouter(
 	}
 }
 
-func (r *GitHubEventRouter) Route(eventType string, payload []byte, deliveryID string) error {
-	ctx := context.Background()
-
+func (r *GitHubEventRouter) Route(ctx context.Context, eventType string, payload []byte, deliveryID string) error {
 	switch eventType {
 	case "push":
 		return r.pushHandler.Handle(ctx, payload, deliveryID)

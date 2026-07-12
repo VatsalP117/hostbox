@@ -111,6 +111,21 @@ The first core-security slice has now:
 
 The remaining bounded risks—same-UID visibility of short-lived Git child-process environment, path-check TOCTOU, Caddy/SQLite non-atomicity, Caddy route replacement ordering, and DNS rebinding—remain explicit later hardening items.
 
+### Milestone 2 GitHub reliability progress — 2026-07-13
+
+The GitHub primary-experience slice has now:
+
+- replaced detached webhook goroutines with a SQLite-backed fixed worker pool that persists before HTTP acceptance, deduplicates delivery IDs, atomically claims work, retries with bounded backoff, recovers interrupted rows, contains handler panics, and prunes completed payloads after a bounded retention period;
+- capped webhook bodies at 1 MiB, rejected missing/oversized delivery metadata, propagated shutdown cancellation through event handlers, and returned a retryable error when durable acceptance fails;
+- connected queued, building, ready, failed, and cancelled deployment transitions to a persisted/reused GitHub Deployment ID with bounded feedback retries;
+- created or updated one marker-based preview PR comment, including immutable and branch-stable URLs, commit, state, duration, logs, and failure details, with pagination beyond the first 100 comments;
+- associated a push-created branch preview with a later PR event without creating a second deployment, while scoping commit deduplication by branch so preview and production outcomes do not suppress each other;
+- made PR-close and branch-delete cleanup cancel queued/building/ready preview work and idempotently remove immutable plus branch-stable routes;
+- serialized full Caddy reconciliation with incremental mutations and added post-build cancellation cleanup so stale snapshots or in-flight success hooks cannot resurrect a closed preview; and
+- added focused migration, repository, HTTP, processor, feedback, worker, and Caddy race coverage.
+
+The remaining GitHub v1 work is still explicit below: fork-PR policy, installation suspension/access removal, repository rename/transfer, multi-project repository semantics, delivery diagnostics/manual retry UI, and real public/private repository validation on the test VM.
+
 ## 4. Priority model
 
 - **P0 — v1 blocker:** security boundary, data loss, incorrect deployment, broken primary journey, broken release/install, or no proof of the promise.

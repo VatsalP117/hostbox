@@ -24,8 +24,13 @@ type Service struct {
 	pool           *worker.Pool
 	executor       *worker.BuildExecutor
 	activator      ProductionActivator
+	reporter       worker.LifecycleReporter
 	platformDomain string
 	logger         *slog.Logger
+}
+
+func (s *Service) SetLifecycleReporter(reporter worker.LifecycleReporter) {
+	s.reporter = reporter
 }
 
 func NewService(
@@ -81,6 +86,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 	if err := s.deployRepo.Create(ctx, deployment); err != nil {
 		return nil, fmt.Errorf("create deployment: %w", err)
 	}
+	s.reportLifecycle(ctx, project, deployment)
 
 	s.pool.Enqueue(deployment.ID)
 	s.logger.Info("deployment triggered", "id", deployment.ID, "project", req.ProjectID, "branch", req.Branch)
@@ -126,6 +132,11 @@ func (s *Service) cancelDeployment(ctx context.Context, deployment *models.Deplo
 
 	if expectedStatus == models.DeploymentStatusBuilding && s.executor != nil {
 		s.executor.CancelBuild(deployment.ID)
+	}
+	if project, projectErr := s.projectRepo.GetByID(ctx, deployment.ProjectID); projectErr != nil {
+		s.logger.Warn("failed to load project for deployment feedback", "deployment_id", deployment.ID, "error", projectErr)
+	} else {
+		s.reportLifecycle(ctx, project, deployment)
 	}
 	return true, nil
 }
@@ -193,6 +204,7 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 	if err := s.activateProduction(ctx, project, deployment); err != nil {
 		return nil, err
 	}
+	s.reportLifecycle(ctx, project, deployment)
 
 	s.logger.Info("rollback created", "id", deployment.ID, "source", target.ID)
 	return deployment, nil
@@ -249,9 +261,19 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 	if err := s.activateProduction(ctx, project, promoted); err != nil {
 		return nil, err
 	}
+	s.reportLifecycle(ctx, project, promoted)
 
 	s.logger.Info("deployment promoted", "id", promoted.ID, "source", source.ID)
 	return promoted, nil
+}
+
+func (s *Service) reportLifecycle(ctx context.Context, project *models.Project, deployment *models.Deployment) {
+	if s.reporter == nil {
+		return
+	}
+	if err := s.reporter.Report(ctx, project, deployment); err != nil {
+		s.logger.Warn("github lifecycle feedback failed", "deployment_id", deployment.ID, "status", deployment.Status, "error", err)
+	}
 }
 
 // Redeploy triggers a new build using the same branch and latest commit.
@@ -273,6 +295,34 @@ func (s *Service) Redeploy(ctx context.Context, projectID string) (*models.Deplo
 // FindByCommitSHA finds a deployment by project and commit SHA.
 func (s *Service) FindByCommitSHA(ctx context.Context, projectID, commitSHA string) (*models.Deployment, error) {
 	return s.deployRepo.FindByCommitSHA(ctx, projectID, commitSHA)
+}
+
+func (s *Service) FindByCommitSHAAndBranch(ctx context.Context, projectID, commitSHA, branch string) (*models.Deployment, error) {
+	return s.deployRepo.FindByCommitSHAAndBranch(ctx, projectID, commitSHA, branch)
+}
+
+// AssociatePullRequest attaches PR metadata when GitHub delivered the branch
+// push before the pull_request event, then immediately publishes the current
+// lifecycle state so the marker comment is not missed.
+func (s *Service) AssociatePullRequest(ctx context.Context, deployment *models.Deployment, prNumber int) error {
+	storedPR, err := s.deployRepo.SetGitHubPRNumberIfUnset(ctx, deployment.ID, prNumber)
+	if err != nil {
+		return err
+	}
+	if storedPR != prNumber {
+		return fmt.Errorf("deployment is already associated with pull request %d", storedPR)
+	}
+	current, err := s.deployRepo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		return fmt.Errorf("reload deployment for pull request association: %w", err)
+	}
+	project, err := s.projectRepo.GetByID(ctx, deployment.ProjectID)
+	if err != nil {
+		return fmt.Errorf("load project for pull request association: %w", err)
+	}
+	s.reportLifecycle(ctx, project, current)
+	*deployment = *current
+	return nil
 }
 
 // CreateFromWebhook creates a deployment triggered by a GitHub webhook.
@@ -300,9 +350,39 @@ func (s *Service) CreateFromWebhook(ctx context.Context, params ghsvc.WebhookTri
 	})
 }
 
-// DeactivateBranchDeployments marks all ready deployments for a branch as cancelled.
+// DeactivateBranchDeployments cancels active previews and returns all preview
+// deployments whose routes may need idempotent cleanup.
 func (s *Service) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
-	return s.deployRepo.DeactivateBranchDeployments(ctx, projectID, branch)
+	deployments, err := s.deployRepo.DeactivateBranchDeployments(ctx, projectID, branch)
+	if err != nil {
+		return nil, err
+	}
+	if s.executor != nil {
+		for i := range deployments {
+			if deployments[i].Status == models.DeploymentStatusBuilding {
+				s.executor.CancelBuild(deployments[i].ID)
+			}
+		}
+	}
+	if s.reporter != nil && len(deployments) > 0 {
+		project, projectErr := s.projectRepo.GetByID(ctx, projectID)
+		if projectErr != nil {
+			s.logger.Warn("failed to load project for branch cleanup feedback", "project_id", projectID, "error", projectErr)
+		} else {
+			for i := range deployments {
+				if deployments[i].Status == models.DeploymentStatusCancelled {
+					continue
+				}
+				deployments[i].Status = models.DeploymentStatusCancelled
+				if deployments[i].CompletedAt == nil {
+					now := time.Now().UTC()
+					deployments[i].CompletedAt = &now
+				}
+				s.reportLifecycle(ctx, project, &deployments[i])
+			}
+		}
+	}
+	return deployments, nil
 }
 
 func (s *Service) activateProduction(ctx context.Context, project *models.Project, deployment *models.Deployment) error {

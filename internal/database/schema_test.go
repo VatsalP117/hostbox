@@ -21,7 +21,7 @@ func TestRealMigration(t *testing.T) {
 	}
 
 	// Verify all tables exist
-	tables := []string{"users", "sessions", "projects", "deployments", "domains", "env_vars", "notification_configs", "activity_log", "settings"}
+	tables := []string{"users", "sessions", "projects", "deployments", "domains", "env_vars", "notification_configs", "activity_log", "settings", "github_webhook_deliveries"}
 	for _, table := range tables {
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count)

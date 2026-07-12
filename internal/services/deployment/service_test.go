@@ -23,6 +23,16 @@ type recordingActivator struct {
 	err         error
 }
 
+type recordingLifecycleReporter struct {
+	statuses []models.DeploymentStatus
+	err      error
+}
+
+func (r *recordingLifecycleReporter) Report(_ context.Context, _ *models.Project, deployment *models.Deployment) error {
+	r.statuses = append(r.statuses, deployment.Status)
+	return r.err
+}
+
 func (a *recordingActivator) ActivateProduction(_ context.Context, activation ProductionActivation) error {
 	a.activations = append(a.activations, activation)
 	return a.err
@@ -400,6 +410,8 @@ func TestService_CancelDeployment_InvalidStatus(t *testing.T) {
 
 func TestService_CancelDeployment_UsesTerminalCompareAndSet(t *testing.T) {
 	svc, deployRepo, projectRepo, userID := newTestService(t)
+	reporter := &recordingLifecycleReporter{}
+	svc.SetLifecycleReporter(reporter)
 	project := createTestProject(t, projectRepo, userID)
 	dep := createTestDeployment(t, deployRepo, project.ID, "queued", false)
 
@@ -416,6 +428,83 @@ func TestService_CancelDeployment_UsesTerminalCompareAndSet(t *testing.T) {
 	}
 	if stored.Status != models.DeploymentStatusCancelled {
 		t.Fatalf("stored status = %q, want cancelled", stored.Status)
+	}
+	if len(reporter.statuses) != 1 || reporter.statuses[0] != models.DeploymentStatusCancelled {
+		t.Fatalf("reported statuses = %v, want [cancelled]", reporter.statuses)
+	}
+}
+
+func TestService_LifecycleFeedbackFailureDoesNotUndoCancellation(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	svc.SetLifecycleReporter(&recordingLifecycleReporter{err: errors.New("github unavailable")})
+	project := createTestProject(t, projectRepo, userID)
+	deployment := createTestDeployment(t, deployRepo, project.ID, "queued", false)
+
+	if _, err := svc.CancelDeployment(context.Background(), deployment.ID); err != nil {
+		t.Fatalf("CancelDeployment should remain successful: %v", err)
+	}
+	stored, err := deployRepo.GetByID(context.Background(), deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("stored status = %q, want cancelled", stored.Status)
+	}
+}
+
+func TestService_DeactivateBranchReportsCancelledOnceAcrossCleanupRetries(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	reporter := &recordingLifecycleReporter{}
+	svc.SetLifecycleReporter(reporter)
+	project := createTestProject(t, projectRepo, userID)
+	deployment := &models.Deployment{
+		ID: util.NewID(), ProjectID: project.ID, CommitSHA: "abc123", Branch: "feature/cleanup",
+		Status: models.DeploymentStatusReady, IsProduction: false, CreatedAt: time.Now().UTC(),
+	}
+	if err := deployRepo.Create(context.Background(), deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt := 0; attempt < 2; attempt++ {
+		deployments, err := svc.DeactivateBranchDeployments(context.Background(), project.ID, deployment.Branch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(deployments) != 1 {
+			t.Fatalf("attempt %d returned %d deployments", attempt+1, len(deployments))
+		}
+	}
+	if len(reporter.statuses) != 1 || reporter.statuses[0] != models.DeploymentStatusCancelled {
+		t.Fatalf("reported statuses = %v, want one cancelled", reporter.statuses)
+	}
+}
+
+func TestService_AssociatePullRequestPersistsAndReportsCurrentState(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	reporter := &recordingLifecycleReporter{}
+	svc.SetLifecycleReporter(reporter)
+	project := createTestProject(t, projectRepo, userID)
+	deployment := createTestDeployment(t, deployRepo, project.ID, "building", false)
+	stale := *deployment
+	if err := deployRepo.UpdateStatus(context.Background(), deployment.ID, models.DeploymentStatusReady, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.AssociatePullRequest(context.Background(), &stale, 42); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := deployRepo.GetByID(context.Background(), deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.GitHubPRNumber == nil || *stored.GitHubPRNumber != 42 {
+		t.Fatalf("stored PR number = %v, want 42", stored.GitHubPRNumber)
+	}
+	if len(reporter.statuses) != 1 || reporter.statuses[0] != models.DeploymentStatusReady {
+		t.Fatalf("reported statuses = %v, want [ready]", reporter.statuses)
+	}
+	if stale.Status != models.DeploymentStatusReady || stale.GitHubPRNumber == nil {
+		t.Fatalf("caller snapshot was not refreshed: %+v", stale)
 	}
 }
 

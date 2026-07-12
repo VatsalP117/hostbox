@@ -5,9 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 func TestRouteManager_AddDeploymentRoute(t *testing.T) {
@@ -72,6 +75,25 @@ func TestRouteManager_UpdateProductionRoute(t *testing.T) {
 	}
 }
 
+func TestRouteManager_RemoveBranchRouteSlugifiesRawBranch(t *testing.T) {
+	var receivedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewCaddyClient(server.URL, slog.Default())
+	mgr := NewRouteManager(client, newTestBuilder(), slog.Default())
+
+	if err := mgr.RemoveBranchRoute(context.Background(), "prj_001", "feature/my change"); err != nil {
+		t.Fatalf("RemoveBranchRoute failed: %v", err)
+	}
+	if want := "/id/route-branch-prj_001-feature-my-change"; receivedPath != want {
+		t.Errorf("path = %q, want %q", receivedPath, want)
+	}
+}
+
 func TestRouteManager_RemoveAllProjectRoutes(t *testing.T) {
 	var paths []string
 	var mu sync.Mutex
@@ -101,5 +123,31 @@ func TestRouteManager_RemoveAllProjectRoutes(t *testing.T) {
 	// 1 production + 2 branches + 2 deployments + 1 domain = 6 DELETEs
 	if len(paths) != 6 {
 		t.Fatalf("expected 6 DELETE requests, got %d: %v", len(paths), paths)
+	}
+}
+
+func TestPostBuildRouteHook_CancelledCleanupRemovesDeploymentAndBranchRoutes(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	manager := NewRouteManager(NewCaddyClient(server.URL, slog.Default()), newTestBuilder(), slog.Default())
+	hook := NewPostBuildRouteHook(manager, slog.Default())
+	project := &models.Project{ID: "prj_1"}
+	deployment := &models.Deployment{ID: "dpl_1", Branch: "feature/cancel-me"}
+
+	if err := hook.OnBuildCancelled(context.Background(), project, deployment); err != nil {
+		t.Fatalf("OnBuildCancelled: %v", err)
+	}
+
+	want := []string{
+		"DELETE /id/route-deploy-dpl_1",
+		"DELETE /id/route-branch-prj_1-feature-cancel-me",
+	}
+	if !slices.Equal(paths, want) {
+		t.Fatalf("requests = %v, want %v", paths, want)
 	}
 }

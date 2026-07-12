@@ -88,6 +88,18 @@ func TestCaddyClient_DeleteRoute(t *testing.T) {
 	}
 }
 
+func TestCaddyClient_DeleteRouteTreatsNotFoundAsSuccess(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := NewCaddyClient(server.URL, slog.Default())
+	if err := client.DeleteRoute(context.Background(), "already-removed"); err != nil {
+		t.Fatalf("DeleteRoute should be idempotent, got: %v", err)
+	}
+}
+
 func TestCaddyClient_RetryOn5xx(t *testing.T) {
 	var attempts int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

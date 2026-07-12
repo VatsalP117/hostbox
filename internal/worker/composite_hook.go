@@ -32,3 +32,16 @@ func (c *CompositePostBuildHook) OnBuildFailure(ctx context.Context, project *mo
 	}
 	return nil
 }
+
+func (c *CompositePostBuildHook) OnBuildCancelled(ctx context.Context, project *models.Project, deployment *models.Deployment) error {
+	for _, h := range c.hooks {
+		cleanup, ok := h.(PostBuildCancellationHook)
+		if !ok {
+			continue
+		}
+		if err := cleanup.OnBuildCancelled(ctx, project, deployment); err != nil {
+			return err
+		}
+	}
+	return nil
+}

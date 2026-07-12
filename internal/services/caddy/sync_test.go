@@ -13,9 +13,21 @@ import (
 type mockDeployRepo struct {
 	deployments []ActiveDeployment
 	err         error
+	started     chan struct{}
+	release     chan struct{}
 }
 
 func (m *mockDeployRepo) ListActiveWithProject(ctx context.Context) ([]ActiveDeployment, error) {
+	if m.started != nil {
+		close(m.started)
+	}
+	if m.release != nil {
+		select {
+		case <-m.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 	return m.deployments, m.err
 }
 
@@ -81,6 +93,54 @@ func TestSyncService_SyncAll(t *testing.T) {
 	routes := receivedConfig.Apps.HTTP.Servers["main"].Routes
 	if len(routes) < 3 { // platform + domain + production + preview + branch
 		t.Errorf("expected at least 3 routes, got %d", len(routes))
+	}
+}
+
+func TestSyncService_SerializesSnapshotLoadWithIncrementalMutation(t *testing.T) {
+	requests := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Method + " " + r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewCaddyClient(server.URL, slog.Default())
+	builder := newTestBuilder()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	svc := NewSyncService(client, builder, &mockDeployRepo{started: started, release: release}, &mockDomainRepo{}, slog.Default())
+	mgr := NewRouteManager(client, builder, slog.Default())
+
+	syncDone := make(chan error, 1)
+	go func() { syncDone <- svc.SyncAll(context.Background()) }()
+	<-started
+
+	mutationDone := make(chan error, 1)
+	go func() {
+		mutationDone <- mgr.AddDeploymentRoute(context.Background(), ActiveDeployment{
+			DeploymentID: "dpl_new", ProjectID: "prj_1", ProjectSlug: "app", Branch: "main", ArtifactPath: "/tmp/out",
+		})
+	}()
+
+	select {
+	case request := <-requests:
+		t.Fatalf("incremental mutation escaped while full sync held snapshot lock: %s", request)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	if err := <-syncDone; err != nil {
+		t.Fatalf("SyncAll: %v", err)
+	}
+	if err := <-mutationDone; err != nil {
+		t.Fatalf("AddDeploymentRoute: %v", err)
+	}
+
+	if first := <-requests; first != "POST /load" {
+		t.Fatalf("first request = %q, want full config load", first)
+	}
+	if second := <-requests; second != "POST /config/apps/http/servers/main/routes" {
+		t.Fatalf("second request = %q, want incremental route after load", second)
 	}
 }
 

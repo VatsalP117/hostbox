@@ -165,8 +165,136 @@ func TestHandleFailureKeepsCancellationTerminalAndSkipsFailureHook(t *testing.T)
 	}
 }
 
+func TestCleanupSuccessfulBuildIfCancelledRunsOptionalCleanupAndRefreshesDeployment(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "worker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	userRepo := repository.NewUserRepository(db)
+	user := &models.User{Email: "cleanup@hostbox.local", PasswordHash: "hash"}
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	projectRepo := repository.NewProjectRepository(db)
+	project := &models.Project{OwnerID: user.ID, Name: "Cleanup", Slug: "cleanup", ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20"}
+	if err := projectRepo.Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "feature/test", Status: models.DeploymentStatusReady}
+	if err := deploymentRepo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	deployment.Status = models.DeploymentStatusCancelled
+	if err := deploymentRepo.Update(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	hook := &recordingCancellationHook{}
+	executor := &BuildExecutor{deploymentRepo: deploymentRepo, postBuild: hook}
+	stale := *deployment
+	stale.Status = models.DeploymentStatusReady
+	hub := NewSSEHub()
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "cleanup.log"), hub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+
+	executor.cleanupSuccessfulBuildIfCancelled(project, &stale, logger)
+
+	if hook.cancelled != 1 {
+		t.Fatalf("cleanup calls = %d, want 1", hook.cancelled)
+	}
+	if stale.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("deployment status = %q, want cancelled", stale.Status)
+	}
+}
+
+type recordingWorkerLifecycleReporter struct {
+	status   models.DeploymentStatus
+	prNumber *int
+}
+
+func (r *recordingWorkerLifecycleReporter) Report(_ context.Context, _ *models.Project, deployment *models.Deployment) error {
+	r.status = deployment.Status
+	r.prNumber = deployment.GitHubPRNumber
+	return nil
+}
+
+func TestReportLifecycleReloadsPRAssociationAndTerminalState(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "worker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	user := &models.User{Email: "feedback@hostbox.local", PasswordHash: "hash"}
+	if err := repository.NewUserRepository(db).Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	project := &models.Project{OwnerID: user.ID, Name: "Feedback", Slug: "feedback", ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20"}
+	if err := repository.NewProjectRepository(db).Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "feature/test", Status: models.DeploymentStatusBuilding}
+	if err := deploymentRepo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	stale := *deployment
+	if err := deploymentRepo.UpdateStatus(ctx, deployment.ID, models.DeploymentStatusReady, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deploymentRepo.SetGitHubPRNumberIfUnset(ctx, deployment.ID, 42); err != nil {
+		t.Fatal(err)
+	}
+	reporter := &recordingWorkerLifecycleReporter{}
+	executor := &BuildExecutor{deploymentRepo: deploymentRepo, reporter: reporter}
+	hub := NewSSEHub()
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "feedback.log"), hub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+
+	executor.reportLifecycle(ctx, project, &stale, logger)
+	if reporter.status != models.DeploymentStatusReady || reporter.prNumber == nil || *reporter.prNumber != 42 {
+		t.Fatalf("reported status/PR = %q/%v, want ready/42", reporter.status, reporter.prNumber)
+	}
+	if stale.Status != models.DeploymentStatusReady || stale.GitHubPRNumber == nil || *stale.GitHubPRNumber != 42 {
+		t.Fatalf("executor snapshot was not refreshed: %+v", stale)
+	}
+}
+
 type recordingPostBuildHook struct {
 	failures int
+}
+
+type recordingCancellationHook struct {
+	cancelled int
+}
+
+func (h *recordingCancellationHook) OnBuildSuccess(context.Context, *models.Project, *models.Deployment) error {
+	return nil
+}
+
+func (h *recordingCancellationHook) OnBuildFailure(context.Context, *models.Project, *models.Deployment, error) error {
+	return nil
+}
+
+func (h *recordingCancellationHook) OnBuildCancelled(context.Context, *models.Project, *models.Deployment) error {
+	h.cancelled++
+	return nil
 }
 
 func (h *recordingPostBuildHook) OnBuildSuccess(context.Context, *models.Project, *models.Deployment) error {

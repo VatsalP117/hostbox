@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -18,78 +20,109 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func TestGitHubWebhookHandler_ValidSignature(t *testing.T) {
+type webhookAcceptorStub struct {
+	created    bool
+	err        error
+	calls      int
+	deliveryID string
+	eventType  string
+	payload    []byte
+}
+
+func (s *webhookAcceptorStub) Accept(_ context.Context, deliveryID, eventType string, payload []byte) (bool, error) {
+	s.calls++
+	s.deliveryID = deliveryID
+	s.eventType = eventType
+	s.payload = append([]byte(nil), payload...)
+	return s.created, s.err
+}
+
+func TestGitHubWebhookHandlerValidSignaturePersistsBeforeAccepted(t *testing.T) {
 	secret := "test-secret"
-	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := newWebhookHandlerForTest(t, secret, router)
-
+	acceptor := &webhookAcceptorStub{created: true}
+	handler := newWebhookHandlerForTest(t, secret, acceptor)
 	body := `{"action":"ping"}`
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(body))
-	sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/github/webhook", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Hub-Signature-256", sig)
-	req.Header.Set("X-GitHub-Event", "ping")
-	req.Header.Set("X-GitHub-Delivery", "test-delivery")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	err := handler.HandleWebhook(c)
-	if err != nil {
-		t.Fatalf("HandleWebhook failed: %v", err)
-	}
+	rec := performWebhookRequest(t, handler, body, webhookSignature(secret, body), "ping", "test-delivery")
 	if rec.Code != http.StatusAccepted {
-		t.Errorf("status = %d, want 202", rec.Code)
+		t.Fatalf("status = %d, want 202; body=%s", rec.Code, rec.Body.String())
+	}
+	if acceptor.calls != 1 || acceptor.deliveryID != "test-delivery" || acceptor.eventType != "ping" || string(acceptor.payload) != body {
+		t.Fatalf("acceptor call = %#v", acceptor)
 	}
 }
 
-func TestGitHubWebhookHandler_InvalidSignature(t *testing.T) {
+func TestGitHubWebhookHandlerDuplicateIsAccepted(t *testing.T) {
 	secret := "test-secret"
-	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := newWebhookHandlerForTest(t, secret, router)
+	acceptor := &webhookAcceptorStub{created: false}
+	handler := newWebhookHandlerForTest(t, secret, acceptor)
+	body := `{}`
 
-	body := `{"action":"ping"}`
-
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/github/webhook", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Hub-Signature-256", "sha256=invalid")
-	req.Header.Set("X-GitHub-Event", "ping")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	err := handler.HandleWebhook(c)
-	if err != nil {
-		t.Fatalf("HandleWebhook failed: %v", err)
-	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
+	rec := performWebhookRequest(t, handler, body, webhookSignature(secret, body), "ping", "duplicate")
+	if rec.Code != http.StatusAccepted || acceptor.calls != 1 {
+		t.Fatalf("duplicate status=%d calls=%d", rec.Code, acceptor.calls)
 	}
 }
 
-func TestGitHubWebhookHandler_MissingSignature(t *testing.T) {
-	router := github.NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	handler := newWebhookHandlerForTest(t, "secret", router)
+func TestGitHubWebhookHandlerInvalidSignatureIsNotStored(t *testing.T) {
+	acceptor := &webhookAcceptorStub{created: true}
+	handler := newWebhookHandlerForTest(t, "test-secret", acceptor)
 
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/github/webhook", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	err := handler.HandleWebhook(c)
-	if err != nil {
-		t.Fatalf("HandleWebhook failed: %v", err)
-	}
+	rec := performWebhookRequest(t, handler, `{}`, "sha256=invalid", "ping", "delivery")
 	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", rec.Code)
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+	if acceptor.calls != 0 {
+		t.Fatalf("acceptor calls = %d, want 0", acceptor.calls)
 	}
 }
 
-func newWebhookHandlerForTest(t *testing.T, secret string, router *github.GitHubEventRouter) *GitHubWebhookHandler {
+func TestGitHubWebhookHandlerMissingSignatureIsNotStored(t *testing.T) {
+	acceptor := &webhookAcceptorStub{created: true}
+	handler := newWebhookHandlerForTest(t, "secret", acceptor)
+
+	rec := performWebhookRequest(t, handler, `{}`, "", "ping", "delivery")
+	if rec.Code != http.StatusUnauthorized || acceptor.calls != 0 {
+		t.Fatalf("status=%d calls=%d, want 401/0", rec.Code, acceptor.calls)
+	}
+}
+
+func TestGitHubWebhookHandlerRequiresDeliveryHeaders(t *testing.T) {
+	secret := "secret"
+	acceptor := &webhookAcceptorStub{created: true}
+	handler := newWebhookHandlerForTest(t, secret, acceptor)
+	body := `{}`
+
+	rec := performWebhookRequest(t, handler, body, webhookSignature(secret, body), "ping", "")
+	if rec.Code != http.StatusBadRequest || acceptor.calls != 0 {
+		t.Fatalf("status=%d calls=%d, want 400/0", rec.Code, acceptor.calls)
+	}
+}
+
+func TestGitHubWebhookHandlerRejectsOversizedPayload(t *testing.T) {
+	acceptor := &webhookAcceptorStub{created: true}
+	handler := newWebhookHandlerForTest(t, "secret", acceptor)
+	body := strings.Repeat("x", int(github.MaxWebhookPayloadBytes)+1)
+
+	rec := performWebhookRequest(t, handler, body, "sha256=unused", "push", "delivery")
+	if rec.Code != http.StatusRequestEntityTooLarge || acceptor.calls != 0 {
+		t.Fatalf("status=%d calls=%d, want 413/0", rec.Code, acceptor.calls)
+	}
+}
+
+func TestGitHubWebhookHandlerPersistenceFailureIsNotAcknowledged(t *testing.T) {
+	secret := "secret"
+	acceptor := &webhookAcceptorStub{err: errors.New("database unavailable")}
+	handler := newWebhookHandlerForTest(t, secret, acceptor)
+	body := `{}`
+
+	rec := performWebhookRequest(t, handler, body, webhookSignature(secret, body), "ping", "delivery")
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func newWebhookHandlerForTest(t *testing.T, secret string, acceptor GitHubWebhookDeliveryAcceptor) *GitHubWebhookHandler {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -110,7 +143,38 @@ func newWebhookHandlerForTest(t *testing.T, secret string, router *github.GitHub
 	}); err != nil {
 		t.Fatalf("configure github runtime: %v", err)
 	}
-	runtime.SetEventRouter(router)
+	runtime.SetEventRouter(github.NewGitHubEventRouter(nil, nil, nil, slog.Default()))
 
-	return NewGitHubWebhookHandler(runtime, slog.Default())
+	return NewGitHubWebhookHandler(runtime, acceptor, slog.Default())
+}
+
+func performWebhookRequest(
+	t *testing.T,
+	handler *GitHubWebhookHandler,
+	body, signature, eventType, deliveryID string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/github/webhook", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if signature != "" {
+		req.Header.Set("X-Hub-Signature-256", signature)
+	}
+	if eventType != "" {
+		req.Header.Set("X-GitHub-Event", eventType)
+	}
+	if deliveryID != "" {
+		req.Header.Set("X-GitHub-Delivery", deliveryID)
+	}
+	rec := httptest.NewRecorder()
+	if err := handler.HandleWebhook(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("HandleWebhook failed: %v", err)
+	}
+	return rec
+}
+
+func webhookSignature(secret, body string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(body))
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }

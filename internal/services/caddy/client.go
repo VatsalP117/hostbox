@@ -160,6 +160,11 @@ func (c *CaddyClient) doWithRetry(ctx context.Context, method, path string, body
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil
 		}
+		// Route cleanup is deliberately idempotent. A missing route means the
+		// desired state has already been reached, including on webhook retries.
+		if method == http.MethodDelete && resp.StatusCode == http.StatusNotFound {
+			return nil
+		}
 
 		lastErr = fmt.Errorf("caddy %s %s returned %d: %s", method, path, resp.StatusCode, string(respBody))
 

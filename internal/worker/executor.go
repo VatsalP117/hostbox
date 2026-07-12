@@ -27,6 +27,13 @@ type PostBuildHook interface {
 	OnBuildFailure(ctx context.Context, project *models.Project, deployment *models.Deployment, buildErr error) error
 }
 
+// PostBuildCancellationHook removes side effects created by a successful build
+// when another workflow cancels the deployment while its success hook runs.
+// It is optional so integrations without success side effects need no cleanup.
+type PostBuildCancellationHook interface {
+	OnBuildCancelled(ctx context.Context, project *models.Project, deployment *models.Deployment) error
+}
+
 type noopPostBuildHook struct{}
 
 func (n *noopPostBuildHook) OnBuildSuccess(_ context.Context, _ *models.Project, _ *models.Deployment) error {
@@ -40,6 +47,12 @@ type InstallationTokenProvider interface {
 	GetInstallationToken(installationID int64) (string, error)
 }
 
+// LifecycleReporter publishes deployment state to an external integration.
+// Reporting is best-effort and never changes the build's primary outcome.
+type LifecycleReporter interface {
+	Report(context.Context, *models.Project, *models.Deployment) error
+}
+
 // BuildExecutor runs the 6-step build pipeline for a single deployment.
 type BuildExecutor struct {
 	cfg            *config.BuildConfig
@@ -50,6 +63,7 @@ type BuildExecutor struct {
 	envVarRepo     *repository.EnvVarRepository
 	sseHub         *SSEHub
 	postBuild      PostBuildHook
+	reporter       LifecycleReporter
 	platformDomain string
 	tokenProvider  InstallationTokenProvider
 
@@ -87,6 +101,10 @@ func NewBuildExecutor(
 // SetPostBuildHook allows Phase 4/5 to register callbacks.
 func (e *BuildExecutor) SetPostBuildHook(hook PostBuildHook) {
 	e.postBuild = hook
+}
+
+func (e *BuildExecutor) SetLifecycleReporter(reporter LifecycleReporter) {
+	e.reporter = reporter
 }
 
 // Execute runs the full build pipeline for a deployment.
@@ -146,6 +164,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		return
 	}
 	e.sseHub.PublishJSON(deploymentID, SSEEventStatus, map[string]string{"status": "building"})
+	e.reportLifecycle(ctx, project, deployment, logger)
 
 	startTime := time.Now()
 
@@ -383,6 +402,31 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 
 	if err := e.postBuild.OnBuildSuccess(ctx, project, deployment); err != nil {
 		logger.Warn("Post-build hook error: " + err.Error())
+	}
+	e.cleanupSuccessfulBuildIfCancelled(project, deployment, logger)
+	e.reportLifecycle(ctx, project, deployment, logger)
+}
+
+func (e *BuildExecutor) cleanupSuccessfulBuildIfCancelled(project *models.Project, deployment *models.Deployment, logger *BuildLogger) {
+	checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	current, err := e.deploymentRepo.GetByID(checkCtx, deployment.ID)
+	if err != nil {
+		logger.Warn("Could not verify deployment status after post-build hooks: " + err.Error())
+		return
+	}
+	if current.Status != models.DeploymentStatusCancelled {
+		return
+	}
+
+	*deployment = *current
+	cleanup, ok := e.postBuild.(PostBuildCancellationHook)
+	if !ok {
+		return
+	}
+	if err := cleanup.OnBuildCancelled(checkCtx, project, deployment); err != nil {
+		logger.Warn("Cancelled deployment route cleanup failed: " + err.Error())
 	}
 }
 
@@ -670,7 +714,7 @@ func (e *BuildExecutor) handleFailure(
 	errMsg string,
 ) {
 	if errors.Is(ctx.Err(), context.Canceled) {
-		e.cancelDeployment(deployment, logger)
+		e.cancelDeployment(deployment, project, logger)
 		return
 	}
 	logger.Errorf("❌ %s", errMsg)
@@ -702,9 +746,10 @@ func (e *BuildExecutor) handleFailure(
 	})
 
 	_ = e.postBuild.OnBuildFailure(updateCtx, project, deployment, fmt.Errorf("%s", errMsg))
+	e.reportLifecycle(updateCtx, project, deployment, logger)
 }
 
-func (e *BuildExecutor) cancelDeployment(deployment *models.Deployment, logger *BuildLogger) {
+func (e *BuildExecutor) cancelDeployment(deployment *models.Deployment, project *models.Project, logger *BuildLogger) {
 	completedAt := time.Now().UTC()
 	deployment.Status = models.DeploymentStatusCancelled
 	deployment.ErrorMessage = nil
@@ -720,6 +765,30 @@ func (e *BuildExecutor) cancelDeployment(deployment *models.Deployment, logger *
 	}
 	logger.Info("Build cancelled")
 	e.sseHub.PublishJSON(deployment.ID, SSEEventDone, map[string]interface{}{"status": "cancelled"})
+	if updated {
+		e.reportLifecycle(updateCtx, project, deployment, logger)
+	}
+}
+
+func (e *BuildExecutor) reportLifecycle(ctx context.Context, project *models.Project, deployment *models.Deployment, logger *BuildLogger) {
+	if e.reporter == nil {
+		return
+	}
+	reloadCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		reloadCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+	}
+	current, err := e.deploymentRepo.GetByID(reloadCtx, deployment.ID)
+	if err != nil {
+		logger.Warn("Could not reload deployment for GitHub lifecycle feedback: " + err.Error())
+		return
+	}
+	if err := e.reporter.Report(reloadCtx, project, current); err != nil {
+		logger.Warn("GitHub lifecycle feedback failed: " + err.Error())
+	}
+	*deployment = *current
 }
 
 func (e *BuildExecutor) publishCancelledIfCurrent(ctx context.Context, deploymentID string) {

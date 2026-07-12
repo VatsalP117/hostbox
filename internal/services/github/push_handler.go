@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -38,17 +39,20 @@ type PushPayload struct {
 type PushHandler struct {
 	projectRepo   ProjectRepository
 	deploymentSvc DeploymentCreator
+	routeManager  RouteRemover
 	logger        *slog.Logger
 }
 
 func NewPushHandler(
 	projectRepo ProjectRepository,
 	deploymentSvc DeploymentCreator,
+	routeManager RouteRemover,
 	logger *slog.Logger,
 ) *PushHandler {
 	return &PushHandler{
 		projectRepo:   projectRepo,
 		deploymentSvc: deploymentSvc,
+		routeManager:  routeManager,
 		logger:        logger,
 	}
 }
@@ -57,11 +61,6 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 	var event PushPayload
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return fmt.Errorf("unmarshal push payload: %w", err)
-	}
-
-	if event.Deleted {
-		h.logger.Debug("ignoring branch deletion push", "ref", event.Ref)
-		return nil
 	}
 
 	branch := strings.TrimPrefix(event.Ref, "refs/heads/")
@@ -76,6 +75,10 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 	if err != nil {
 		h.logger.Debug("no project found for repo", "repo", repoFullName)
 		return nil
+	}
+
+	if event.Deleted {
+		return h.cleanupDeletedBranch(ctx, project.ID, branch)
 	}
 
 	if !project.AutoDeploy {
@@ -96,7 +99,7 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 		return nil
 	}
 
-	existing, _ := h.deploymentSvc.FindByCommitSHA(ctx, project.ID, event.After)
+	existing, _ := h.deploymentSvc.FindByCommitSHAAndBranch(ctx, project.ID, event.After, branch)
 	if existing != nil {
 		h.logger.Debug("deployment already exists for commit",
 			"project_id", project.ID,
@@ -122,4 +125,29 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 		InstallationID: installationID,
 	})
 	return err
+}
+
+func (h *PushHandler) cleanupDeletedBranch(ctx context.Context, projectID, branch string) error {
+	h.logger.Info("branch deleted, deactivating preview deployments",
+		"project_id", projectID,
+		"branch", branch,
+	)
+
+	var cleanupErrors []error
+	deployments, err := h.deploymentSvc.DeactivateBranchDeployments(ctx, projectID, branch)
+	if err != nil {
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("deactivate branch deployments: %w", err))
+	} else {
+		for _, deployment := range deployments {
+			if err := h.routeManager.RemoveDeploymentRoute(ctx, deployment.ID); err != nil {
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("remove deployment route %s: %w", deployment.ID, err))
+			}
+		}
+	}
+
+	if err := h.routeManager.RemoveBranchRoute(ctx, projectID, branch); err != nil {
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("remove branch route: %w", err))
+	}
+
+	return errors.Join(cleanupErrors...)
 }

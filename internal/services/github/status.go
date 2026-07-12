@@ -9,12 +9,20 @@ import (
 
 // StatusReporter posts GitHub Deployment Statuses.
 type StatusReporter struct {
-	client         *Client
+	client         DeploymentStatusClient
 	platformDomain string
 	logger         *slog.Logger
 }
 
-func NewStatusReporter(client *Client, platformDomain string, logger *slog.Logger) *StatusReporter {
+// DeploymentStatusClient is the subset of the GitHub API used for deployment
+// lifecycle reporting. Keeping this boundary small makes lifecycle reporting
+// independently testable and allows callers to obtain clients dynamically.
+type DeploymentStatusClient interface {
+	CreateDeployment(context.Context, int64, string, string, CreateDeploymentRequest) (*DeploymentResponse, error)
+	CreateDeploymentStatus(context.Context, int64, string, string, int64, CreateDeploymentStatusRequest) error
+}
+
+func NewStatusReporter(client DeploymentStatusClient, platformDomain string, logger *slog.Logger) *StatusReporter {
 	return &StatusReporter{
 		client:         client,
 		platformDomain: platformDomain,
@@ -58,8 +66,16 @@ func mapStatus(hostboxStatus string) string {
 // If info.GitHubDeployID is 0, creates a new GitHub Deployment first.
 // Returns the GitHub Deployment ID (to be stored for subsequent updates).
 func (r *StatusReporter) ReportStatus(ctx context.Context, info DeploymentStatusInfo) (int64, error) {
-	parts := strings.SplitN(info.Owner+"/"+info.Repo, "/", 2)
-	owner, repo := parts[0], parts[1]
+	owner, repo, err := parseRepository(info.Owner + "/" + info.Repo)
+	if err != nil {
+		return 0, err
+	}
+	if info.InstallationID <= 0 {
+		return 0, fmt.Errorf("github installation id is required")
+	}
+	if strings.TrimSpace(info.CommitSHA) == "" {
+		return 0, fmt.Errorf("deployment commit sha is required")
+	}
 
 	deployID := info.GitHubDeployID
 	if deployID == 0 {
@@ -104,4 +120,17 @@ func (r *StatusReporter) ReportStatus(ctx context.Context, info DeploymentStatus
 	)
 
 	return deployID, nil
+}
+
+func parseRepository(fullName string) (string, string, error) {
+	parts := strings.Split(fullName, "/")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid github repository %q: expected owner/repo", fullName)
+	}
+	owner := strings.TrimSpace(parts[0])
+	repo := strings.TrimSpace(parts[1])
+	if owner == "" || repo == "" || owner == "." || owner == ".." || repo == "." || repo == ".." {
+		return "", "", fmt.Errorf("invalid github repository %q: expected owner/repo", fullName)
+	}
+	return owner, repo, nil
 }

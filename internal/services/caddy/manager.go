@@ -23,6 +23,9 @@ func NewRouteManager(client *CaddyClient, builder *ConfigBuilder, logger *slog.L
 
 // AddDeploymentRoute adds a preview route for a newly-ready deployment.
 func (m *RouteManager) AddDeploymentRoute(ctx context.Context, d ActiveDeployment) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	route := m.builder.buildPreviewRoute(d)
 	m.logger.Info("adding deployment route",
 		"deployment_id", d.DeploymentID,
@@ -33,6 +36,9 @@ func (m *RouteManager) AddDeploymentRoute(ctx context.Context, d ActiveDeploymen
 
 // UpdateProductionRoute sets or updates the production route for a project.
 func (m *RouteManager) UpdateProductionRoute(ctx context.Context, projectSlug, projectID, artifactPath, framework string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	route := m.builder.buildProductionRoute(projectSlug, projectID, artifactPath, framework)
 
 	// Remove existing first (ignore errors for non-existent)
@@ -47,6 +53,9 @@ func (m *RouteManager) UpdateProductionRoute(ctx context.Context, projectSlug, p
 
 // UpdateBranchRoute sets or updates the branch-stable route.
 func (m *RouteManager) UpdateBranchRoute(ctx context.Context, projectSlug, projectID, branchSlug, artifactPath, framework string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	routeID := fmt.Sprintf("route-branch-%s-%s", projectID, branchSlug)
 	_ = m.client.DeleteRoute(ctx, routeID)
 
@@ -61,6 +70,9 @@ func (m *RouteManager) UpdateBranchRoute(ctx context.Context, projectSlug, proje
 
 // AddCustomDomainRoute adds a route for a verified custom domain.
 func (m *RouteManager) AddCustomDomainRoute(ctx context.Context, d VerifiedDomain) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	route := m.builder.buildCustomDomainRoute(d)
 	m.logger.Info("adding custom domain route",
 		"domain_id", d.DomainID,
@@ -71,6 +83,9 @@ func (m *RouteManager) AddCustomDomainRoute(ctx context.Context, d VerifiedDomai
 
 // RemoveCustomDomainRoute removes a custom domain route.
 func (m *RouteManager) RemoveCustomDomainRoute(ctx context.Context, domainID string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	routeID := fmt.Sprintf("route-domain-%s", domainID)
 	m.logger.Info("removing custom domain route", "domain_id", domainID)
 	return m.client.DeleteRoute(ctx, routeID)
@@ -78,13 +93,32 @@ func (m *RouteManager) RemoveCustomDomainRoute(ctx context.Context, domainID str
 
 // RemoveDeploymentRoute removes a single deployment's preview route.
 func (m *RouteManager) RemoveDeploymentRoute(ctx context.Context, deploymentID string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	routeID := fmt.Sprintf("route-deploy-%s", deploymentID)
 	m.logger.Info("removing deployment route", "deployment_id", deploymentID)
 	return m.client.DeleteRoute(ctx, routeID)
 }
 
+// RemoveBranchRoute removes the stable preview route for a branch. The raw
+// branch name is normalized with the same convention used when routes are
+// created, so names such as "feature/my-change" address the correct route.
+func (m *RouteManager) RemoveBranchRoute(ctx context.Context, projectID, branch string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
+	branchSlug := Slugify(branch)
+	routeID := fmt.Sprintf("route-branch-%s-%s", projectID, branchSlug)
+	m.logger.Info("removing branch route", "project_id", projectID, "branch", branch)
+	return m.client.DeleteRoute(ctx, routeID)
+}
+
 // RemoveAllProjectRoutes removes all routes for a project.
 func (m *RouteManager) RemoveAllProjectRoutes(ctx context.Context, projectID string, deploymentIDs []string, branchSlugs []string, domainIDs []string) error {
+	unlock := m.builder.lockMutations()
+	defer unlock()
+
 	_ = m.client.DeleteRoute(ctx, fmt.Sprintf("route-prod-%s", projectID))
 
 	for _, slug := range branchSlugs {

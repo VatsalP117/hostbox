@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -219,6 +220,35 @@ func TestClient_PRComments(t *testing.T) {
 	err = client.UpdateComment(ctx, 99, "user", "repo1", 1, "updated")
 	if err != nil {
 		t.Fatalf("UpdateComment failed: %v", err)
+	}
+}
+
+func TestClient_ListPRCommentsPaginatesPastFirstHundred(t *testing.T) {
+	var pages []string
+	client, server := setupTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		if page == "1" {
+			comments := make([]IssueComment, 100)
+			for i := range comments {
+				comments[i] = IssueComment{ID: int64(i + 1), Body: "ordinary"}
+			}
+			_ = json.NewEncoder(w).Encode(comments)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]IssueComment{{ID: 101, Body: commentMarker}})
+	})
+	defer server.Close()
+
+	comments, err := client.ListPRComments(context.Background(), 99, "user", "repo1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 101 || comments[100].Body != commentMarker {
+		t.Fatalf("comments = %d, marker=%q", len(comments), comments[len(comments)-1].Body)
+	}
+	if strings.Join(pages, ",") != "1,2" {
+		t.Fatalf("pages = %v, want [1 2]", pages)
 	}
 }
 

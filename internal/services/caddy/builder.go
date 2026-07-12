@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
 )
@@ -22,7 +23,16 @@ type BuilderConfig struct {
 
 // ConfigBuilder assembles a CaddyConfig from deployments and domains.
 type ConfigBuilder struct {
-	cfg BuilderConfig
+	cfg        BuilderConfig
+	mutationMu sync.Mutex
+}
+
+// lockMutations serializes complete config loads with incremental route
+// mutations. A full sync holds this lock from the database snapshot through
+// the Caddy load so an older snapshot cannot overwrite a newer route change.
+func (b *ConfigBuilder) lockMutations() func() {
+	b.mutationMu.Lock()
+	return b.mutationMu.Unlock
 }
 
 func NewConfigBuilder(cfg BuilderConfig) *ConfigBuilder {

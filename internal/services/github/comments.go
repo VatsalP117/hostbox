@@ -11,12 +11,20 @@ const commentMarker = "<!-- hostbox-preview-deployment -->"
 
 // PRCommentManager handles creating and updating Hostbox's PR comments.
 type PRCommentManager struct {
-	client          *Client
+	client          PRCommentClient
 	dashboardDomain string
 	logger          *slog.Logger
 }
 
-func NewPRCommentManager(client *Client, dashboardDomain string, logger *slog.Logger) *PRCommentManager {
+// PRCommentClient is the subset of the GitHub API used to maintain the single
+// Hostbox preview comment on a pull request.
+type PRCommentClient interface {
+	ListPRComments(context.Context, int64, string, string, int) ([]IssueComment, error)
+	CreatePRComment(context.Context, int64, string, string, int, string) (*IssueComment, error)
+	UpdateComment(context.Context, int64, string, string, int64, string) error
+}
+
+func NewPRCommentManager(client PRCommentClient, dashboardDomain string, logger *slog.Logger) *PRCommentManager {
 	return &PRCommentManager{
 		client:          client,
 		dashboardDomain: dashboardDomain,
@@ -34,6 +42,7 @@ type DeploymentInfo struct {
 	Branch        string
 	Status        string // "building", "ready", "failed"
 	DeploymentURL string
+	BranchURL     string
 	BuildDuration string
 	LogURL        string
 	ErrorMessage  string
@@ -47,6 +56,15 @@ func (m *PRCommentManager) PostOrUpdate(
 	prNumber int,
 	deployment DeploymentInfo,
 ) error {
+	if installationID <= 0 {
+		return fmt.Errorf("github installation id is required")
+	}
+	if _, _, err := parseRepository(owner + "/" + repo); err != nil {
+		return err
+	}
+	if prNumber <= 0 {
+		return fmt.Errorf("github pull request number is required")
+	}
 	body := m.buildCommentBody(deployment)
 
 	comments, err := m.client.ListPRComments(ctx, installationID, owner, repo, prNumber)
@@ -76,11 +94,18 @@ func (m *PRCommentManager) buildCommentBody(d DeploymentInfo) string {
 	sb.WriteString("\n")
 
 	switch d.Status {
+	case "queued":
+		sb.WriteString("## 🕒 Preview Deployment Queued\n\n")
+		sb.WriteString(fmt.Sprintf("**%s** is waiting to build.\n\n", d.ProjectName))
+		sb.WriteString(fmt.Sprintf("**Commit**: `%.7s` — %s\n", d.CommitSHA, firstLine(d.CommitMessage)))
 	case "ready":
 		sb.WriteString("## 🚀 Preview Deployment Ready\n\n")
 		sb.WriteString("| Name | Status | Preview |\n")
 		sb.WriteString("|------|--------|------|\n")
 		sb.WriteString(fmt.Sprintf("| **%s** | ✅ Ready | [Visit Preview](%s) |\n\n", d.ProjectName, d.DeploymentURL))
+		if d.BranchURL != "" {
+			sb.WriteString(fmt.Sprintf("**Branch URL**: [Latest `%s` preview](%s)\n", d.Branch, d.BranchURL))
+		}
 		sb.WriteString(fmt.Sprintf("**Commit**: `%.7s` — %s\n", d.CommitSHA, firstLine(d.CommitMessage)))
 		sb.WriteString(fmt.Sprintf("**Built in**: %s\n", d.BuildDuration))
 	case "building":
@@ -101,6 +126,13 @@ func (m *PRCommentManager) buildCommentBody(d DeploymentInfo) string {
 		if d.ErrorMessage != "" {
 			sb.WriteString(fmt.Sprintf("\n**Error**: %s\n", d.ErrorMessage))
 		}
+		if d.LogURL != "" {
+			sb.WriteString(fmt.Sprintf("\n[View Build Logs](%s)\n", d.LogURL))
+		}
+	case "cancelled":
+		sb.WriteString("## 🚫 Preview Deployment Cancelled\n\n")
+		sb.WriteString(fmt.Sprintf("**%s** was cancelled.\n\n", d.ProjectName))
+		sb.WriteString(fmt.Sprintf("**Commit**: `%.7s` — %s\n", d.CommitSHA, firstLine(d.CommitMessage)))
 		if d.LogURL != "" {
 			sb.WriteString(fmt.Sprintf("\n[View Build Logs](%s)\n", d.LogURL))
 		}

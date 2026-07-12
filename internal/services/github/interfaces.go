@@ -14,7 +14,8 @@ type ProjectRepository interface {
 
 // DeploymentCreator defines the deployment creation methods needed by webhook handlers.
 type DeploymentCreator interface {
-	FindByCommitSHA(ctx context.Context, projectID, commitSHA string) (*models.Deployment, error)
+	FindByCommitSHAAndBranch(ctx context.Context, projectID, commitSHA, branch string) (*models.Deployment, error)
+	AssociatePullRequest(ctx context.Context, deployment *models.Deployment, prNumber int) error
 	CreateFromWebhook(ctx context.Context, params WebhookTriggerParams) (*models.Deployment, error)
 	DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error)
 }
@@ -22,6 +23,7 @@ type DeploymentCreator interface {
 // RouteRemover defines the Caddy route removal methods needed by PR close handler.
 type RouteRemover interface {
 	RemoveDeploymentRoute(ctx context.Context, deploymentID string) error
+	RemoveBranchRoute(ctx context.Context, projectID, branch string) error
 }
 
 // WebhookTriggerParams contains parameters for creating a deployment from a webhook.

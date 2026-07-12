@@ -2,6 +2,7 @@ package caddy
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/VatsalP117/hostbox/internal/models"
@@ -68,4 +69,13 @@ func (h *PostBuildRouteHook) OnBuildSuccess(ctx context.Context, project *models
 // OnBuildFailure is a no-op for route management (failed builds don't get routes).
 func (h *PostBuildRouteHook) OnBuildFailure(ctx context.Context, project *models.Project, deployment *models.Deployment, buildErr error) error {
 	return nil
+}
+
+// OnBuildCancelled removes routes that may have been added immediately before
+// a concurrent branch/PR cleanup marked the deployment cancelled.
+func (h *PostBuildRouteHook) OnBuildCancelled(ctx context.Context, project *models.Project, deployment *models.Deployment) error {
+	return errors.Join(
+		h.manager.RemoveDeploymentRoute(ctx, deployment.ID),
+		h.manager.RemoveBranchRoute(ctx, project.ID, deployment.Branch),
+	)
 }

@@ -130,6 +130,12 @@ func main() {
 	// 9b. Initialize GitHub services. The runtime can be configured now from
 	// env/settings or later by the dashboard GitHub App manifest flow.
 	ghRuntime := ghsvc.NewRuntime(l)
+	ghDeliveryProcessor := ghsvc.NewDeliveryProcessor(repos.GitHubWebhookDelivery, ghRuntime, l)
+	ghLifecycleReporter, err := ghsvc.NewLifecycleReporter(ghRuntime, repos.Deployment, cfg.DashboardBaseURL(), l, cfg.PlatformDomain)
+	if err != nil {
+		l.Error("failed to initialize GitHub lifecycle reporter", "error", err)
+		os.Exit(1)
+	}
 	ghConfigStore := ghsvc.NewAppConfigStore(repos.Settings, cfg.EncryptionKey)
 	if ghConfig, ok, err := ghConfigStore.Load(ctx, ghsvc.AppConfig{
 		AppID:         cfg.GitHubAppID,
@@ -145,7 +151,7 @@ func main() {
 			l.Info("github app integration initialized", "app_id", ghConfig.AppID)
 		}
 	}
-	ghWebhookHandler := handlers.NewGitHubWebhookHandler(ghRuntime, l)
+	ghWebhookHandler := handlers.NewGitHubWebhookHandler(ghRuntime, ghDeliveryProcessor, l)
 	ghHandler := handlers.NewGitHubHandler(ghRuntime, ghConfigStore, cfg.DashboardBaseURL(), cfg.PlatformName, l)
 
 	// 10. Create server
@@ -195,6 +201,7 @@ func main() {
 		caddyHook := caddysvc.NewPostBuildRouteHook(routeManager, l)
 		notifHook := notification.NewPostBuildNotificationHook(notificationService, cfg.DashboardBaseURL())
 		executor.SetPostBuildHook(worker.NewCompositePostBuildHook(caddyHook, notifHook))
+		executor.SetLifecycleReporter(ghLifecycleReporter)
 
 		pool := worker.NewPool(
 			cfg.MaxConcurrentBuilds,
@@ -213,19 +220,34 @@ func main() {
 			cfg.PlatformDomain,
 			l,
 		)
+		deploymentService.SetLifecycleReporter(ghLifecycleReporter)
 
 		deploymentHandler.SetBuildDeps(deploymentService, sseHub, cfg.Build.LogBaseDir)
 
-		pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, l)
+		pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, routeManager, l)
 		prHandler := ghsvc.NewPullRequestHandler(repos.Project, deploymentService, routeManager, l)
 		installHandler := ghsvc.NewInstallationHandler(repos.Project, l)
 		ghRuntime.SetEventRouter(ghsvc.NewGitHubEventRouter(pushHandler, prHandler, installHandler, l))
+		webhookProcessorCtx, webhookProcessorCancel := context.WithCancel(context.Background())
+		if err := ghDeliveryProcessor.Start(webhookProcessorCtx); err != nil {
+			l.Error("failed to start GitHub webhook processor", "error", err)
+			os.Exit(1)
+		}
 
 		if err := pool.Start(); err != nil {
 			l.Error("failed to start worker pool", "error", err)
 			os.Exit(1)
 		}
 
+		srv.OnShutdown(func() {
+			l.Info("shutting down GitHub webhook processor")
+			webhookProcessorCancel()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Build.ShutdownTimeoutSec)*time.Second)
+			defer cancel()
+			if err := ghDeliveryProcessor.Shutdown(shutdownCtx); err != nil {
+				l.Warn("GitHub webhook processor shutdown did not complete", "error", err)
+			}
+		})
 		srv.OnShutdown(func() {
 			l.Info("shutting down worker pool")
 			pool.Shutdown(time.Duration(cfg.Build.ShutdownTimeoutSec) * time.Second)

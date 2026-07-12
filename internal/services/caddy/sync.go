@@ -44,6 +44,9 @@ func NewSyncService(
 
 // SyncAll builds the complete config from DB and loads it into Caddy.
 func (s *SyncService) SyncAll(ctx context.Context) error {
+	unlock := s.builder.lockMutations()
+	defer unlock()
+
 	s.logger.Info("syncing caddy configuration from database")
 
 	deployments, err := s.deployRepo.ListActiveWithProject(ctx)

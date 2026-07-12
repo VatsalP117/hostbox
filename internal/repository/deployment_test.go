@@ -106,6 +106,71 @@ func TestDeploymentRepository_UpdateResolvedCommit(t *testing.T) {
 	}
 }
 
+func TestDeploymentRepository_SetGitHubDeployIDIfUnset(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: "abc123", Branch: "main", Status: models.DeploymentStatusQueued}
+	if err := repo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := repo.SetGitHubDeployIDIfUnset(ctx, deployment.ID, 1234)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != 1234 {
+		t.Fatalf("stored ID = %d, want 1234", stored)
+	}
+	stored, err = repo.SetGitHubDeployIDIfUnset(ctx, deployment.ID, 5678)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != 1234 {
+		t.Fatalf("second stored ID = %d, want original 1234", stored)
+	}
+	got, err := repo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.GitHubDeployID == nil || *got.GitHubDeployID != 1234 {
+		t.Fatalf("persisted GitHub ID = %v, want 1234", got.GitHubDeployID)
+	}
+}
+
+func TestDeploymentRepository_BranchScopedCommitLookupAndPRAssociation(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	sha := "same-commit"
+	mainDeployment := &models.Deployment{ProjectID: project.ID, CommitSHA: sha, Branch: "main", Status: models.DeploymentStatusQueued}
+	previewDeployment := &models.Deployment{ProjectID: project.ID, CommitSHA: sha, Branch: "feature/test", Status: models.DeploymentStatusBuilding}
+	if err := repo.Create(ctx, mainDeployment); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Create(ctx, previewDeployment); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.FindByCommitSHAAndBranch(ctx, project.ID, sha, "feature/test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != previewDeployment.ID {
+		t.Fatalf("lookup ID = %q, want preview %q", got.ID, previewDeployment.ID)
+	}
+	storedPR, err := repo.SetGitHubPRNumberIfUnset(ctx, previewDeployment.ID, 42)
+	if err != nil || storedPR != 42 {
+		t.Fatalf("PR association = (%d, %v), want (42, nil)", storedPR, err)
+	}
+	storedPR, err = repo.SetGitHubPRNumberIfUnset(ctx, previewDeployment.ID, 99)
+	if err != nil || storedPR != 42 {
+		t.Fatalf("second PR association = (%d, %v), want original 42", storedPR, err)
+	}
+}
+
 func TestDeploymentRepository_UpdateStatus(t *testing.T) {
 	db := setupTestDB(t)
 	_, project := createTestProject(t, db)
@@ -205,6 +270,67 @@ func TestDeploymentRepository_CancelQueuedByProjectAndBranch(t *testing.T) {
 	}
 	if cancelled != 1 {
 		t.Errorf("cancelled = %d, want 1", cancelled)
+	}
+}
+
+func TestDeploymentRepository_DeactivateBranchDeploymentsIsRetryableAndStopsActiveBuilds(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+
+	var previewIDs []string
+	for _, status := range []models.DeploymentStatus{
+		models.DeploymentStatusQueued,
+		models.DeploymentStatusBuilding,
+		models.DeploymentStatusReady,
+		models.DeploymentStatusCancelled,
+	} {
+		deployment := &models.Deployment{
+			ProjectID: project.ID, CommitSHA: "abc123", Branch: "feature/retry",
+			Status: status, IsProduction: false,
+		}
+		if err := repo.Create(ctx, deployment); err != nil {
+			t.Fatal(err)
+		}
+		previewIDs = append(previewIDs, deployment.ID)
+	}
+	production := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "def456", Branch: "feature/retry",
+		Status: models.DeploymentStatusReady, IsProduction: true,
+	}
+	if err := repo.Create(ctx, production); err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		deployments, err := repo.DeactivateBranchDeployments(ctx, project.ID, "feature/retry")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(deployments) != len(previewIDs) {
+			t.Fatalf("attempt %d returned %d previews, want %d", attempt, len(deployments), len(previewIDs))
+		}
+	}
+
+	for _, id := range previewIDs {
+		deployment, err := repo.GetByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deployment.Status != models.DeploymentStatusCancelled {
+			t.Fatalf("preview %s status = %q, want cancelled", id, deployment.Status)
+		}
+		if deployment.CompletedAt == nil {
+			t.Fatalf("preview %s missing completion time", id)
+		}
+	}
+	gotProduction, err := repo.GetByID(ctx, production.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotProduction.Status != models.DeploymentStatusReady {
+		t.Fatalf("production status = %q, want ready", gotProduction.Status)
 	}
 }
 

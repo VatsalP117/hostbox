@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -30,13 +31,15 @@ func (m *mockProjectRepo) ClearInstallation(ctx context.Context, installationID 
 }
 
 type mockDeploymentCreator struct {
-	commits     map[string]*models.Deployment // keyed by "projectID:commitSHA"
-	created     []WebhookTriggerParams
-	deactivated map[string][]models.Deployment // keyed by "projectID:branch"
+	commits       map[string]*models.Deployment // keyed by "projectID:commitSHA"
+	created       []WebhookTriggerParams
+	deactivated   map[string][]models.Deployment // keyed by "projectID:branch"
+	deactivateErr error
+	associated    []int
 }
 
-func (m *mockDeploymentCreator) FindByCommitSHA(ctx context.Context, projectID, commitSHA string) (*models.Deployment, error) {
-	key := projectID + ":" + commitSHA
+func (m *mockDeploymentCreator) FindByCommitSHAAndBranch(ctx context.Context, projectID, commitSHA, branch string) (*models.Deployment, error) {
+	key := projectID + ":" + branch + ":" + commitSHA
 	d, ok := m.commits[key]
 	if !ok {
 		return nil, context.DeadlineExceeded
@@ -44,12 +47,33 @@ func (m *mockDeploymentCreator) FindByCommitSHA(ctx context.Context, projectID, 
 	return d, nil
 }
 
+func (m *mockDeploymentCreator) AssociatePullRequest(_ context.Context, deployment *models.Deployment, prNumber int) error {
+	m.associated = append(m.associated, prNumber)
+	deployment.GitHubPRNumber = &prNumber
+	return nil
+}
+
 func (m *mockDeploymentCreator) CreateFromWebhook(ctx context.Context, params WebhookTriggerParams) (*models.Deployment, error) {
 	m.created = append(m.created, params)
-	return &models.Deployment{ID: "deploy-1"}, nil
+	deployment := &models.Deployment{
+		ID: "deploy-1", ProjectID: params.ProjectID, Branch: params.Branch,
+		CommitSHA: params.CommitSHA, Status: models.DeploymentStatusQueued,
+	}
+	if params.GitHubPRNumber > 0 {
+		prNumber := params.GitHubPRNumber
+		deployment.GitHubPRNumber = &prNumber
+	}
+	if m.commits == nil {
+		m.commits = make(map[string]*models.Deployment)
+	}
+	m.commits[params.ProjectID+":"+params.Branch+":"+params.CommitSHA] = deployment
+	return deployment, nil
 }
 
 func (m *mockDeploymentCreator) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
+	if m.deactivateErr != nil {
+		return nil, m.deactivateErr
+	}
 	key := projectID + ":" + branch
 	if deployments, ok := m.deactivated[key]; ok {
 		return deployments, nil
@@ -58,19 +82,30 @@ func (m *mockDeploymentCreator) DeactivateBranchDeployments(ctx context.Context,
 }
 
 type mockRouteRemover struct {
-	removed []string
+	removed          []string
+	removedBranches  []string
+	deploymentErrors map[string]error
+	branchError      error
 }
 
 func (m *mockRouteRemover) RemoveDeploymentRoute(ctx context.Context, deploymentID string) error {
 	m.removed = append(m.removed, deploymentID)
+	if err := m.deploymentErrors[deploymentID]; err != nil {
+		return err
+	}
 	return nil
+}
+
+func (m *mockRouteRemover) RemoveBranchRoute(ctx context.Context, projectID, branch string) error {
+	m.removedBranches = append(m.removedBranches, projectID+":"+branch)
+	return m.branchError
 }
 
 // --- Tests ---
 
 func TestEventRouter_Ping(t *testing.T) {
 	router := NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	err := router.Route("ping", []byte("{}"), "delivery-1")
+	err := router.Route(context.Background(), "ping", []byte("{}"), "delivery-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,7 +113,7 @@ func TestEventRouter_Ping(t *testing.T) {
 
 func TestEventRouter_Unknown(t *testing.T) {
 	router := NewGitHubEventRouter(nil, nil, nil, slog.Default())
-	err := router.Route("unknown_event", []byte("{}"), "delivery-2")
+	err := router.Route(context.Background(), "unknown_event", []byte("{}"), "delivery-2")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,7 +133,7 @@ func TestPushHandler_CreatesDeployment(t *testing.T) {
 		commits: make(map[string]*models.Deployment),
 	}
 
-	handler := NewPushHandler(projectRepo, deploySvc, slog.Default())
+	handler := NewPushHandler(projectRepo, deploySvc, &mockRouteRemover{}, slog.Default())
 
 	payload, _ := json.Marshal(PushPayload{
 		Ref:   "refs/heads/main",
@@ -138,26 +173,41 @@ func TestPushHandler_CreatesDeployment(t *testing.T) {
 	}
 }
 
-func TestPushHandler_IgnoresBranchDeletion(t *testing.T) {
-	handler := NewPushHandler(nil, nil, slog.Default())
+func TestPushHandler_BranchDeletionCleansPreviewRoutes(t *testing.T) {
+	projectRepo := &mockProjectRepo{projects: map[string]*models.Project{
+		"user/repo": {ID: "proj-1"},
+	}}
+	deploySvc := &mockDeploymentCreator{deactivated: map[string][]models.Deployment{
+		"proj-1:feature/test": {{ID: "deploy-1"}, {ID: "deploy-2"}},
+	}}
+	routes := &mockRouteRemover{}
+	handler := NewPushHandler(projectRepo, deploySvc, routes, slog.Default())
 
 	payload, _ := json.Marshal(map[string]interface{}{
-		"ref":     "refs/heads/main",
-		"deleted": true,
+		"ref":        "refs/heads/feature/test",
+		"deleted":    true,
+		"repository": map[string]string{"full_name": "user/repo"},
 	})
 
 	err := handler.Handle(context.Background(), payload, "delivery-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if got, want := len(routes.removed), 2; got != want {
+		t.Fatalf("deployment route removals = %d, want %d", got, want)
+	}
+	if got, want := routes.removedBranches, []string{"proj-1:feature/test"}; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("branch route removals = %v, want %v", got, want)
+	}
 }
 
 func TestPushHandler_IgnoresTagPush(t *testing.T) {
-	handler := NewPushHandler(nil, nil, slog.Default())
+	handler := NewPushHandler(nil, nil, nil, slog.Default())
 
 	payload, _ := json.Marshal(map[string]interface{}{
-		"ref":   "refs/tags/v1.0",
-		"after": "abc123",
+		"ref":     "refs/tags/v1.0",
+		"after":   "abc123",
+		"deleted": true,
 	})
 
 	err := handler.Handle(context.Background(), payload, "delivery-1")
@@ -177,7 +227,7 @@ func TestPushHandler_IgnoresDisabledAutoDeploy(t *testing.T) {
 	}
 	deploySvc := &mockDeploymentCreator{}
 
-	handler := NewPushHandler(projectRepo, deploySvc, slog.Default())
+	handler := NewPushHandler(projectRepo, deploySvc, &mockRouteRemover{}, slog.Default())
 
 	payload, _ := json.Marshal(map[string]interface{}{
 		"ref":          "refs/heads/main",
@@ -242,6 +292,49 @@ func TestPRHandler_CreatesPreviewDeployment(t *testing.T) {
 	}
 }
 
+func TestPushThenPullRequestAssociatesExistingPreview(t *testing.T) {
+	project := &models.Project{
+		ID: "proj-1", ProductionBranch: "main", AutoDeploy: true, PreviewDeployments: true,
+	}
+	projects := &mockProjectRepo{projects: map[string]*models.Project{"user/repo": project}}
+	deployments := &mockDeploymentCreator{commits: make(map[string]*models.Deployment)}
+	push := NewPushHandler(projects, deployments, &mockRouteRemover{}, slog.Default())
+	pr := NewPullRequestHandler(projects, deployments, &mockRouteRemover{}, slog.Default())
+
+	pushPayload, _ := json.Marshal(map[string]any{
+		"ref": "refs/heads/feature/test", "after": "def456",
+		"repository":   map[string]string{"full_name": "user/repo"},
+		"installation": map[string]int64{"id": 99},
+		"head_commit":  map[string]any{"id": "def456", "message": "change", "author": map[string]string{"name": "Test"}},
+	})
+	if err := push.Handle(context.Background(), pushPayload, "push-first"); err != nil {
+		t.Fatal(err)
+	}
+	prPayload, _ := json.Marshal(map[string]any{
+		"action": "opened", "number": 42,
+		"pull_request": map[string]any{
+			"title": "My PR", "head": map[string]string{"ref": "feature/test", "sha": "def456"},
+			"base": map[string]string{"ref": "main"},
+		},
+		"repository":   map[string]string{"full_name": "user/repo"},
+		"installation": map[string]int64{"id": 99},
+	})
+	if err := pr.Handle(context.Background(), prPayload, "pr-second"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(deployments.created) != 1 {
+		t.Fatalf("deployments created = %d, want 1", len(deployments.created))
+	}
+	if len(deployments.associated) != 1 || deployments.associated[0] != 42 {
+		t.Fatalf("PR associations = %v, want [42]", deployments.associated)
+	}
+	existing := deployments.commits["proj-1:feature/test:def456"]
+	if existing.GitHubPRNumber == nil || *existing.GitHubPRNumber != 42 {
+		t.Fatalf("existing deployment PR = %v, want 42", existing.GitHubPRNumber)
+	}
+}
+
 func TestPRHandler_ClosedDeactivatesDeployments(t *testing.T) {
 	proj := &models.Project{
 		ID:                 "proj-1",
@@ -281,6 +374,69 @@ func TestPRHandler_ClosedDeactivatesDeployments(t *testing.T) {
 	}
 	if len(routes.removed) != 2 {
 		t.Errorf("expected 2 route removals, got %d", len(routes.removed))
+	}
+	if got, want := routes.removedBranches, []string{"proj-1:feature/test"}; len(got) != 1 || got[0] != want[0] {
+		t.Errorf("branch route removals = %v, want %v", got, want)
+	}
+}
+
+func TestPRHandler_ClosedReturnsRouteErrorsAfterAttemptingAllCleanup(t *testing.T) {
+	deploymentRouteErr := errors.New("deployment route unavailable")
+	branchRouteErr := errors.New("branch route unavailable")
+	projectRepo := &mockProjectRepo{projects: map[string]*models.Project{
+		"user/repo": {ID: "proj-1", PreviewDeployments: true},
+	}}
+	deploySvc := &mockDeploymentCreator{deactivated: map[string][]models.Deployment{
+		"proj-1:feature/test": {{ID: "deploy-1"}, {ID: "deploy-2"}},
+	}}
+	routes := &mockRouteRemover{
+		deploymentErrors: map[string]error{"deploy-1": deploymentRouteErr},
+		branchError:      branchRouteErr,
+	}
+	handler := NewPullRequestHandler(projectRepo, deploySvc, routes, slog.Default())
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"action": "closed",
+		"number": 42,
+		"pull_request": map[string]interface{}{
+			"head": map[string]string{"ref": "feature/test"},
+		},
+		"repository": map[string]string{"full_name": "user/repo"},
+	})
+
+	err := handler.Handle(context.Background(), payload, "delivery-1")
+	if !errors.Is(err, deploymentRouteErr) || !errors.Is(err, branchRouteErr) {
+		t.Fatalf("error = %v, want both cleanup errors", err)
+	}
+	if got := len(routes.removed); got != 2 {
+		t.Errorf("deployment route attempts = %d, want 2", got)
+	}
+	if got := len(routes.removedBranches); got != 1 {
+		t.Errorf("branch route attempts = %d, want 1", got)
+	}
+}
+
+func TestPushHandler_BranchDeletionReturnsCleanupErrors(t *testing.T) {
+	deactivateErr := errors.New("database unavailable")
+	branchRouteErr := errors.New("caddy unavailable")
+	projectRepo := &mockProjectRepo{projects: map[string]*models.Project{
+		"user/repo": {ID: "proj-1"},
+	}}
+	deploySvc := &mockDeploymentCreator{deactivateErr: deactivateErr}
+	routes := &mockRouteRemover{branchError: branchRouteErr}
+	handler := NewPushHandler(projectRepo, deploySvc, routes, slog.Default())
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"ref":        "refs/heads/feature/test",
+		"deleted":    true,
+		"repository": map[string]string{"full_name": "user/repo"},
+	})
+	err := handler.Handle(context.Background(), payload, "delivery-1")
+	if !errors.Is(err, deactivateErr) || !errors.Is(err, branchRouteErr) {
+		t.Fatalf("error = %v, want both cleanup errors", err)
+	}
+	if got := len(routes.removedBranches); got != 1 {
+		t.Errorf("branch route attempts = %d, want 1", got)
 	}
 }
 

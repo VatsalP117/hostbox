@@ -75,7 +75,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *models.De
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
 		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
-		  github_deploy_id = ?, build_duration_ms = ?, started_at = ?, completed_at = ?
+		  github_deploy_id = COALESCE(?, github_deploy_id), build_duration_ms = ?, started_at = ?, completed_at = ?
 		 WHERE id = ?`,
 		deployment.Status, deployment.DeploymentURL, deployment.ArtifactPath,
 		deployment.ArtifactSizeBytes, deployment.LogPath, deployment.ErrorMessage,
@@ -102,7 +102,7 @@ func (r *DeploymentRepository) UpdateIfStatus(ctx context.Context, deployment *m
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
 		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
-		  github_deploy_id = ?, build_duration_ms = ?, started_at = ?, completed_at = ?
+		  github_deploy_id = COALESCE(?, github_deploy_id), build_duration_ms = ?, started_at = ?, completed_at = ?
 		 WHERE id = ? AND status = ?`,
 		deployment.Status, deployment.DeploymentURL, deployment.ArtifactPath,
 		deployment.ArtifactSizeBytes, deployment.LogPath, deployment.ErrorMessage,
@@ -133,6 +133,37 @@ func (r *DeploymentRepository) UpdateResolvedCommit(ctx context.Context, deploym
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// SetGitHubDeployIDIfUnset records the GitHub Deployment created for a Hostbox
+// deployment without replacing an ID already persisted by an earlier lifecycle
+// update. The returned ID is the value stored after the operation.
+func (r *DeploymentRepository) SetGitHubDeployIDIfUnset(ctx context.Context, deploymentID string, githubDeployID int64) (int64, error) {
+	if githubDeployID <= 0 {
+		return 0, fmt.Errorf("github deployment id must be positive")
+	}
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE deployments SET github_deploy_id = ? WHERE id = ? AND github_deploy_id IS NULL`,
+		githubDeployID, deploymentID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("set github deployment id: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("set github deployment id rows: %w", err)
+	}
+	if rows == 0 {
+		var stored sql.NullInt64
+		if err := r.db.QueryRowContext(ctx, `SELECT github_deploy_id FROM deployments WHERE id = ?`, deploymentID).Scan(&stored); err != nil {
+			return 0, fmt.Errorf("get github deployment id: %w", err)
+		}
+		if !stored.Valid {
+			return 0, fmt.Errorf("github deployment id was not persisted")
+		}
+		return stored.Int64, nil
+	}
+	return githubDeployID, nil
 }
 
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status models.DeploymentStatus, errorMsg *string) error {
@@ -472,11 +503,43 @@ func (r *DeploymentRepository) FindByCommitSHA(ctx context.Context, projectID, c
 	return d, nil
 }
 
-// DeactivateBranchDeployments cancels all ready deployments for a branch, returning the affected deployments.
+// FindByCommitSHAAndBranch scopes webhook deduplication to the source branch so
+// the same commit may still produce distinct preview and production outcomes.
+func (r *DeploymentRepository) FindByCommitSHAAndBranch(ctx context.Context, projectID, commitSHA, branch string) (*models.Deployment, error) {
+	row := r.db.QueryRowContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.commit_sha = ? AND d.branch = ? ORDER BY d.created_at DESC LIMIT 1`,
+		projectID, commitSHA, branch)
+	return scanDeployment(row)
+}
+
+// SetGitHubPRNumberIfUnset associates a push-created preview with the PR event
+// that arrived later while preserving an existing association.
+func (r *DeploymentRepository) SetGitHubPRNumberIfUnset(ctx context.Context, deploymentID string, prNumber int) (int, error) {
+	if prNumber <= 0 {
+		return 0, fmt.Errorf("github pull request number must be positive")
+	}
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE deployments SET github_pr_number = COALESCE(github_pr_number, ?) WHERE id = ?`,
+		prNumber, deploymentID); err != nil {
+		return 0, fmt.Errorf("associate github pull request: %w", err)
+	}
+	var stored sql.NullInt64
+	if err := r.db.QueryRowContext(ctx, `SELECT github_pr_number FROM deployments WHERE id = ?`, deploymentID).Scan(&stored); err != nil {
+		return 0, fmt.Errorf("read associated github pull request: %w", err)
+	}
+	if !stored.Valid {
+		return 0, fmt.Errorf("github pull request association was not stored")
+	}
+	return int(stored.Int64), nil
+}
+
+// DeactivateBranchDeployments cancels all active preview deployments for a
+// branch and returns every deployment whose immutable route may need cleanup.
+// Cancelled rows are included so retrying a close/delete webhook can finish a
+// previously partial route cleanup.
 func (r *DeploymentRepository) DeactivateBranchDeployments(ctx context.Context, projectID, branch string) ([]models.Deployment, error) {
-	// Find affected deployments first
 	rows, err := r.db.QueryContext(ctx,
-		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status = 'ready' AND d.is_production = FALSE`,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status IN ('queued', 'building', 'ready', 'cancelled') AND d.is_production = FALSE`,
 		projectID, branch)
 	if err != nil {
 		return nil, fmt.Errorf("find branch deployments: %w", err)
@@ -499,10 +562,15 @@ func (r *DeploymentRepository) DeactivateBranchDeployments(ctx context.Context, 
 		return nil, nil
 	}
 
-	// Cancel them
+	// Cancel queued/building work as well as ready previews. Build finalization
+	// uses a compare-and-swap from building, so this prevents an in-flight build
+	// from recreating routes after its branch has been deleted or PR closed.
 	_, err = r.db.ExecContext(ctx,
-		`UPDATE deployments SET status = 'cancelled' WHERE project_id = ? AND branch = ? AND status = 'ready' AND is_production = FALSE`,
-		projectID, branch)
+		`UPDATE deployments
+		 SET status = 'cancelled', completed_at = COALESCE(completed_at, ?)
+		 WHERE project_id = ? AND branch = ?
+		   AND status IN ('queued', 'building', 'ready', 'cancelled') AND is_production = FALSE`,
+		time.Now().UTC(), projectID, branch)
 	if err != nil {
 		return nil, fmt.Errorf("deactivate branch deployments: %w", err)
 	}

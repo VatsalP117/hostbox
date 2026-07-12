@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -87,9 +88,11 @@ func (h *PullRequestHandler) handleOpenedOrSync(ctx context.Context, project *mo
 	branch := event.PullRequest.Head.Ref
 	commitSHA := event.PullRequest.Head.SHA
 
-	existing, _ := h.deploymentSvc.FindByCommitSHA(ctx, project.ID, commitSHA)
+	existing, _ := h.deploymentSvc.FindByCommitSHAAndBranch(ctx, project.ID, commitSHA, branch)
 	if existing != nil {
-		return nil
+		if existing.GitHubPRNumber == nil || *existing.GitHubPRNumber == event.Number {
+			return h.deploymentSvc.AssociatePullRequest(ctx, existing, event.Number)
+		}
 	}
 
 	h.logger.Info("creating preview deployment from PR",
@@ -121,16 +124,21 @@ func (h *PullRequestHandler) handleClosed(ctx context.Context, project *models.P
 		"branch", branch,
 	)
 
+	var cleanupErrors []error
 	deployments, err := h.deploymentSvc.DeactivateBranchDeployments(ctx, project.ID, branch)
 	if err != nil {
-		return fmt.Errorf("deactivate branch deployments: %w", err)
-	}
-
-	for _, d := range deployments {
-		if err := h.routeManager.RemoveDeploymentRoute(ctx, d.ID); err != nil {
-			h.logger.Error("failed to remove deployment route", "deployment_id", d.ID, "error", err)
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("deactivate branch deployments: %w", err))
+	} else {
+		for _, d := range deployments {
+			if err := h.routeManager.RemoveDeploymentRoute(ctx, d.ID); err != nil {
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("remove deployment route %s: %w", d.ID, err))
+			}
 		}
 	}
 
-	return nil
+	if err := h.routeManager.RemoveBranchRoute(ctx, project.ID, branch); err != nil {
+		cleanupErrors = append(cleanupErrors, fmt.Errorf("remove branch route: %w", err))
+	}
+
+	return errors.Join(cleanupErrors...)
 }

@@ -115,10 +115,10 @@ type Installation struct {
 		Login     string `json:"login"`
 		AvatarURL string `json:"avatar_url"`
 	} `json:"account"`
-	AppID      int64             `json:"app_id"`
-	TargetType string            `json:"target_type"`
+	AppID       int64             `json:"app_id"`
+	TargetType  string            `json:"target_type"`
 	Permissions map[string]string `json:"permissions"`
-	Events     []string          `json:"events"`
+	Events      []string          `json:"events"`
 }
 
 // ListInstallations returns all installations of the GitHub App.
@@ -257,13 +257,21 @@ type IssueComment struct {
 
 // ListPRComments lists comments on a pull request.
 func (c *Client) ListPRComments(ctx context.Context, installationID int64, owner, repo string, prNumber int) ([]IssueComment, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments?per_page=100", c.baseURL, owner, repo, prNumber)
-
-	var comments []IssueComment
-	if err := c.doInstallationRequest(ctx, installationID, "GET", url, nil, &comments); err != nil {
-		return nil, err
+	const perPage = 100
+	const maxPages = 100
+	allComments := make([]IssueComment, 0, perPage)
+	for page := 1; page <= maxPages; page++ {
+		url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments?per_page=%d&page=%d", c.baseURL, owner, repo, prNumber, perPage, page)
+		var comments []IssueComment
+		if err := c.doInstallationRequest(ctx, installationID, "GET", url, nil, &comments); err != nil {
+			return nil, err
+		}
+		allComments = append(allComments, comments...)
+		if len(comments) < perPage {
+			return allComments, nil
+		}
 	}
-	return comments, nil
+	return nil, fmt.Errorf("github pull request comments exceed pagination limit")
 }
 
 // CreatePRComment creates a new comment on a PR.

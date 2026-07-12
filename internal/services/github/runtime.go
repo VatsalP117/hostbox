@@ -63,6 +63,15 @@ func (r *Runtime) WebhookSecretAndRouter() (string, *GitHubEventRouter, bool) {
 	return r.appConfig.WebhookSecret, r.eventRouter, true
 }
 
+func (r *Runtime) WebhookRouter() (DeliveryRouter, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.client == nil || r.eventRouter == nil {
+		return nil, false
+	}
+	return r.eventRouter, true
+}
+
 func (r *Runtime) ListInstallations(ctx context.Context) ([]Installation, error) {
 	client, err := r.clientOrError()
 	if err != nil {
@@ -96,6 +105,12 @@ func (r *Runtime) GetInstallationToken(installationID int64) (string, error) {
 		return "", fmt.Errorf("github app integration is not configured")
 	}
 	return tokenProvider.GetInstallationToken(installationID)
+}
+
+// FeedbackClient returns the currently configured GitHub client through the
+// narrow lifecycle-feedback interface.
+func (r *Runtime) FeedbackClient() (FeedbackClient, error) {
+	return r.clientOrError()
 }
 
 func (r *Runtime) clientOrError() (*Client, error) {
