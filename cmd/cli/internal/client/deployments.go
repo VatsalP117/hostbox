@@ -19,8 +19,14 @@ type DeploymentListResponse struct {
 	Deployments []Deployment `json:"deployments"`
 }
 
+type DeploymentLogs struct {
+	Lines      []string `json:"lines"`
+	TotalLines int      `json:"total_lines"`
+	HasMore    bool     `json:"has_more"`
+}
+
 type TriggerDeployRequest struct {
-	Branch   string `json:"branch,omitempty"`
+	Branch    string `json:"branch,omitempty"`
 	CommitSHA string `json:"commit_sha,omitempty"`
 }
 
@@ -41,11 +47,11 @@ func (c *Client) ListDeployments(projectID string) (*DeploymentListResponse, err
 	return &resp, nil
 }
 
-func (c *Client) GetDeployment(projectID, deployID string) (*Deployment, error) {
+func (c *Client) GetDeployment(deployID string) (*Deployment, error) {
 	var resp struct {
 		Deployment Deployment `json:"deployment"`
 	}
-	err := c.Get(fmt.Sprintf("/api/v1/projects/%s/deployments/%s", projectID, deployID), &resp)
+	err := c.Get(fmt.Sprintf("/api/v1/deployments/%s", deployID), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("get deployment: %w", err)
 	}
@@ -54,11 +60,20 @@ func (c *Client) GetDeployment(projectID, deployID string) (*Deployment, error) 
 
 func (c *Client) TriggerDeploy(projectID string, req TriggerDeployRequest) (*Deployment, error) {
 	var resp TriggerDeployResponse
-	err := c.Post(fmt.Sprintf("/api/v1/projects/%s/deployments", projectID), req, &resp)
+	err := c.Post(fmt.Sprintf("/api/v1/projects/%s/deployments/trigger", projectID), req, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("trigger deploy: %w", err)
 	}
 	return &resp.Deployment, nil
+}
+
+func (c *Client) GetDeploymentLogs(deployID string) (*DeploymentLogs, error) {
+	var resp DeploymentLogs
+	err := c.Get(fmt.Sprintf("/api/v1/deployments/%s/logs", deployID), &resp)
+	if err != nil {
+		return nil, fmt.Errorf("get deployment logs: %w", err)
+	}
+	return &resp, nil
 }
 
 func (c *Client) Rollback(projectID string, req RollbackRequest) (*Deployment, error) {

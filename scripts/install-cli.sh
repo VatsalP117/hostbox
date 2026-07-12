@@ -7,6 +7,7 @@ set -euo pipefail
 REPO="VatsalP117/hostbox"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="hostbox"
+TMPDIR_INSTALL=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -16,6 +17,14 @@ NC='\033[0m'
 info()  { echo -e "${CYAN}ℹ${NC} $*"; }
 ok()    { echo -e "${GREEN}✓${NC} $*"; }
 fatal() { echo -e "${RED}✗${NC} $*" >&2; exit 1; }
+
+cleanup() {
+    if [ -n "$TMPDIR_INSTALL" ]; then
+        rm -rf "$TMPDIR_INSTALL"
+    fi
+}
+
+trap cleanup EXIT
 
 detect_platform() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -46,28 +55,54 @@ get_latest_version() {
 }
 
 download_and_install() {
-    local tmpdir
-    tmpdir=$(mktemp -d)
-    trap 'rm -rf "$tmpdir"' EXIT
+    TMPDIR_INSTALL=$(mktemp -d)
 
     local filename="hostbox-cli-${OS}-${ARCH}.tar.gz"
     local url="https://github.com/${REPO}/releases/download/${VERSION}/${filename}"
+    local checksums_url="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
 
     info "Downloading ${filename}..."
-    if ! curl -fsSL "$url" -o "${tmpdir}/${filename}"; then
+    if ! curl -fsSL "$url" -o "${TMPDIR_INSTALL}/${filename}"; then
         fatal "Download failed. Check if release exists: ${url}"
     fi
 
-    info "Installing to ${INSTALL_DIR}..."
-    tar -xzf "${tmpdir}/${filename}" -C "$tmpdir"
-
-    # Try to install to INSTALL_DIR, use sudo if needed
-    if [ -w "$INSTALL_DIR" ]; then
-        mv "${tmpdir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
-    else
-        sudo mv "${tmpdir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    info "Verifying checksum..."
+    if ! curl -fsSL "$checksums_url" -o "${TMPDIR_INSTALL}/checksums.txt"; then
+        fatal "Could not download release checksums"
     fi
-    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+    local expected_checksum
+    expected_checksum=$(awk -v file="$filename" '$2 == file || $2 == ("*" file) { print $1; exit }' "${TMPDIR_INSTALL}/checksums.txt")
+    if [[ ! "$expected_checksum" =~ ^[[:xdigit:]]{64}$ ]]; then
+        fatal "No valid checksum found for ${filename}"
+    fi
+
+    local actual_checksum
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual_checksum=$(sha256sum "${TMPDIR_INSTALL}/${filename}" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual_checksum=$(shasum -a 256 "${TMPDIR_INSTALL}/${filename}" | awk '{print $1}')
+    else
+        fatal "A SHA-256 tool is required (sha256sum or shasum)"
+    fi
+
+    expected_checksum=$(printf '%s' "$expected_checksum" | tr '[:upper:]' '[:lower:]')
+    actual_checksum=$(printf '%s' "$actual_checksum" | tr '[:upper:]' '[:lower:]')
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+        fatal "Checksum verification failed for ${filename}"
+    fi
+
+    tar -xzf "${TMPDIR_INSTALL}/${filename}" -C "$TMPDIR_INSTALL"
+    if [ ! -f "${TMPDIR_INSTALL}/${BINARY_NAME}" ]; then
+        fatal "Release archive does not contain ${BINARY_NAME}"
+    fi
+
+    info "Installing to ${INSTALL_DIR}..."
+    if [ -w "$INSTALL_DIR" ]; then
+        install -m 0755 "${TMPDIR_INSTALL}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    else
+        sudo install -m 0755 "${TMPDIR_INSTALL}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    fi
 }
 
 main() {

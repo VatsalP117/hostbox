@@ -39,19 +39,19 @@ func (c *Client) AddDomain(projectID string, domain string) (*Domain, error) {
 	return &resp.Domain, nil
 }
 
-func (c *Client) DeleteDomain(projectID, domainID string) error {
-	err := c.Delete(fmt.Sprintf("/api/v1/projects/%s/domains/%s", projectID, domainID), nil)
+func (c *Client) DeleteDomain(domainID string) error {
+	err := c.Delete(fmt.Sprintf("/api/v1/domains/%s", domainID), nil)
 	if err != nil {
 		return fmt.Errorf("delete domain: %w", err)
 	}
 	return nil
 }
 
-func (c *Client) VerifyDomain(projectID, domainID string) (*Domain, error) {
+func (c *Client) VerifyDomain(domainID string) (*Domain, error) {
 	var resp struct {
 		Domain Domain `json:"domain"`
 	}
-	err := c.Post(fmt.Sprintf("/api/v1/projects/%s/domains/%s/verify", projectID, domainID), nil, &resp)
+	err := c.Post(fmt.Sprintf("/api/v1/domains/%s/verify", domainID), nil, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("verify domain: %w", err)
 	}

@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 var domainsCmd = &cobra.Command{
@@ -91,12 +91,7 @@ var domainsRemoveCmd = &cobra.Command{
 			return err
 		}
 
-		projectID, err := resolveProjectID()
-		if err != nil {
-			return err
-		}
-
-		if err := c.DeleteDomain(projectID, args[0]); err != nil {
+		if err := c.DeleteDomain(args[0]); err != nil {
 			return err
 		}
 
@@ -115,12 +110,7 @@ var domainsVerifyCmd = &cobra.Command{
 			return err
 		}
 
-		projectID, err := resolveProjectID()
-		if err != nil {
-			return err
-		}
-
-		d, err := c.VerifyDomain(projectID, args[0])
+		d, err := c.VerifyDomain(args[0])
 		if err != nil {
 			return err
 		}

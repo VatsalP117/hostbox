@@ -1,9 +1,11 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
+	"fmt"
+
 	clientpkg "github.com/VatsalP117/hostbox/cmd/cli/internal/client"
 	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 var deployCmd = &cobra.Command{
@@ -22,6 +24,10 @@ var deployCmd = &cobra.Command{
 		}
 
 		branch, _ := cmd.Flags().GetString("branch")
+		branch, err = resolveDeployBranch(c, projectID, branch)
+		if err != nil {
+			return err
+		}
 
 		dep, err := c.TriggerDeploy(projectID, clientpkg.TriggerDeployRequest{Branch: branch})
 		if err != nil {
@@ -45,4 +51,19 @@ var deployCmd = &cobra.Command{
 
 func init() {
 	deployCmd.Flags().String("branch", "", "Branch to deploy (default: production branch)")
+}
+
+func resolveDeployBranch(c *clientpkg.Client, projectID, requested string) (string, error) {
+	if requested != "" {
+		return requested, nil
+	}
+
+	project, err := c.GetProject(projectID)
+	if err != nil {
+		return "", fmt.Errorf("resolve production branch: %w", err)
+	}
+	if project.ProductionBranch == "" {
+		return "", fmt.Errorf("project %s has no production branch configured", projectID)
+	}
+	return project.ProductionBranch, nil
 }

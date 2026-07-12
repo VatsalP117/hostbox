@@ -82,6 +82,20 @@ The UI, README, marketing site, framework detector, and errors must all state th
 | Packaging hygiene | A platform-specific 18 MB `api` executable and generated frontend build metadata are tracked. | Repository/release inputs contain stale machine-generated artifacts. |
 | Resource claim | The 512 MB VM goal is not benchmarked. Default build memory is 512 MB and workspaces can request 1 GB, before Docker/OS/Hostbox/Caddy overhead. | The headline lightweight claim is currently unverified and internally inconsistent. |
 
+### Milestone 0 progress — 2026-07-12
+
+The table above preserves the original v0 audit baseline. The first implementation slice has now:
+
+- repaired the dashboard lint baseline and removed its known production dependency advisories;
+- made the marketing site clean-install/build reproducible and added it to CI;
+- removed the unusable standalone server archives in favor of the existing Docker server images;
+- made CLI archives and the installer agree on a stable `hostbox` executable with SHA-256 verification;
+- aligned existing CLI commands with registered deployment, project, domain, environment-variable, backup, and auth API routes, with contract tests;
+- removed the tracked machine-specific API binary and generated TypeScript/Vite outputs; and
+- added release-packaging contract tests to CI.
+
+Remaining build-tool advisories in the static marketing toolchain require a separate Astro/Tailwind major migration; they are not part of the deployed static output. All security gates still apply to that migration before v1.
+
 ## 4. Priority model
 
 - **P0 — v1 blocker:** security boundary, data loss, incorrect deployment, broken primary journey, broken release/install, or no proof of the promise.

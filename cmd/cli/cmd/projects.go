@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	clientpkg "github.com/VatsalP117/hostbox/cmd/cli/internal/client"
 	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 var projectsCmd = &cobra.Command{
@@ -60,6 +60,12 @@ var projectCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if branch, _ := cmd.Flags().GetString("branch"); branch != "" && branch != proj.ProductionBranch {
+			proj, err = c.UpdateProjectProductionBranch(proj.ID, branch)
+			if err != nil {
+				return err
+			}
+		}
 
 		if flagJSON {
 			output.PrintJSON(proj)
@@ -73,33 +79,26 @@ var projectCreateCmd = &cobra.Command{
 }
 
 func init() {
-	projectCreateCmd.Flags().String("slug", "", "Project slug")
-	projectCreateCmd.Flags().String("git-repo", "", "Git repository URL")
+	projectCreateCmd.Flags().String("git-repo", "", "GitHub repository in owner/name format")
 	projectCreateCmd.Flags().String("branch", "", "Production branch (default: main)")
-	projectCreateCmd.Flags().String("framework", "", "Framework (react, vue, next, etc.)")
 	projectCreateCmd.Flags().String("build-command", "", "Build command")
+	projectCreateCmd.Flags().String("install-command", "", "Install command")
 	projectCreateCmd.Flags().String("output-dir", "", "Output directory")
 }
 
 func clientCreateProjectReq(name string, cmd *cobra.Command) clientpkg.CreateProjectRequest {
 	req := clientpkg.CreateProjectRequest{Name: name}
-	if v, _ := cmd.Flags().GetString("slug"); v != "" {
-		req.Slug = v
-	}
 	if v, _ := cmd.Flags().GetString("git-repo"); v != "" {
-		req.GitRepo = v
-	}
-	if v, _ := cmd.Flags().GetString("branch"); v != "" {
-		req.ProductionBranch = v
-	}
-	if v, _ := cmd.Flags().GetString("framework"); v != "" {
-		req.Framework = v
+		req.GitHubRepo = v
 	}
 	if v, _ := cmd.Flags().GetString("build-command"); v != "" {
 		req.BuildCommand = v
 	}
 	if v, _ := cmd.Flags().GetString("output-dir"); v != "" {
-		req.OutputDir = v
+		req.OutputDirectory = v
+	}
+	if v, _ := cmd.Flags().GetString("install-command"); v != "" {
+		req.InstallCommand = v
 	}
 	return req
 }

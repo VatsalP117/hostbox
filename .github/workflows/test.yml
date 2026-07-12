@@ -75,6 +75,45 @@ jobs:
       - name: Build
         run: npm run build
 
+  marketing-test:
+    name: Marketing Site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: marketing
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: marketing/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  packaging-test:
+    name: Release Packaging Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        run: bash -n scripts/install-cli.sh scripts/tests/test-install-cli.sh scripts/tests/test-release-packaging.sh
+
+      - name: Test CLI installer
+        run: bash scripts/tests/test-install-cli.sh
+
+      - name: Test release packaging contract
+        run: bash scripts/tests/test-release-packaging.sh
+
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest

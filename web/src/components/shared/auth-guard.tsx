@@ -12,7 +12,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const bootstrap = useBootstrapAuth();
 
   useEffect(() => {
-    if (isAuthenticated) return;
+    if (isAuthenticated) {
+      setChecking(false);
+      setFailed(false);
+      return;
+    }
 
     let cancelled = false;
     bootstrap().then((success) => {
@@ -23,7 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bootstrap, isAuthenticated]);
 
   if (checking) return <LoadingPage />;
   if (failed && !isAuthenticated)

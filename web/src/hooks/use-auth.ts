@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
@@ -36,7 +37,7 @@ export function useBootstrapAuth() {
   const login = useAuthStore((s) => s.login);
   const logout = useAuthStore((s) => s.logout);
 
-  return async (): Promise<boolean> => {
+  return useCallback(async (): Promise<boolean> => {
     try {
       const refreshRes = await fetch("/api/v1/auth/refresh", {
         method: "POST",
@@ -56,5 +57,5 @@ export function useBootstrapAuth() {
       logout();
       return false;
     }
-  };
+  }, [login, logout]);
 }

@@ -8,8 +8,7 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken string `json:"access_token"`
 }
 
 type WhoAmIResponse struct {
@@ -29,10 +28,12 @@ func (c *Client) Login(email, password string) (*LoginResponse, error) {
 }
 
 func (c *Client) WhoAmI() (*WhoAmIResponse, error) {
-	var resp WhoAmIResponse
+	var resp struct {
+		User WhoAmIResponse `json:"user"`
+	}
 	err := c.Get("/api/v1/auth/me", &resp)
 	if err != nil {
 		return nil, fmt.Errorf("whoami failed: %w", err)
 	}
-	return &resp, nil
+	return &resp.User, nil
 }

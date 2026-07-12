@@ -32,10 +32,12 @@ const ansiColors: Record<string, string> = {
   "97": "text-[hsl(30,4%,100%)]",    // Bright White
 };
 
+const ansiPattern = "\\x1b\\[([0-9;]*)m";
+
 // Parse ANSI codes and convert to styled HTML
 function parseAnsi(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const regex = /\x1b\[([0-9;]*)m/g;
+  const regex = new RegExp(ansiPattern, "g");
   let lastIndex = 0;
   let match;
   let currentClass = "";
@@ -79,7 +81,7 @@ function parseAnsi(text: string): React.ReactNode[] {
 
 // Strip ANSI codes for plain text copy
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
+  return text.replace(new RegExp(ansiPattern, "g"), "");
 }
 
 export function LogViewer({

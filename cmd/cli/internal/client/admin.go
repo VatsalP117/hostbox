@@ -1,5 +1,7 @@
 package client
 
+import "strconv"
+
 type BackupResult struct {
 	Filename  string `json:"filename"`
 	Path      string `json:"path"`
@@ -14,7 +16,7 @@ func (c *Client) CreateBackup(compress bool) (*BackupResult, error) {
 	var resp struct {
 		Backup BackupResult `json:"backup"`
 	}
-	err := c.Post("/api/v1/admin/backup", map[string]bool{"compress": compress}, &resp)
+	err := c.Post("/api/v1/admin/backups?compress="+strconv.FormatBool(compress), nil, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -31,5 +33,5 @@ func (c *Client) ListBackups() (*BackupListResponse, error) {
 }
 
 func (c *Client) RestoreBackup(path string) error {
-	return c.Post("/api/v1/admin/restore", map[string]string{"path": path}, nil)
+	return c.Post("/api/v1/admin/backups/restore", map[string]string{"path": path}, nil)
 }

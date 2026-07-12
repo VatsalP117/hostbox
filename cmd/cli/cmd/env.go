@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/VatsalP117/hostbox/cmd/cli/internal/output"
+	"github.com/spf13/cobra"
 )
 
 var envCmd = &cobra.Command{
@@ -92,12 +92,7 @@ var envDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		projectID, err := resolveProjectID()
-		if err != nil {
-			return err
-		}
-
-		if err := c.DeleteEnvVar(projectID, args[0]); err != nil {
+		if err := c.DeleteEnvVar(args[0]); err != nil {
 			return err
 		}
 

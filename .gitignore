@@ -10,8 +10,12 @@
 # Web
 web/dist/
 web/node_modules/
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
 marketing/dist/
 marketing/node_modules/
+marketing/.astro/
 
 # IDE
 .idea/
@@ -36,3 +40,4 @@ data/
 # Binaries
 hostbox
 hostbox-cli
+/api

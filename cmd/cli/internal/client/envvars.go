@@ -21,7 +21,7 @@ type SetEnvVarRequest struct {
 
 func (c *Client) ListEnvVars(projectID string) (*EnvVarListResponse, error) {
 	var resp EnvVarListResponse
-	err := c.Get(fmt.Sprintf("/api/v1/projects/%s/env", projectID), &resp)
+	err := c.Get(fmt.Sprintf("/api/v1/projects/%s/env-vars", projectID), &resp)
 	if err != nil {
 		return nil, fmt.Errorf("list env vars: %w", err)
 	}
@@ -29,9 +29,9 @@ func (c *Client) ListEnvVars(projectID string) (*EnvVarListResponse, error) {
 }
 
 func (c *Client) SetEnvVar(projectID string, key, value string) error {
-	return c.Post(fmt.Sprintf("/api/v1/projects/%s/env", projectID), SetEnvVarRequest{Key: key, Value: value}, nil)
+	return c.Post(fmt.Sprintf("/api/v1/projects/%s/env-vars", projectID), SetEnvVarRequest{Key: key, Value: value}, nil)
 }
 
-func (c *Client) DeleteEnvVar(projectID, envVarID string) error {
-	return c.Delete(fmt.Sprintf("/api/v1/projects/%s/env/%s", projectID, envVarID), nil)
+func (c *Client) DeleteEnvVar(envVarID string) error {
+	return c.Delete(fmt.Sprintf("/api/v1/env-vars/%s", envVarID), nil)
 }
