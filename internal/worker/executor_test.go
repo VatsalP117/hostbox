@@ -593,6 +593,23 @@ func TestDescribeContainerExecError_PassesThroughOtherErrors(t *testing.T) {
 	}
 }
 
+func TestDescribeArtifactErrorCategories(t *testing.T) {
+	tests := []struct {
+		message string
+		prefix  string
+	}{
+		{"artifact exceeds maximum size of 100 B", "Artifact output oversized:"},
+		{"artifact contains symbolic link", "Artifact output unsafe:"},
+		{"artifact contains non-regular entry", "Artifact output unsafe:"},
+		{"output directory does not exist", "Artifact output missing or unreadable:"},
+	}
+	for _, test := range tests {
+		if got := describeArtifactError(errors.New(test.message)); !strings.HasPrefix(got, test.prefix) {
+			t.Errorf("describeArtifactError(%q) = %q, want prefix %q", test.message, got, test.prefix)
+		}
+	}
+}
+
 func TestBaseBuildEnvVars_DoesNotForceNodeEnv(t *testing.T) {
 	t.Parallel()
 

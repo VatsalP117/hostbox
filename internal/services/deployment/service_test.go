@@ -181,6 +181,135 @@ func TestService_QueuedSupersessionReportsCancellationOnce(t *testing.T) {
 	}
 }
 
+func TestService_TriggerDeploymentSnapshotsProjectBuildSettings(t *testing.T) {
+	svc, _, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	project.RootDirectory = "apps/web"
+	project.NodeVersion = "22"
+	project.BuildCommand = stringPointer("npm run export")
+	project.InstallCommand = stringPointer("npm ci")
+	project.OutputDirectory = stringPointer("out")
+	repositoryName := "owner/original"
+	installationID := int64(42)
+	project.GitHubRepo = &repositoryName
+	project.GitHubInstallationID = &installationID
+	if err := projectRepo.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+
+	deployment, err := svc.TriggerDeployment(context.Background(), TriggerRequest{
+		ProjectID: project.ID, Branch: "main", CommitSHA: "manual",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project.RootDirectory = "apps/changed"
+	project.NodeVersion = "20"
+	project.BuildCommand = stringPointer("npm run changed")
+	changedRepository := "owner/changed"
+	project.GitHubRepo = &changedRepository
+	if err := projectRepo.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+
+	if deployment.BuildRootDirectory != filepath.Join("apps", "web") ||
+		deployment.BuildNodeVersion != "22" ||
+		testPointerValue(deployment.BuildCommand) != "npm run export" ||
+		testPointerValue(deployment.BuildInstallCommand) != "npm ci" ||
+		testPointerValue(deployment.BuildOutputDirectory) != "out" ||
+		testPointerValue(deployment.SourceRepository) != repositoryName ||
+		deployment.SourceInstallationID == nil || *deployment.SourceInstallationID != installationID {
+		t.Fatalf("deployment did not retain project snapshot: %+v", deployment)
+	}
+	if deployment.BuildManifestResolved {
+		t.Fatal("new branch deployment must remain unresolved until worker detection")
+	}
+}
+
+func TestService_RebuildAndDeployLatestHaveDistinctSourceSemantics(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	project.RootDirectory = "apps/current"
+	project.NodeVersion = "22"
+	if err := projectRepo.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+	framework := "vite"
+	mode := "spa"
+	manager := "pnpm"
+	version := "9.12.0"
+	output := "dist"
+	install := "pnpm install --frozen-lockfile"
+	build := "pnpm run build"
+	sourceRepository := "owner/original"
+	sourceInstallationID := int64(7)
+	source := &models.Deployment{
+		ProjectID: project.ID,
+		CommitSHA: strings.Repeat("a", 40),
+		Branch:    "main", Status: models.DeploymentStatusReady, IsProduction: true,
+		BuildFramework: &framework, BuildServingMode: &mode,
+		BuildPackageManager: &manager, BuildPackageManagerVersion: &version,
+		BuildNodeVersion: "20", BuildRootDirectory: "apps/old",
+		BuildOutputDirectory: &output, BuildInstallCommand: &install,
+		BuildCommand: &build, BuildLockFileHash: "lock-old",
+		BuildManifestResolved: true,
+		SourceRepository:      &sourceRepository, SourceInstallationID: &sourceInstallationID,
+	}
+	if err := deployRepo.Create(context.Background(), source); err != nil {
+		t.Fatal(err)
+	}
+	project.ProductionBranch = "release"
+	if err := projectRepo.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+
+	rebuilt, err := svc.RebuildDeployment(context.Background(), source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebuilt.CommitSHA != source.CommitSHA || !rebuilt.BuildManifestResolved ||
+		rebuilt.BuildRootDirectory != "apps/old" ||
+		testPointerValue(rebuilt.BuildCommand) != build ||
+		rebuilt.BuildLockFileHash != "lock-old" ||
+		testPointerValue(rebuilt.SourceRepository) != sourceRepository ||
+		!rebuilt.IsProduction {
+		t.Fatalf("rebuild did not copy immutable source manifest: %+v", rebuilt)
+	}
+
+	latest, err := svc.DeployLatest(context.Background(), project.ID, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.CommitSHA != "manual" || latest.BuildManifestResolved ||
+		latest.BuildRootDirectory != filepath.Join("apps", "current") ||
+		latest.BuildNodeVersion != "22" {
+		t.Fatalf("deploy latest did not use fresh project snapshot: %+v", latest)
+	}
+}
+
+func testPointerValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func TestService_RebuildRejectsLegacyDeploymentWithoutManifest(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	source := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40),
+		Branch: "main", Status: models.DeploymentStatusFailed,
+	}
+	if err := deployRepo.Create(context.Background(), source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RebuildDeployment(context.Background(), source.ID); err == nil ||
+		!strings.Contains(err.Error(), "resolved build manifest") {
+		t.Fatalf("expected unresolved manifest rejection, got %v", err)
+	}
+}
+
 func TestService_GetDeployment_NotFound(t *testing.T) {
 	svc, _, _, _ := newTestService(t)
 

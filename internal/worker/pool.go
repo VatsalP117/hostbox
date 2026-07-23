@@ -3,12 +3,14 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/VatsalP117/hostbox/internal/models"
 	dockerpkg "github.com/VatsalP117/hostbox/internal/platform/docker"
+	"github.com/VatsalP117/hostbox/internal/platform/sanitize"
 	"github.com/VatsalP117/hostbox/internal/repository"
 )
 
@@ -154,13 +156,37 @@ func (p *Pool) recoverCrashedBuilds() error {
 		updated, err := p.deployRepo.UpdateIfStatus(ctx, &d, models.DeploymentStatusBuilding)
 		if err != nil || !updated {
 			slog.Error("failed to mark deployment as failed", "id", d.ID, "err", err)
+			continue
 		}
+		p.removeInterruptedWorkspace(d)
 	}
 
 	if len(stuck) > 0 {
 		slog.Info("crash recovery complete", "recovered", len(stuck))
 	}
 	return nil
+}
+
+func (p *Pool) removeInterruptedWorkspace(deployment models.Deployment) {
+	if p.executor == nil || p.executor.cfg == nil {
+		return
+	}
+	artifactPath, err := sanitize.SafeJoinPath(
+		p.executor.cfg.DeploymentBaseDir,
+		deployment.ProjectID,
+		deployment.ID,
+	)
+	if err == nil {
+		if removeErr := os.RemoveAll(artifactPath); removeErr != nil {
+			slog.Warn("failed to remove interrupted artifact", "deployment_id", deployment.ID, "error", removeErr)
+		}
+	}
+	clonePath, err := sanitize.SafeJoinPath(p.executor.cfg.CloneBaseDir, "clone-"+deployment.ID)
+	if err == nil {
+		if removeErr := os.RemoveAll(clonePath); removeErr != nil {
+			slog.Warn("failed to remove interrupted clone", "deployment_id", deployment.ID, "error", removeErr)
+		}
+	}
 }
 
 func (p *Pool) cleanOrphanedContainers() {

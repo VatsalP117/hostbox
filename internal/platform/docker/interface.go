@@ -16,7 +16,7 @@ type DockerClient interface {
 	StopContainer(ctx context.Context, containerID string, gracePeriod time.Duration) error
 	RemoveContainer(ctx context.Context, nameOrID string) error
 	RemoveContainerByName(ctx context.Context, name string)
-	CopyFromContainer(ctx context.Context, containerID, srcPath, destPath string) (int64, error)
+	CopyFromContainer(ctx context.Context, containerID, srcPath, destPath string, maxBytes int64) (int64, error)
 	RemoveVolume(ctx context.Context, name string) error
 	ListManagedContainers(ctx context.Context) ([]types.Container, error)
 	Close() error

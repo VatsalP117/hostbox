@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // PackageManager holds the detected package manager and its install command.
@@ -12,6 +13,19 @@ type PackageManager struct {
 	Name           string // "pnpm", "yarn", "bun", "npm"
 	InstallCommand string
 	LockFile       string
+}
+
+// PackageManagerVersion returns the version declared by the packageManager
+// field when it matches the detected manager (for example, "pnpm@9.12.0").
+func PackageManagerVersion(pkg *PackageJSON, manager string) string {
+	if pkg == nil {
+		return ""
+	}
+	name, version, ok := strings.Cut(strings.TrimSpace(pkg.PackageManager), "@")
+	if !ok || !strings.EqualFold(name, manager) {
+		return ""
+	}
+	return strings.TrimSpace(version)
 }
 
 // Lock files checked in priority order.

@@ -92,7 +92,7 @@ func TestExtractTarStripsCopiedRootDirectory(t *testing.T) {
 	}
 
 	destDir := t.TempDir()
-	size, err := extractTar(bytes.NewReader(buf.Bytes()), destDir, "out")
+	size, err := extractTar(bytes.NewReader(buf.Bytes()), destDir, "out", 0)
 	if err != nil {
 		t.Fatalf("extract tar: %v", err)
 	}
@@ -123,8 +123,43 @@ func TestExtractTarRejectsPathTraversal(t *testing.T) {
 		t.Fatalf("close tar writer: %v", err)
 	}
 
-	if _, err := extractTar(bytes.NewReader(buf.Bytes()), t.TempDir(), ""); err == nil {
+	if _, err := extractTar(bytes.NewReader(buf.Bytes()), t.TempDir(), "", 0); err == nil {
 		t.Fatal("expected traversal error")
+	}
+}
+
+func TestExtractTarRejectsArtifactOverLimitBeforeWriting(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	writeTarFile(t, tw, "out/large.txt", "123456")
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := t.TempDir()
+	if _, err := extractTar(bytes.NewReader(buf.Bytes()), dest, "out", 5); err == nil ||
+		!strings.Contains(err.Error(), "maximum size") {
+		t.Fatalf("expected size-limit error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "large.txt")); !os.IsNotExist(err) {
+		t.Fatalf("oversized file should not be written: %v", err)
+	}
+}
+
+func TestExtractTarRejectsSymlinks(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name: "out/link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := extractTar(bytes.NewReader(buf.Bytes()), t.TempDir(), "out", 1024); err == nil ||
+		!strings.Contains(err.Error(), "unsupported tar entry") {
+		t.Fatalf("expected symlink rejection, got %v", err)
 	}
 }
 

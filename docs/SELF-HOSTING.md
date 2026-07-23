@@ -200,6 +200,7 @@ Hostbox reads runtime configuration from `.env`.
 | `DNS_PROVIDER` | No | `none`, `cloudflare`, `route53`, or `digitalocean`. |
 | `LOG_LEVEL` | No | `debug`, `info`, `warn`, or `error`. |
 | `BUILD_MEMORY_MB` | No | Per-build container memory limit in MB. Increase this for large Node.js workspaces if builds are killed with exit code `137`. |
+| `MAX_ARTIFACT_SIZE_BYTES` | No | Maximum extracted deployment size. Defaults to 100 MiB; oversized builds fail before the artifact is activated. |
 | `GITHUB_APP_ID` | No | Optional advanced override. The dashboard can create and store a GitHub App for you. |
 | `GITHUB_APP_SLUG` | No | Optional advanced override. |
 | `GITHUB_APP_PEM` | No | Optional advanced override. |

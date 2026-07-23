@@ -106,6 +106,39 @@ func TestDeploymentContracts(t *testing.T) {
 			t.Fatalf("Rollback() = %#v, %v", got, err)
 		}
 	})
+
+	t.Run("rebuild uses immutable deployment route", func(t *testing.T) {
+		c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+			requireRequest(t, r, http.MethodPost, "/api/v1/deployments/dep-1/rebuild")
+			writeJSON(t, w, map[string]any{"deployment": map[string]any{
+				"id": "dep-rebuild", "commit_sha": "same-sha", "build_manifest_resolved": true,
+			}})
+		})
+		got, err := c.RebuildDeployment("dep-1")
+		if err != nil || got.ID != "dep-rebuild" || !got.BuildManifestResolved {
+			t.Fatalf("RebuildDeployment() = %#v, %v", got, err)
+		}
+	})
+
+	t.Run("deploy latest uses branch endpoint", func(t *testing.T) {
+		c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+			requireRequest(t, r, http.MethodPost, "/api/v1/projects/project-1/deploy-latest")
+			var body struct {
+				Branch string `json:"branch"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Branch != "release" {
+				t.Fatalf("branch = %q, want release", body.Branch)
+			}
+			writeJSON(t, w, map[string]any{"deployment": map[string]any{"id": "dep-latest", "commit_sha": "manual"}})
+		})
+		got, err := c.DeployLatest("project-1", "release")
+		if err != nil || got.ID != "dep-latest" || got.CommitSHA != "manual" {
+			t.Fatalf("DeployLatest() = %#v, %v", got, err)
+		}
+	})
 }
 
 func TestProjectAndAuthContracts(t *testing.T) {

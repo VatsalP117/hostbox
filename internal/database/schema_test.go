@@ -1,8 +1,10 @@
 package database
 
 import (
+	"io/fs"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/VatsalP117/hostbox/migrations"
 )
@@ -41,6 +43,71 @@ func TestRealMigration(t *testing.T) {
 	db.QueryRow("SELECT value FROM settings WHERE key = 'setup_complete'").Scan(&setupComplete)
 	if setupComplete != "false" {
 		t.Errorf("setup_complete = %q, want %q", setupComplete, "false")
+	}
+}
+
+func TestDeploymentManifestMigrationBackfillsQueuedProjectSettings(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "pre-manifest.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	oldMigrations := fstest.MapFS{}
+	for _, name := range []string{
+		"001_initial.sql", "002_password_reset.sql", "003_deployments_cache.sql",
+		"004_github_deploy_id.sql", "005_system_metrics.sql", "006_github_webhook_deliveries.sql",
+	} {
+		data, err := fs.ReadFile(migrations.FS, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oldMigrations[name] = &fstest.MapFile{Data: data}
+	}
+	if err := Migrate(db, oldMigrations); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO users (id, email, password_hash) VALUES ('user', 'user@example.com', 'hash');
+		INSERT INTO projects (
+			id, owner_id, name, slug, github_repo, github_installation_id,
+			production_branch, framework, build_command,
+			install_command, output_directory, root_directory, node_version
+		) VALUES (
+			'project', 'user', 'Project', 'project', 'owner/repo', 42,
+			'main', 'vite', 'npm run build',
+			'npm ci', 'dist', 'apps/web', '22'
+		);
+		INSERT INTO deployments (id, project_id, commit_sha, branch, status)
+		VALUES ('deployment', 'project', 'manual', 'main', 'queued');
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+
+	var framework, node, root, output, install, build string
+	var sourceRepository string
+	var sourceInstallationID int64
+	var resolved bool
+	if err := db.QueryRow(`
+		SELECT build_framework, build_node_version, build_root_directory,
+		       build_output_directory, build_install_command, build_command,
+		       build_manifest_resolved, source_repository, source_installation_id
+		FROM deployments WHERE id = 'deployment'
+	`).Scan(
+		&framework, &node, &root, &output, &install, &build, &resolved,
+		&sourceRepository, &sourceInstallationID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if framework != "vite" || node != "22" || root != "apps/web" ||
+		output != "dist" || install != "npm ci" || build != "npm run build" || resolved ||
+		sourceRepository != "owner/repo" || sourceInstallationID != 42 {
+		t.Fatalf("unexpected backfilled manifest: %q %q %q %q %q %q resolved=%v repo=%q installation=%d",
+			framework, node, root, output, install, build, resolved, sourceRepository, sourceInstallationID)
 	}
 }
 

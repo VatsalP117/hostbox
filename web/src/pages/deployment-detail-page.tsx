@@ -224,6 +224,61 @@ export function DeploymentDetailPage() {
                 <span className="text-[hsl(30,4%,70%)]">Branch</span>
                 <span className="text-[hsl(30,4%,90%)] font-mono">{deployment.branch}</span>
               </div>
+              {deployment.source_repository && (
+                <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                  <span className="text-[hsl(30,4%,70%)]">Repository</span>
+                  <span className="text-[hsl(30,4%,90%)] font-mono">
+                    {deployment.source_repository}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                <span className="text-[hsl(30,4%,70%)]">Build Recipe</span>
+                <span className="text-[hsl(30,4%,90%)]">
+                  {deployment.build_manifest_resolved ? "Resolved" : "Pending detection"}
+                </span>
+              </div>
+              {deployment.build_framework && (
+                <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                  <span className="text-[hsl(30,4%,70%)]">Framework</span>
+                  <span className="text-[hsl(30,4%,90%)] font-mono">
+                    {deployment.build_framework} · {deployment.build_serving_mode}
+                  </span>
+                </div>
+              )}
+              {deployment.build_package_manager && (
+                <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                  <span className="text-[hsl(30,4%,70%)]">Package Manager</span>
+                  <span className="text-[hsl(30,4%,90%)] font-mono">
+                    {deployment.build_package_manager}
+                    {deployment.build_package_manager_version
+                      ? `@${deployment.build_package_manager_version}`
+                      : ""}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                <span className="text-[hsl(30,4%,70%)]">Node / Root</span>
+                <span className="text-[hsl(30,4%,90%)] font-mono">
+                  Node {deployment.build_node_version || "detect"} · {deployment.build_root_directory}
+                </span>
+              </div>
+              {deployment.build_command && (
+                <div className="border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                  <div className="text-[hsl(30,4%,70%)] mb-1">Build Command</div>
+                  <div className="text-[hsl(30,4%,90%)] font-mono break-all">
+                    {deployment.build_command}
+                  </div>
+                </div>
+              )}
+              {deployment.build_output_directory && (
+                <div className="flex justify-between items-center border-b border-[hsl(220,10%,28%)]/10 pb-2">
+                  <span className="text-[hsl(30,4%,70%)]">Output</span>
+                  <span className="text-[hsl(30,4%,90%)] font-mono">
+                    {deployment.build_output_directory}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-[hsl(30,4%,70%)]">Production</span>
                 <span className="text-[hsl(30,4%,90%)]">{deployment.is_production ? "Yes" : "No"}</span>

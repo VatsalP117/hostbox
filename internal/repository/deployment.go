@@ -61,8 +61,12 @@ func insertDeployment(ctx context.Context, execer sqlExecer, deployment *models.
 		`INSERT INTO deployments (id, project_id, commit_sha, commit_message, commit_author,
 		  branch, status, is_production, deployment_url, artifact_path, artifact_size_bytes,
 		  log_path, error_message, is_rollback, rollback_source_id, github_pr_number,
-		  github_deploy_id, build_duration_ms, started_at, completed_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		  github_deploy_id, build_duration_ms, build_framework, build_serving_mode,
+		  build_package_manager, build_package_manager_version, build_node_version,
+		  build_root_directory, build_output_directory, build_install_command, build_command,
+		  build_lock_file_hash, build_manifest_resolved, source_repository, source_installation_id,
+		  started_at, completed_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		deployment.ID, deployment.ProjectID, deployment.CommitSHA,
 		deployment.CommitMessage, deployment.CommitAuthor,
 		deployment.Branch, deployment.Status, deployment.IsProduction,
@@ -71,6 +75,13 @@ func insertDeployment(ctx context.Context, execer sqlExecer, deployment *models.
 		deployment.ErrorMessage, deployment.IsRollback,
 		deployment.RollbackSourceID, deployment.GitHubPRNumber,
 		deployment.GitHubDeployID, deployment.BuildDurationMs,
+		deployment.BuildFramework, deployment.BuildServingMode,
+		deployment.BuildPackageManager, deployment.BuildPackageManagerVersion,
+		deployment.BuildNodeVersion, deployment.BuildRootDirectory,
+		deployment.BuildOutputDirectory, deployment.BuildInstallCommand,
+		deployment.BuildCommand, deployment.BuildLockFileHash,
+		deployment.BuildManifestResolved,
+		deployment.SourceRepository, deployment.SourceInstallationID,
 		formatNullableTime(deployment.StartedAt),
 		formatNullableTime(deployment.CompletedAt),
 		createdAt,
@@ -101,7 +112,11 @@ func (r *DeploymentRepository) ReplaceQueued(ctx context.Context, deployment *mo
 		 RETURNING id, project_id, commit_sha, commit_message, commit_author,
 		   branch, status, is_production, deployment_url, artifact_path, artifact_size_bytes,
 		   log_path, error_message, is_rollback, rollback_source_id, github_pr_number,
-		   github_deploy_id, build_duration_ms, started_at, completed_at, created_at`,
+		   github_deploy_id, build_duration_ms, build_framework, build_serving_mode,
+		   build_package_manager, build_package_manager_version, build_node_version,
+		   build_root_directory, build_output_directory, build_install_command, build_command,
+		   build_lock_file_hash, build_manifest_resolved, source_repository, source_installation_id,
+		   started_at, completed_at, created_at`,
 		now, deployment.ProjectID, deployment.Branch,
 	)
 	if err != nil {
@@ -208,6 +223,39 @@ func (r *DeploymentRepository) UpdateResolvedCommit(ctx context.Context, deploym
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// ResolveBuildManifest persists the effective recipe before any install or
+// build command runs. It succeeds only while the deployment is building.
+func (r *DeploymentRepository) ResolveBuildManifest(ctx context.Context, deployment *models.Deployment) (bool, error) {
+	if deployment.Status != models.DeploymentStatusBuilding {
+		return false, fmt.Errorf("resolve build manifest: deployment must be building")
+	}
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE deployments SET
+		   build_framework = ?, build_serving_mode = ?, build_package_manager = ?,
+		   build_package_manager_version = ?, build_node_version = ?,
+		   build_root_directory = ?, build_output_directory = ?,
+		   build_install_command = ?, build_command = ?, build_lock_file_hash = ?,
+		   build_manifest_resolved = TRUE
+		 WHERE id = ? AND status = 'building'`,
+		deployment.BuildFramework, deployment.BuildServingMode,
+		deployment.BuildPackageManager, deployment.BuildPackageManagerVersion,
+		deployment.BuildNodeVersion, deployment.BuildRootDirectory,
+		deployment.BuildOutputDirectory, deployment.BuildInstallCommand,
+		deployment.BuildCommand, deployment.BuildLockFileHash, deployment.ID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("resolve build manifest: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("resolve build manifest rows: %w", err)
+	}
+	if rows == 1 {
+		deployment.BuildManifestResolved = true
+	}
+	return rows == 1, nil
 }
 
 // SetGitHubDeployIDIfUnset records the GitHub Deployment created for a Hostbox
@@ -512,7 +560,11 @@ func (r *DeploymentRepository) FindLatestReady(ctx context.Context, projectID st
 const deploymentSelectSQL = `SELECT d.id, d.project_id, d.commit_sha, d.commit_message, d.commit_author,
 	d.branch, d.status, d.is_production, d.deployment_url, d.artifact_path, d.artifact_size_bytes,
 	d.log_path, d.error_message, d.is_rollback, d.rollback_source_id, d.github_pr_number,
-	d.github_deploy_id, d.build_duration_ms, d.started_at, d.completed_at, d.created_at
+	d.github_deploy_id, d.build_duration_ms, d.build_framework, d.build_serving_mode,
+	d.build_package_manager, d.build_package_manager_version, d.build_node_version,
+	d.build_root_directory, d.build_output_directory, d.build_install_command, d.build_command,
+	d.build_lock_file_hash, d.build_manifest_resolved, d.source_repository, d.source_installation_id,
+	d.started_at, d.completed_at, d.created_at
 	FROM deployments d`
 
 func scanDeployment(s scanner) (*models.Deployment, error) {
@@ -522,6 +574,11 @@ func scanDeployment(s scanner) (*models.Deployment, error) {
 		&d.Branch, &d.Status, &d.IsProduction, &d.DeploymentURL, &d.ArtifactPath,
 		&d.ArtifactSizeBytes, &d.LogPath, &d.ErrorMessage, &d.IsRollback,
 		&d.RollbackSourceID, &d.GitHubPRNumber, &d.GitHubDeployID, &d.BuildDurationMs,
+		&d.BuildFramework, &d.BuildServingMode, &d.BuildPackageManager,
+		&d.BuildPackageManagerVersion, &d.BuildNodeVersion, &d.BuildRootDirectory,
+		&d.BuildOutputDirectory, &d.BuildInstallCommand, &d.BuildCommand,
+		&d.BuildLockFileHash, &d.BuildManifestResolved,
+		&d.SourceRepository, &d.SourceInstallationID,
 		&startedAt, &completedAt, &createdAt)
 	if err != nil {
 		return nil, err
@@ -554,7 +611,7 @@ func formatNullableTime(t *time.Time) interface{} {
 // ListActiveWithProject returns all ready deployments joined with project info for Caddy sync.
 func (r *DeploymentRepository) ListActiveWithProject(ctx context.Context) ([]ActiveDeploymentRow, error) {
 	query := `SELECT d.id, d.project_id, p.slug, d.branch, d.commit_sha,
-		d.is_production, d.artifact_path, p.framework
+		d.is_production, d.artifact_path, COALESCE(d.build_framework, p.framework)
 		FROM deployments d
 		JOIN projects p ON d.project_id = p.id
 		WHERE d.status = 'ready' AND d.artifact_path IS NOT NULL`

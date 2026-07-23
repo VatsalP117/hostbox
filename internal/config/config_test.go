@@ -65,6 +65,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Build.LogBaseDir != cfg.LogsDir {
 		t.Errorf("Build.LogBaseDir = %q, want %q", cfg.Build.LogBaseDir, cfg.LogsDir)
 	}
+	if cfg.Build.MaxArtifactSizeBytes != 100*1024*1024 {
+		t.Errorf("Build.MaxArtifactSizeBytes = %d, want 100 MiB", cfg.Build.MaxArtifactSizeBytes)
+	}
 	expectedCloneDir := filepath.Join(cfg.CacheDir, "clones")
 	if cfg.Build.CloneBaseDir != expectedCloneDir {
 		t.Errorf("Build.CloneBaseDir = %q, want %q", cfg.Build.CloneBaseDir, expectedCloneDir)
@@ -326,6 +329,7 @@ func TestValidateNormalizesDNSProvider(t *testing.T) {
 		LogLevel:         "info",
 		DNSProvider:      "none",
 		CaddyAPIUpstream: "localhost:8080",
+		Build:            BuildConfig{MaxArtifactSizeBytes: 100 * 1024 * 1024},
 	}
 
 	if err := cfg.Validate(); err != nil {

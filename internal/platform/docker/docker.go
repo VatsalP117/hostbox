@@ -216,14 +216,14 @@ func (c *Client) RemoveContainerByName(ctx context.Context, name string) {
 }
 
 // CopyFromContainer copies a directory from the container to the host.
-func (c *Client) CopyFromContainer(ctx context.Context, containerID, srcPath, destPath string) (int64, error) {
+func (c *Client) CopyFromContainer(ctx context.Context, containerID, srcPath, destPath string, maxBytes int64) (int64, error) {
 	reader, stat, err := c.cli.CopyFromContainer(ctx, containerID, srcPath)
 	if err != nil {
 		return 0, fmt.Errorf("copy from container %s:%s: %w", containerID, srcPath, err)
 	}
 	defer reader.Close()
 
-	size, err := extractTar(reader, destPath, stat.Name)
+	size, err := extractTar(reader, destPath, stat.Name, maxBytes)
 	if err != nil {
 		return 0, fmt.Errorf("extract tar to %s: %w", destPath, err)
 	}
@@ -261,7 +261,7 @@ func (c *Client) ensureImage(ctx context.Context, img string) error {
 	return nil
 }
 
-func extractTar(reader io.Reader, destDir, stripRoot string) (int64, error) {
+func extractTar(reader io.Reader, destDir, stripRoot string, maxBytes int64) (int64, error) {
 	tr := tar.NewReader(reader)
 	baseDir := filepath.Clean(destDir)
 	stripRoot = strings.Trim(strings.TrimPrefix(filepath.ToSlash(stripRoot), "./"), "/")
@@ -302,6 +302,9 @@ func extractTar(reader io.Reader, destDir, stripRoot string) (int64, error) {
 				return 0, err
 			}
 		case tar.TypeReg, tar.TypeRegA:
+			if maxBytes > 0 && (header.Size > maxBytes || totalSize > maxBytes-header.Size) {
+				return 0, fmt.Errorf("artifact exceeds maximum size of %d bytes", maxBytes)
+			}
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return 0, err
 			}
@@ -316,6 +319,8 @@ func extractTar(reader io.Reader, destDir, stripRoot string) (int64, error) {
 			}
 			f.Close()
 			totalSize += written
+		default:
+			return 0, fmt.Errorf("artifact contains unsupported tar entry %q (type %d)", header.Name, header.Typeflag)
 		}
 	}
 

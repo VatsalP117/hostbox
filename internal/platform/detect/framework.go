@@ -23,6 +23,7 @@ type Framework struct {
 // PackageJSON represents the subset of package.json fields we need.
 type PackageJSON struct {
 	Name            string            `json:"name"`
+	PackageManager  string            `json:"packageManager"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
 	Scripts         map[string]string `json:"scripts"`

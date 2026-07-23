@@ -61,7 +61,7 @@ export function DeploymentHeader({ deployment }: DeploymentHeaderProps) {
   };
 
   const handleRedeploy = () => {
-    redeploy.mutate(deployment.project_id, {
+    redeploy.mutate({ projectId: deployment.project_id, deploymentId: deployment.id }, {
       onSuccess: () => toast.success("Redeployment triggered"),
       onError: (err) => toast.error(getApiErrorMessage(err)),
     });
@@ -148,7 +148,7 @@ export function DeploymentHeader({ deployment }: DeploymentHeaderProps) {
               {redeploy.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              Redeploy
+              Rebuild same commit
             </Button>
           )}
 

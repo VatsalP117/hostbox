@@ -87,9 +87,35 @@ export function useRollbackDeployment() {
 export function useRedeployment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (projectId: string) =>
-      api.post<DeploymentResponse>(`/projects/${projectId}/redeploy`),
-    onSuccess: (_, projectId) => {
+    mutationFn: ({
+      projectId,
+      deploymentId,
+    }: {
+      projectId: string;
+      deploymentId: string;
+    }) => api.post<DeploymentResponse>(`/deployments/${deploymentId}/rebuild`),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.deployments(projectId),
+      });
+    },
+  });
+}
+
+export function useDeployLatest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      branch,
+    }: {
+      projectId: string;
+      branch?: string;
+    }) =>
+      api.post<DeploymentResponse>(`/projects/${projectId}/deploy-latest`, {
+        branch,
+      }),
+    onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.deployments(projectId),
       });

@@ -113,6 +113,68 @@ func TestCopyDir(t *testing.T) {
 	}
 }
 
+func TestCopyDirLimitedRejectsOversizedArtifact(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "large.txt"), []byte("123456"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copyDirLimited(src, dst, 5); err == nil ||
+		!strings.Contains(err.Error(), "maximum size") {
+		t.Fatalf("expected artifact size rejection, got %v", err)
+	}
+}
+
+func TestValidateArtifactTreeRejectsSymlinkAndSpecialFile(t *testing.T) {
+	t.Run("symlink", func(t *testing.T) {
+		root := t.TempDir()
+		target := filepath.Join(t.TempDir(), "target")
+		if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(root, "link")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := validateArtifactTree(root, 1024); err == nil ||
+			!strings.Contains(err.Error(), "symbolic link") {
+			t.Fatalf("expected symlink rejection, got %v", err)
+		}
+	})
+
+	t.Run("socket", func(t *testing.T) {
+		root := t.TempDir()
+		socketPath := filepath.Join(root, "artifact.sock")
+		addr, err := net.ResolveUnixAddr("unix", socketPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		listener, err := net.ListenUnix("unix", addr)
+		if err != nil {
+			t.Skipf("unix sockets unavailable: %v", err)
+		}
+		listener.SetUnlinkOnClose(false)
+		defer listener.Close()
+		if _, err := validateArtifactTree(root, 1024); err == nil ||
+			!strings.Contains(err.Error(), "non-regular") {
+			t.Fatalf("expected special-file rejection, got %v", err)
+		}
+	})
+}
+
+func TestValidateArtifactTreeReturnsExactSize(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	size, err := validateArtifactTree(root, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != 5 {
+		t.Fatalf("size = %d, want 5", size)
+	}
+}
+
 func TestIsDirEmpty(t *testing.T) {
 	empty := t.TempDir()
 	isEmpty, err := isDirEmpty(empty)

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -575,6 +577,77 @@ func TestDeploymentCreatePathsShareServiceBehavior(t *testing.T) {
 				t.Fatalf("stored status = %q, want queued", stored.Status)
 			}
 		})
+	}
+}
+
+func TestDeploymentRebuildAndDeployLatestContracts(t *testing.T) {
+	env := setupTestEnv(t)
+	token := setupAdmin(t, env)
+	headers := map[string]string{"Authorization": "Bearer " + token}
+	projectID := createTestProject(t, env, token, "Manifest Contract")
+	project, err := env.repos.Project.GetByID(context.Background(), projectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project.RootDirectory = "apps/current"
+	project.NodeVersion = "22"
+	if err := env.repos.Project.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+
+	framework, mode, manager := "vite", "spa", "pnpm"
+	output, command := "dist", "pnpm run build"
+	sourceRepository := "owner/repo"
+	source := &models.Deployment{
+		ProjectID: projectID, CommitSHA: strings.Repeat("a", 40), Branch: "main",
+		Status: models.DeploymentStatusReady, IsProduction: true,
+		BuildFramework: &framework, BuildServingMode: &mode,
+		BuildPackageManager: &manager, BuildNodeVersion: "20",
+		BuildRootDirectory: "apps/old", BuildOutputDirectory: &output,
+		BuildCommand: &command, BuildLockFileHash: "old-lock",
+		BuildManifestResolved: true,
+		SourceRepository:      &sourceRepository,
+	}
+	if err := env.repos.Deployment.Create(context.Background(), source); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doRequest(env.echo, http.MethodPost, "/api/v1/deployments/"+source.ID+"/rebuild", nil, headers)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("rebuild: %d %s", rec.Code, rec.Body.String())
+	}
+	var rebuildResponse struct {
+		Deployment dto.DeploymentResponse `json:"deployment"`
+	}
+	mustDecode(t, rec, &rebuildResponse)
+	if rebuildResponse.Deployment.CommitSHA != source.CommitSHA ||
+		rebuildResponse.Deployment.BuildRootDirectory != "apps/old" ||
+		rebuildResponse.Deployment.SourceRepository == nil ||
+		*rebuildResponse.Deployment.SourceRepository != sourceRepository ||
+		!rebuildResponse.Deployment.BuildManifestResolved {
+		t.Fatalf("unexpected rebuild response: %+v", rebuildResponse.Deployment)
+	}
+
+	rec = doRequest(env.echo, http.MethodPost,
+		"/api/v1/projects/"+projectID+"/deploy-latest",
+		jsonBody(map[string]string{"branch": "main"}), headers)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("deploy latest: %d %s", rec.Code, rec.Body.String())
+	}
+	var latestResponse struct {
+		Deployment dto.DeploymentResponse `json:"deployment"`
+	}
+	mustDecode(t, rec, &latestResponse)
+	if latestResponse.Deployment.CommitSHA != "manual" ||
+		latestResponse.Deployment.BuildRootDirectory != filepath.Join("apps", "current") ||
+		latestResponse.Deployment.BuildNodeVersion != "22" ||
+		latestResponse.Deployment.BuildManifestResolved {
+		t.Fatalf("unexpected latest response: %+v", latestResponse.Deployment)
+	}
+
+	rec = doRequest(env.echo, http.MethodPost, "/api/v1/projects/"+projectID+"/redeploy", nil, headers)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("redeploy compatibility alias: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

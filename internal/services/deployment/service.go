@@ -13,6 +13,7 @@ import (
 
 	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/platform/hostnames"
+	"github.com/VatsalP117/hostbox/internal/platform/sanitize"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	ghsvc "github.com/VatsalP117/hostbox/internal/services/github"
 	"github.com/VatsalP117/hostbox/internal/util"
@@ -62,6 +63,13 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 	}
 
 	isProduction := req.Branch == project.ProductionBranch
+	if req.IsProduction != nil {
+		isProduction = *req.IsProduction
+	}
+	manifest, err := buildManifestForRequest(project, req.BuildManifest)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stop an active build explicitly. Queued supersession and replacement are
 	// committed atomically below.
@@ -76,16 +84,29 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 	}
 
 	deployment := &models.Deployment{
-		ID:             util.NewID(),
-		ProjectID:      req.ProjectID,
-		CommitSHA:      req.CommitSHA,
-		CommitMessage:  req.CommitMessage,
-		CommitAuthor:   req.CommitAuthor,
-		Branch:         req.Branch,
-		Status:         models.DeploymentStatusQueued,
-		IsProduction:   isProduction,
-		GitHubPRNumber: req.PRNumber,
-		CreatedAt:      time.Now().UTC(),
+		ID:                         util.NewID(),
+		ProjectID:                  req.ProjectID,
+		CommitSHA:                  req.CommitSHA,
+		CommitMessage:              req.CommitMessage,
+		CommitAuthor:               req.CommitAuthor,
+		Branch:                     req.Branch,
+		Status:                     models.DeploymentStatusQueued,
+		IsProduction:               isProduction,
+		GitHubPRNumber:             req.PRNumber,
+		BuildFramework:             manifest.Framework,
+		BuildServingMode:           manifest.ServingMode,
+		BuildPackageManager:        manifest.PackageManager,
+		BuildPackageManagerVersion: manifest.PackageManagerVersion,
+		BuildNodeVersion:           manifest.NodeVersion,
+		BuildRootDirectory:         manifest.RootDirectory,
+		BuildOutputDirectory:       manifest.OutputDirectory,
+		BuildInstallCommand:        manifest.InstallCommand,
+		BuildCommand:               manifest.BuildCommand,
+		BuildLockFileHash:          manifest.LockFileHash,
+		BuildManifestResolved:      manifest.Resolved,
+		SourceRepository:           manifest.SourceRepository,
+		SourceInstallationID:       manifest.SourceInstallationID,
+		CreatedAt:                  time.Now().UTC(),
 	}
 
 	cancelled, err := s.deployRepo.ReplaceQueued(ctx, deployment)
@@ -190,20 +211,33 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	deployment := &models.Deployment{
-		ID:                util.NewID(),
-		ProjectID:         projectID,
-		CommitSHA:         target.CommitSHA,
-		CommitMessage:     target.CommitMessage,
-		CommitAuthor:      target.CommitAuthor,
-		Branch:            target.Branch,
-		Status:            models.DeploymentStatusBuilding,
-		IsProduction:      true,
-		ArtifactPath:      &artifactPath,
-		ArtifactSizeBytes: target.ArtifactSizeBytes,
-		DeploymentURL:     &deploymentURL,
-		IsRollback:        true,
-		RollbackSourceID:  &target.ID,
-		CreatedAt:         time.Now().UTC(),
+		ID:                         util.NewID(),
+		ProjectID:                  projectID,
+		CommitSHA:                  target.CommitSHA,
+		CommitMessage:              target.CommitMessage,
+		CommitAuthor:               target.CommitAuthor,
+		Branch:                     target.Branch,
+		Status:                     models.DeploymentStatusBuilding,
+		IsProduction:               true,
+		ArtifactPath:               &artifactPath,
+		ArtifactSizeBytes:          target.ArtifactSizeBytes,
+		DeploymentURL:              &deploymentURL,
+		IsRollback:                 true,
+		RollbackSourceID:           &target.ID,
+		BuildFramework:             target.BuildFramework,
+		BuildServingMode:           target.BuildServingMode,
+		BuildPackageManager:        target.BuildPackageManager,
+		BuildPackageManagerVersion: target.BuildPackageManagerVersion,
+		BuildNodeVersion:           target.BuildNodeVersion,
+		BuildRootDirectory:         target.BuildRootDirectory,
+		BuildOutputDirectory:       target.BuildOutputDirectory,
+		BuildInstallCommand:        target.BuildInstallCommand,
+		BuildCommand:               target.BuildCommand,
+		BuildLockFileHash:          target.BuildLockFileHash,
+		BuildManifestResolved:      target.BuildManifestResolved,
+		SourceRepository:           target.SourceRepository,
+		SourceInstallationID:       target.SourceInstallationID,
+		CreatedAt:                  time.Now().UTC(),
 	}
 
 	if err := s.deployRepo.Create(ctx, deployment); err != nil {
@@ -250,18 +284,31 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	promoted := &models.Deployment{
-		ID:                util.NewID(),
-		ProjectID:         projectID,
-		CommitSHA:         source.CommitSHA,
-		CommitMessage:     source.CommitMessage,
-		CommitAuthor:      source.CommitAuthor,
-		Branch:            project.ProductionBranch,
-		Status:            models.DeploymentStatusBuilding,
-		IsProduction:      true,
-		ArtifactPath:      &artifactPath,
-		ArtifactSizeBytes: source.ArtifactSizeBytes,
-		DeploymentURL:     &deploymentURL,
-		CreatedAt:         time.Now().UTC(),
+		ID:                         util.NewID(),
+		ProjectID:                  projectID,
+		CommitSHA:                  source.CommitSHA,
+		CommitMessage:              source.CommitMessage,
+		CommitAuthor:               source.CommitAuthor,
+		Branch:                     project.ProductionBranch,
+		Status:                     models.DeploymentStatusBuilding,
+		IsProduction:               true,
+		ArtifactPath:               &artifactPath,
+		ArtifactSizeBytes:          source.ArtifactSizeBytes,
+		DeploymentURL:              &deploymentURL,
+		BuildFramework:             source.BuildFramework,
+		BuildServingMode:           source.BuildServingMode,
+		BuildPackageManager:        source.BuildPackageManager,
+		BuildPackageManagerVersion: source.BuildPackageManagerVersion,
+		BuildNodeVersion:           source.BuildNodeVersion,
+		BuildRootDirectory:         source.BuildRootDirectory,
+		BuildOutputDirectory:       source.BuildOutputDirectory,
+		BuildInstallCommand:        source.BuildInstallCommand,
+		BuildCommand:               source.BuildCommand,
+		BuildLockFileHash:          source.BuildLockFileHash,
+		BuildManifestResolved:      source.BuildManifestResolved,
+		SourceRepository:           source.SourceRepository,
+		SourceInstallationID:       source.SourceInstallationID,
+		CreatedAt:                  time.Now().UTC(),
 	}
 
 	if err := s.deployRepo.Create(ctx, promoted); err != nil {
@@ -289,20 +336,56 @@ func (s *Service) reportLifecycle(ctx context.Context, project *models.Project, 
 	}
 }
 
-// Redeploy triggers a new build using the same branch and latest commit.
-func (s *Service) Redeploy(ctx context.Context, projectID string) (*models.Deployment, error) {
-	latest, err := s.deployRepo.FindLatestReady(ctx, projectID, true)
+// RebuildDeployment rebuilds the same immutable commit with the exact resolved
+// recipe recorded on the source deployment.
+func (s *Service) RebuildDeployment(ctx context.Context, deploymentID string) (*models.Deployment, error) {
+	source, err := s.deployRepo.GetByID(ctx, deploymentID)
 	if err != nil {
-		return nil, fmt.Errorf("no previous production deployment found: %w", err)
+		return nil, fmt.Errorf("source deployment not found: %w", err)
+	}
+	if !source.BuildManifestResolved {
+		return nil, fmt.Errorf("deployment does not have a resolved build manifest; deploy the branch again before rebuilding")
+	}
+	if source.Status == models.DeploymentStatusQueued || source.Status == models.DeploymentStatusBuilding {
+		return nil, fmt.Errorf("cannot rebuild a deployment while it is %s", source.Status)
+	}
+	if len(source.CommitSHA) != 40 {
+		return nil, fmt.Errorf("deployment does not have an immutable resolved commit SHA")
 	}
 
 	return s.TriggerDeployment(ctx, TriggerRequest{
-		ProjectID:     projectID,
-		Branch:        latest.Branch,
-		CommitSHA:     latest.CommitSHA,
-		CommitMessage: latest.CommitMessage,
-		CommitAuthor:  latest.CommitAuthor,
+		ProjectID:     source.ProjectID,
+		Branch:        source.Branch,
+		CommitSHA:     source.CommitSHA,
+		CommitMessage: source.CommitMessage,
+		CommitAuthor:  source.CommitAuthor,
+		PRNumber:      source.GitHubPRNumber,
+		BuildManifest: manifestFromDeployment(source),
+		IsProduction:  boolPointer(source.IsProduction),
 	})
+}
+
+// DeployLatest resolves and builds the latest head of the requested branch
+// using a fresh snapshot of the project's current settings.
+func (s *Service) DeployLatest(ctx context.Context, projectID, branch string) (*models.Deployment, error) {
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		branch = project.ProductionBranch
+	}
+	return s.TriggerDeployment(ctx, TriggerRequest{
+		ProjectID: projectID,
+		Branch:    branch,
+		CommitSHA: "manual",
+	})
+}
+
+// Redeploy is retained as a compatibility alias for deploy-latest.
+func (s *Service) Redeploy(ctx context.Context, projectID string) (*models.Deployment, error) {
+	return s.DeployLatest(ctx, projectID, "")
 }
 
 // FindByCommitSHA finds a deployment by project and commit SHA.
@@ -400,7 +483,9 @@ func (s *Service) DeactivateBranchDeployments(ctx context.Context, projectID, br
 
 func (s *Service) activateProduction(ctx context.Context, project *models.Project, deployment *models.Deployment) error {
 	framework := ""
-	if project.Framework != nil {
+	if deployment.BuildFramework != nil {
+		framework = *deployment.BuildFramework
+	} else if project.Framework != nil {
 		framework = *project.Framework
 	}
 
@@ -446,6 +531,102 @@ func (s *Service) markReady(ctx context.Context, deployment *models.Deployment) 
 		return fmt.Errorf("deployment is no longer building")
 	}
 	return nil
+}
+
+func buildManifestForRequest(project *models.Project, requested *BuildManifest) (*BuildManifest, error) {
+	if requested != nil {
+		manifest := cloneBuildManifest(requested)
+		root, err := sanitize.SafeRelativePath(manifest.RootDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("invalid build root directory: %w", err)
+		}
+		manifest.RootDirectory = root
+		if manifest.OutputDirectory != nil {
+			output, err := sanitize.SafeRelativePath(*manifest.OutputDirectory)
+			if err != nil {
+				return nil, fmt.Errorf("invalid build output directory: %w", err)
+			}
+			manifest.OutputDirectory = stringPointer(output)
+		}
+		return manifest, nil
+	}
+
+	root, err := sanitize.SafeRelativePath(project.RootDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("invalid project root directory: %w", err)
+	}
+	manifest := &BuildManifest{
+		NodeVersion:          project.NodeVersion,
+		RootDirectory:        root,
+		OutputDirectory:      cloneStringPointer(project.OutputDirectory),
+		InstallCommand:       cloneStringPointer(project.InstallCommand),
+		BuildCommand:         cloneStringPointer(project.BuildCommand),
+		SourceRepository:     cloneStringPointer(project.GitHubRepo),
+		SourceInstallationID: cloneInt64Pointer(project.GitHubInstallationID),
+	}
+	if manifest.OutputDirectory != nil {
+		output, err := sanitize.SafeRelativePath(*manifest.OutputDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("invalid project output directory: %w", err)
+		}
+		manifest.OutputDirectory = stringPointer(output)
+	}
+	return manifest, nil
+}
+
+func manifestFromDeployment(deployment *models.Deployment) *BuildManifest {
+	return &BuildManifest{
+		Framework:             cloneStringPointer(deployment.BuildFramework),
+		ServingMode:           cloneStringPointer(deployment.BuildServingMode),
+		PackageManager:        cloneStringPointer(deployment.BuildPackageManager),
+		PackageManagerVersion: cloneStringPointer(deployment.BuildPackageManagerVersion),
+		NodeVersion:           deployment.BuildNodeVersion,
+		RootDirectory:         deployment.BuildRootDirectory,
+		OutputDirectory:       cloneStringPointer(deployment.BuildOutputDirectory),
+		InstallCommand:        cloneStringPointer(deployment.BuildInstallCommand),
+		BuildCommand:          cloneStringPointer(deployment.BuildCommand),
+		LockFileHash:          deployment.BuildLockFileHash,
+		Resolved:              deployment.BuildManifestResolved,
+		SourceRepository:      cloneStringPointer(deployment.SourceRepository),
+		SourceInstallationID:  cloneInt64Pointer(deployment.SourceInstallationID),
+	}
+}
+
+func cloneBuildManifest(manifest *BuildManifest) *BuildManifest {
+	cloned := *manifest
+	cloned.Framework = cloneStringPointer(manifest.Framework)
+	cloned.ServingMode = cloneStringPointer(manifest.ServingMode)
+	cloned.PackageManager = cloneStringPointer(manifest.PackageManager)
+	cloned.PackageManagerVersion = cloneStringPointer(manifest.PackageManagerVersion)
+	cloned.OutputDirectory = cloneStringPointer(manifest.OutputDirectory)
+	cloned.InstallCommand = cloneStringPointer(manifest.InstallCommand)
+	cloned.BuildCommand = cloneStringPointer(manifest.BuildCommand)
+	cloned.SourceRepository = cloneStringPointer(manifest.SourceRepository)
+	cloned.SourceInstallationID = cloneInt64Pointer(manifest.SourceInstallationID)
+	return &cloned
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	return stringPointer(*value)
+}
+
+func stringPointer(value string) *string {
+	return &value
+}
+
+func boolPointer(value bool) *bool {
+	return &value
+}
+
+func cloneInt64Pointer(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func validateArtifact(artifactPath *string) (string, error) {

@@ -25,7 +25,9 @@ func NewPostBuildRouteHook(manager *RouteManager, logger *slog.Logger) *PostBuil
 // OnBuildSuccess adds/updates Caddy routes for a successful deployment.
 func (h *PostBuildRouteHook) OnBuildSuccess(ctx context.Context, project *models.Project, deployment *models.Deployment) error {
 	framework := ""
-	if project.Framework != nil {
+	if deployment.BuildFramework != nil {
+		framework = *deployment.BuildFramework
+	} else if project.Framework != nil {
 		framework = *project.Framework
 	}
 

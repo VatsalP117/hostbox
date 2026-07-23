@@ -126,6 +126,21 @@ The GitHub primary-experience slice has now:
 
 The remaining GitHub v1 work is still explicit below: fork-PR policy, installation suspension/access removal, repository rename/transfer, multi-project repository semantics, delivery diagnostics/manual retry UI, and real public/private repository validation on the test VM.
 
+### Deployment reproducibility and recovery progress — 2026-07-23
+
+The deployment-integrity slice has now:
+
+- defined and repository-enforced the deployment state machine, including atomic queued supersession and terminal lifecycle feedback;
+- made SQLite queued rows the durable build queue, with non-blocking in-memory dispatch, restart reconciliation, and duplicate-safe worker pickup;
+- replaced the record-only API behavior with one service-backed creation path while retaining the old trigger URL as a compatibility alias;
+- persisted an immutable per-deployment build manifest containing repository/installation identity, production scope, resolved commit, framework/serving mode, package manager/version, Node version, root/output paths, commands, and lockfile hash;
+- split exact rebuild (`/deployments/:id/rebuild`) from latest-branch deployment (`/projects/:id/deploy-latest`) and made dashboard labels explicit;
+- made immediate and reconciled Caddy routing use the deployment framework snapshot, with route activation required before `ready` and compensation for activation/finalization races;
+- bounded artifact extraction with `MAX_ARTIFACT_SIZE_BYTES`, rejected links/special files, categorized missing/empty/unsafe/oversized output failures, and removed interrupted clone/artifact workspaces during crash recovery; and
+- added migration/backfill, repository, service, API/CLI contract, artifact-security, route, concurrency, and restart-recovery coverage.
+
+Build environment-variable values and container image digests are not yet snapshotted, so the manifest currently guarantees source and build-recipe identity rather than bit-for-bit reproducible artifacts. Image pinning and an explicit environment-version policy remain release-hardening work.
+
 ## 4. Priority model
 
 - **P0 — v1 blocker:** security boundary, data loss, incorrect deployment, broken primary journey, broken release/install, or no proof of the promise.

@@ -25,6 +25,27 @@ type TriggerRequest struct {
 	CommitMessage *string
 	CommitAuthor  *string
 	PRNumber      *int
+	BuildManifest *BuildManifest
+	IsProduction  *bool
+}
+
+// BuildManifest is the immutable build recipe attached to a deployment.
+// Unresolved manifests contain the project settings captured at queue time;
+// resolved manifests contain the exact effective recipe used by the worker.
+type BuildManifest struct {
+	Framework             *string
+	ServingMode           *string
+	PackageManager        *string
+	PackageManagerVersion *string
+	NodeVersion           string
+	RootDirectory         string
+	OutputDirectory       *string
+	InstallCommand        *string
+	BuildCommand          *string
+	LockFileHash          string
+	Resolved              bool
+	SourceRepository      *string
+	SourceInstallationID  *int64
 }
 
 // ListOpts configures list queries.

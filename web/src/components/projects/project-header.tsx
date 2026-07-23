@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { TimeAgo } from "@/components/shared/time-ago";
 import { routes } from "@/lib/constants";
 import { getApiErrorMessage, cn } from "@/lib/utils";
-import { useTriggerDeployment } from "@/hooks/use-deployments";
+import { useDeployLatest } from "@/hooks/use-deployments";
 import { frameworkConfig as frameworkConfigMap } from "@/lib/constants";
 import type { Project, Deployment, Domain, ProjectStats } from "@/types/models";
 import {
@@ -54,7 +54,7 @@ export function ProjectHeader({
   stats,
 }: ProjectHeaderProps) {
   const navigate = useNavigate();
-  const trigger = useTriggerDeployment(project.id);
+  const trigger = useDeployLatest();
 
   const productionDomain = domains.find((d) => d.verified);
   const productionUrl = productionDomain
@@ -69,10 +69,10 @@ export function ProjectHeader({
 
   const handleDeploy = () => {
     trigger.mutate(
-      { branch: project.production_branch },
+      { projectId: project.id, branch: project.production_branch },
       {
         onSuccess: (data) => {
-          toast.success("Deployment triggered");
+          toast.success("Latest branch deployment triggered");
           navigate(routes.deployment(project.id, data.deployment.id));
         },
         onError: (err) => toast.error(getApiErrorMessage(err)),

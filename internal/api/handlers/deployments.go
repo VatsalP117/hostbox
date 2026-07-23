@@ -244,6 +244,11 @@ func (h *DeploymentHandler) Promote(c echo.Context) error {
 
 // Redeploy triggers a new build using the latest production deployment's config.
 func (h *DeploymentHandler) Redeploy(c echo.Context) error {
+	return h.DeployLatest(c)
+}
+
+// DeployLatest builds the latest head of a project branch with current project settings.
+func (h *DeploymentHandler) DeployLatest(c echo.Context) error {
 	if h.service == nil {
 		return apperrors.NewInternal(fmt.Errorf("build service not initialized"))
 	}
@@ -253,11 +258,45 @@ func (h *DeploymentHandler) Redeploy(c echo.Context) error {
 		return err
 	}
 
-	deployment, err := h.service.Redeploy(c.Request().Context(), project.ID)
+	var req dto.DeployLatestRequest
+	if c.Request().ContentLength != 0 {
+		if err := c.Bind(&req); err != nil {
+			return apperrors.NewBadRequest("Invalid request body")
+		}
+		if appErr := dto.ValidateStruct(req); appErr != nil {
+			return appErr
+		}
+	}
+	branch := ""
+	if req.Branch != nil {
+		branch = *req.Branch
+	}
+	deployment, err := h.service.DeployLatest(c.Request().Context(), project.ID, branch)
 	if err != nil {
 		return apperrors.NewBadRequest(err.Error())
 	}
 
+	return c.JSON(http.StatusAccepted, map[string]interface{}{
+		"deployment": toDeploymentResponse(deployment),
+	})
+}
+
+// Rebuild rebuilds one deployment's immutable commit and resolved recipe.
+func (h *DeploymentHandler) Rebuild(c echo.Context) error {
+	if h.service == nil {
+		return apperrors.NewInternal(fmt.Errorf("build service not initialized"))
+	}
+	source, err := h.service.GetDeployment(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return apperrors.NewNotFound("Deployment")
+	}
+	if _, err := h.getOwnedProject(c, source.ProjectID); err != nil {
+		return err
+	}
+	deployment, err := h.service.RebuildDeployment(c.Request().Context(), source.ID)
+	if err != nil {
+		return apperrors.NewBadRequest(err.Error())
+	}
 	return c.JSON(http.StatusAccepted, map[string]interface{}{
 		"deployment": toDeploymentResponse(deployment),
 	})
@@ -447,19 +486,32 @@ func (h *DeploymentHandler) getOwnedProject(c echo.Context, projectID string) (*
 
 func toDeploymentResponse(d *models.Deployment) dto.DeploymentResponse {
 	resp := dto.DeploymentResponse{
-		ID:                d.ID,
-		ProjectID:         d.ProjectID,
-		CommitSHA:         d.CommitSHA,
-		CommitMessage:     d.CommitMessage,
-		CommitAuthor:      d.CommitAuthor,
-		Branch:            d.Branch,
-		Status:            string(d.Status),
-		IsProduction:      d.IsProduction,
-		DeploymentURL:     d.DeploymentURL,
-		ArtifactSizeBytes: d.ArtifactSizeBytes,
-		ErrorMessage:      d.ErrorMessage,
-		BuildDurationMs:   d.BuildDurationMs,
-		CreatedAt:         d.CreatedAt.Format(time.RFC3339),
+		ID:                         d.ID,
+		ProjectID:                  d.ProjectID,
+		CommitSHA:                  d.CommitSHA,
+		CommitMessage:              d.CommitMessage,
+		CommitAuthor:               d.CommitAuthor,
+		Branch:                     d.Branch,
+		Status:                     string(d.Status),
+		IsProduction:               d.IsProduction,
+		DeploymentURL:              d.DeploymentURL,
+		ArtifactSizeBytes:          d.ArtifactSizeBytes,
+		ErrorMessage:               d.ErrorMessage,
+		BuildDurationMs:            d.BuildDurationMs,
+		BuildFramework:             d.BuildFramework,
+		BuildServingMode:           d.BuildServingMode,
+		BuildPackageManager:        d.BuildPackageManager,
+		BuildPackageManagerVersion: d.BuildPackageManagerVersion,
+		BuildNodeVersion:           d.BuildNodeVersion,
+		BuildRootDirectory:         d.BuildRootDirectory,
+		BuildOutputDirectory:       d.BuildOutputDirectory,
+		BuildInstallCommand:        d.BuildInstallCommand,
+		BuildCommand:               d.BuildCommand,
+		BuildLockFileHash:          d.BuildLockFileHash,
+		BuildManifestResolved:      d.BuildManifestResolved,
+		SourceRepository:           d.SourceRepository,
+		SourceInstallationID:       d.SourceInstallationID,
+		CreatedAt:                  d.CreatedAt.Format(time.RFC3339),
 	}
 	if d.StartedAt != nil {
 		s := d.StartedAt.Format(time.RFC3339)

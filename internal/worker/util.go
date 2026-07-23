@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -23,8 +24,12 @@ func generateDeploymentURL(project *models.Project, deployment *models.Deploymen
 
 // copyDir recursively copies src to dst. Returns total bytes copied.
 func copyDir(src, dst string) (int64, error) {
+	return copyDirLimited(src, dst, math.MaxInt64)
+}
+
+func copyDirLimited(src, dst string, maxBytes int64) (int64, error) {
 	var totalSize int64
-	return totalSize, filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -54,8 +59,46 @@ func copyDir(src, dst string) (int64, error) {
 			return err
 		}
 		totalSize += int64(len(data))
+		if maxBytes > 0 && totalSize > maxBytes {
+			return fmt.Errorf("artifact exceeds maximum size of %s", humanizeBytes(maxBytes))
+		}
 		return os.WriteFile(targetPath, data, 0644)
 	})
+	return totalSize, err
+}
+
+// validateArtifactTree rejects links and special files and returns the total
+// regular-file size without following entries outside the artifact root.
+func validateArtifactTree(root string, maxBytes int64) (int64, error) {
+	var totalSize int64
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == root || entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return fmt.Errorf("resolve artifact entry: %w", err)
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("artifact contains symbolic link %q", rel)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect artifact entry %q: %w", rel, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("artifact contains non-regular entry %q", rel)
+		}
+		totalSize += info.Size()
+		if maxBytes > 0 && totalSize > maxBytes {
+			return fmt.Errorf("artifact exceeds maximum size of %s", humanizeBytes(maxBytes))
+		}
+		return nil
+	})
+	return totalSize, err
 }
 
 // isDirEmpty checks if a directory has zero entries.

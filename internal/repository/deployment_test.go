@@ -130,6 +130,102 @@ func TestDeploymentRepository_CreateAndGetByID(t *testing.T) {
 	}
 }
 
+func TestDeploymentRepository_BuildManifestRoundTripAndResolve(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	buildCommand := "pnpm run build"
+	sourceRepository := "owner/repo"
+	sourceInstallationID := int64(42)
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "manual", Branch: "main",
+		Status:           models.DeploymentStatusBuilding,
+		BuildNodeVersion: "22", BuildRootDirectory: "apps/web",
+		BuildCommand:     &buildCommand,
+		SourceRepository: &sourceRepository, SourceInstallationID: &sourceInstallationID,
+	}
+	if err := repo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	framework := "vite"
+	mode := "spa"
+	manager := "pnpm"
+	version := "9.12.0"
+	output := "dist"
+	install := "pnpm install --frozen-lockfile"
+	deployment.BuildFramework = &framework
+	deployment.BuildServingMode = &mode
+	deployment.BuildPackageManager = &manager
+	deployment.BuildPackageManagerVersion = &version
+	deployment.BuildOutputDirectory = &output
+	deployment.BuildInstallCommand = &install
+	deployment.BuildLockFileHash = "lock-hash"
+	resolved, err := repo.ResolveBuildManifest(ctx, deployment)
+	if err != nil || !resolved {
+		t.Fatalf("ResolveBuildManifest = (%v, %v)", resolved, err)
+	}
+
+	got, err := repo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.BuildManifestResolved || got.BuildFramework == nil || *got.BuildFramework != framework ||
+		got.BuildServingMode == nil || *got.BuildServingMode != mode ||
+		got.BuildPackageManagerVersion == nil || *got.BuildPackageManagerVersion != version ||
+		got.BuildNodeVersion != "22" || got.BuildRootDirectory != "apps/web" ||
+		got.BuildOutputDirectory == nil || *got.BuildOutputDirectory != output ||
+		got.BuildLockFileHash != "lock-hash" ||
+		got.SourceRepository == nil || *got.SourceRepository != sourceRepository ||
+		got.SourceInstallationID == nil || *got.SourceInstallationID != sourceInstallationID {
+		t.Fatalf("manifest round trip mismatch: %+v", got)
+	}
+}
+
+func TestDeploymentRepository_ResolveBuildManifestRequiresBuilding(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "abc", Branch: "main",
+		Status: models.DeploymentStatusQueued,
+	}
+	if err := repo.Create(context.Background(), deployment); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.ResolveBuildManifest(context.Background(), deployment); err == nil {
+		t.Fatal("expected non-building manifest resolution rejection")
+	}
+}
+
+func TestDeploymentRepository_ActiveRoutesUseDeploymentFrameworkSnapshot(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	projectFramework := "nextjs"
+	project.Framework = &projectFramework
+	if err := NewProjectRepository(db).Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentFramework := "vite"
+	artifact := t.TempDir()
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "abc", Branch: "main",
+		Status: models.DeploymentStatusReady, ArtifactPath: &artifact,
+		BuildFramework: &deploymentFramework, BuildManifestResolved: true,
+	}
+	repo := NewDeploymentRepository(db)
+	if err := repo.Create(context.Background(), deployment); err != nil {
+		t.Fatal(err)
+	}
+	active, err := repo.ListActiveWithProject(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 || active[0].Framework == nil || *active[0].Framework != deploymentFramework {
+		t.Fatalf("active routes did not use deployment framework: %+v", active)
+	}
+}
+
 func TestDeploymentRepository_UpdateIfStatusIsCompareAndSet(t *testing.T) {
 	db := setupTestDB(t)
 	_, project := createTestProject(t, db)

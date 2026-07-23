@@ -113,6 +113,10 @@ type CreateDeploymentRequest struct {
 
 type TriggerDeployRequest = CreateDeploymentRequest
 
+type DeployLatestRequest struct {
+	Branch *string `json:"branch" validate:"omitempty,min=1,max=200"`
+}
+
 type RollbackRequest struct {
 	DeploymentID string `json:"deployment_id" validate:"required"`
 }
@@ -220,24 +224,37 @@ type ProjectListResponse struct {
 }
 
 type DeploymentResponse struct {
-	ID                string  `json:"id"`
-	ProjectID         string  `json:"project_id"`
-	CommitSHA         string  `json:"commit_sha"`
-	CommitMessage     *string `json:"commit_message,omitempty"`
-	CommitAuthor      *string `json:"commit_author,omitempty"`
-	Branch            string  `json:"branch"`
-	Status            string  `json:"status"`
-	IsProduction      bool    `json:"is_production"`
-	DeploymentURL     *string `json:"deployment_url,omitempty"`
-	ArtifactSizeBytes *int64  `json:"artifact_size_bytes,omitempty"`
-	ErrorMessage      *string `json:"error_message,omitempty"`
-	IsRollback        bool    `json:"is_rollback"`
-	RollbackSourceID  *string `json:"rollback_source_id,omitempty"`
-	GitHubPRNumber    *int    `json:"github_pr_number,omitempty"`
-	BuildDurationMs   *int64  `json:"build_duration_ms,omitempty"`
-	StartedAt         *string `json:"started_at,omitempty"`
-	CompletedAt       *string `json:"completed_at,omitempty"`
-	CreatedAt         string  `json:"created_at"`
+	ID                         string  `json:"id"`
+	ProjectID                  string  `json:"project_id"`
+	CommitSHA                  string  `json:"commit_sha"`
+	CommitMessage              *string `json:"commit_message,omitempty"`
+	CommitAuthor               *string `json:"commit_author,omitempty"`
+	Branch                     string  `json:"branch"`
+	Status                     string  `json:"status"`
+	IsProduction               bool    `json:"is_production"`
+	DeploymentURL              *string `json:"deployment_url,omitempty"`
+	ArtifactSizeBytes          *int64  `json:"artifact_size_bytes,omitempty"`
+	ErrorMessage               *string `json:"error_message,omitempty"`
+	IsRollback                 bool    `json:"is_rollback"`
+	RollbackSourceID           *string `json:"rollback_source_id,omitempty"`
+	GitHubPRNumber             *int    `json:"github_pr_number,omitempty"`
+	BuildDurationMs            *int64  `json:"build_duration_ms,omitempty"`
+	BuildFramework             *string `json:"build_framework,omitempty"`
+	BuildServingMode           *string `json:"build_serving_mode,omitempty"`
+	BuildPackageManager        *string `json:"build_package_manager,omitempty"`
+	BuildPackageManagerVersion *string `json:"build_package_manager_version,omitempty"`
+	BuildNodeVersion           string  `json:"build_node_version"`
+	BuildRootDirectory         string  `json:"build_root_directory"`
+	BuildOutputDirectory       *string `json:"build_output_directory,omitempty"`
+	BuildInstallCommand        *string `json:"build_install_command,omitempty"`
+	BuildCommand               *string `json:"build_command,omitempty"`
+	BuildLockFileHash          string  `json:"build_lock_file_hash"`
+	BuildManifestResolved      bool    `json:"build_manifest_resolved"`
+	SourceRepository           *string `json:"source_repository,omitempty"`
+	SourceInstallationID       *int64  `json:"source_installation_id,omitempty"`
+	StartedAt                  *string `json:"started_at,omitempty"`
+	CompletedAt                *string `json:"completed_at,omitempty"`
+	CreatedAt                  string  `json:"created_at"`
 }
 
 type DeploymentListResponse struct {
@@ -283,10 +300,10 @@ type NotificationConfigResponse struct {
 }
 
 type ProjectStatsResponse struct {
-	TotalDeployments   int64  `json:"total_deployments"`
-	SuccessfulBuilds   int64  `json:"successful_builds"`
-	FailedBuilds       int64  `json:"failed_builds"`
-	AverageBuildTimeMs *int64 `json:"average_build_time_ms,omitempty"`
+	TotalDeployments   int64   `json:"total_deployments"`
+	SuccessfulBuilds   int64   `json:"successful_builds"`
+	FailedBuilds       int64   `json:"failed_builds"`
+	AverageBuildTimeMs *int64  `json:"average_build_time_ms,omitempty"`
 	LastDeployAt       *string `json:"last_deploy_at,omitempty"`
 }
 

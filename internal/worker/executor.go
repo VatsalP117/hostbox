@@ -189,7 +189,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	defer os.RemoveAll(cloneDir)
 
 	// Resolve source directory (monorepo support)
-	rootDirectory, err := sanitize.SafeRelativePath(project.RootDirectory)
+	rootDirectory, err := sanitize.SafeRelativePath(deployment.BuildRootDirectory)
 	if err != nil {
 		e.handleFailure(ctx, deployment, project, logger, "Invalid root directory: "+err.Error())
 		return
@@ -201,7 +201,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	}
 	if info, err := os.Stat(sourceDir); err != nil || !info.IsDir() {
 		e.handleFailure(ctx, deployment, project, logger,
-			fmt.Sprintf("Root directory %q not found in repository", project.RootDirectory))
+			fmt.Sprintf("Root directory %q not found in repository", deployment.BuildRootDirectory))
 		return
 	}
 
@@ -214,36 +214,89 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		return
 	}
 
-	// Apply project-level overrides
-	buildCmdOverride := ""
-	if project.BuildCommand != nil {
-		buildCmdOverride = *project.BuildCommand
+	pm := detect.DetectPackageManager(sourceDir)
+	packageManagerVersion := detect.PackageManagerVersion(pkg, pm.Name)
+	lockHash := detect.HashLockFile(sourceDir, pm.LockFile)
+	installCmd := ""
+	buildCommand := ""
+	nodeVersion := ""
+
+	if deployment.BuildManifestResolved {
+		if deployment.BuildFramework == nil || deployment.BuildServingMode == nil ||
+			deployment.BuildPackageManager == nil || deployment.BuildOutputDirectory == nil {
+			e.handleFailure(ctx, deployment, project, logger, "Resolved build manifest is incomplete")
+			return
+		}
+		if pm.Name != *deployment.BuildPackageManager || lockHash != deployment.BuildLockFileHash {
+			e.handleFailure(ctx, deployment, project, logger,
+				"Build manifest does not match the checked-out commit's package manager or lockfile")
+			return
+		}
+		if deployment.BuildPackageManagerVersion != nil &&
+			*deployment.BuildPackageManagerVersion != packageManagerVersion {
+			e.handleFailure(ctx, deployment, project, logger,
+				"Build manifest package manager version does not match the checked-out commit")
+			return
+		}
+		fw.Name = *deployment.BuildFramework
+		fw.DisplayName = *deployment.BuildFramework
+		fw.ServingMode = *deployment.BuildServingMode
+		fw.OutputDirectory = *deployment.BuildOutputDirectory
+		if deployment.BuildCommand != nil {
+			buildCommand = *deployment.BuildCommand
+		}
+		if deployment.BuildInstallCommand != nil {
+			installCmd = *deployment.BuildInstallCommand
+		}
+		nodeVersion = deployment.BuildNodeVersion
+	} else {
+		buildCmdOverride := pointerValue(deployment.BuildCommand)
+		outputDir := pointerValue(deployment.BuildOutputDirectory)
+		fw = detect.ApplyOverrides(fw, buildCmdOverride, "", outputDir)
+		outputDirectory, err := sanitize.SafeRelativePath(fw.OutputDirectory)
+		if err != nil {
+			e.handleFailure(ctx, deployment, project, logger, "Invalid output directory: "+err.Error())
+			return
+		}
+		fw.OutputDirectory = outputDirectory
+		installCmd = pm.InstallCommand
+		if deployment.BuildInstallCommand != nil && *deployment.BuildInstallCommand != "" {
+			installCmd = *deployment.BuildInstallCommand
+		}
+		buildCommand = fw.BuildCommand
+		if buildCmdOverride == "" {
+			buildCommand = detect.AdaptCommandForPackageManager(buildCommand, pm.Name)
+		}
+		nodeVersion = detect.DetectNodeVersion(pkg, e.cfg.DefaultNodeVersion)
+		if deployment.BuildNodeVersion != "" {
+			nodeVersion = deployment.BuildNodeVersion
+		}
+
+		deployment.BuildFramework = stringPtr(fw.Name)
+		deployment.BuildServingMode = stringPtr(fw.ServingMode)
+		deployment.BuildPackageManager = stringPtr(pm.Name)
+		deployment.BuildPackageManagerVersion = optionalStringPtr(packageManagerVersion)
+		deployment.BuildNodeVersion = nodeVersion
+		deployment.BuildRootDirectory = rootDirectory
+		deployment.BuildOutputDirectory = stringPtr(fw.OutputDirectory)
+		deployment.BuildInstallCommand = optionalStringPtr(installCmd)
+		deployment.BuildCommand = optionalStringPtr(buildCommand)
+		deployment.BuildLockFileHash = lockHash
+		resolved, err := e.deploymentRepo.ResolveBuildManifest(ctx, deployment)
+		if err != nil || !resolved {
+			e.handleFailure(ctx, deployment, project, logger, "Failed to persist resolved build manifest")
+			return
+		}
 	}
-	outputDir := ""
-	if project.OutputDirectory != nil {
-		outputDir = *project.OutputDirectory
-	}
-	fw = detect.ApplyOverrides(fw, buildCmdOverride, "", outputDir)
 	outputDirectory, err := sanitize.SafeRelativePath(fw.OutputDirectory)
 	if err != nil {
 		e.handleFailure(ctx, deployment, project, logger, "Invalid output directory: "+err.Error())
 		return
 	}
 	fw.OutputDirectory = outputDirectory
-
-	pm := detect.DetectPackageManager(sourceDir)
-	installCmd := pm.InstallCommand
-	if project.InstallCommand != nil && *project.InstallCommand != "" {
-		installCmd = *project.InstallCommand
-	}
-	buildCommand := fw.BuildCommand
-	if buildCmdOverride == "" {
-		buildCommand = detect.AdaptCommandForPackageManager(buildCommand, pm.Name)
-	}
-
-	nodeVersion := detect.DetectNodeVersion(pkg, e.cfg.DefaultNodeVersion)
-	if project.NodeVersion != "" {
-		nodeVersion = project.NodeVersion
+	if strings.TrimSpace(nodeVersion) == "" {
+		e.handleFailure(ctx, deployment, project, logger, "Resolved build manifest has no Node.js version")
+		return
 	}
 	memoryMB := effectiveBuildMemoryMB(e.cfg.DefaultMemoryMB, sourceDir, pkg)
 
@@ -260,7 +313,6 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	}
 
 	// === Cache invalidation check ===
-	lockHash := detect.HashLockFile(sourceDir, pm.LockFile)
 	cacheInvalidated := e.shouldInvalidateCache(project, nodeVersion, pm.Name, lockHash)
 	if cacheInvalidated {
 		logger.Info("  ⚠ Cache invalidated (dependency changes detected)")
@@ -284,6 +336,12 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		e.handleFailure(ctx, deployment, project, logger, "Failed to create output directory: "+err.Error())
 		return
 	}
+	artifactCommitted := false
+	defer func() {
+		if !artifactCommitted {
+			_ = os.RemoveAll(deployOutputDir)
+		}
+	}()
 
 	envVars := e.resolveEnvVars(ctx, project, deployment)
 
@@ -346,24 +404,35 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	var artifactSize int64
 
 	if fw.Name == "static" && fw.OutputDirectory == "." {
-		artifactSize, err = copyDir(sourceDir, deployOutputDir)
+		artifactSize, err = copyDirLimited(sourceDir, deployOutputDir, e.cfg.MaxArtifactSizeBytes)
 	} else {
 		containerOutputPath, err := sanitize.SafeJoinPath("/app/src", fw.OutputDirectory)
 		if err != nil {
 			e.handleFailure(ctx, deployment, project, logger, "Invalid output directory: "+err.Error())
 			return
 		}
-		artifactSize, err = e.docker.CopyFromContainer(ctx, containerID, containerOutputPath, deployOutputDir)
+		artifactSize, err = e.docker.CopyFromContainer(
+			ctx,
+			containerID,
+			containerOutputPath,
+			deployOutputDir,
+			e.cfg.MaxArtifactSizeBytes,
+		)
 	}
 
 	if err != nil {
-		e.handleFailure(ctx, deployment, project, logger, "Output copy failed: "+err.Error())
+		e.handleFailure(ctx, deployment, project, logger, describeArtifactError(err))
 		return
 	}
 
-	if isEmpty, _ := isDirEmpty(deployOutputDir); isEmpty {
+	artifactSize, err = validateArtifactTree(deployOutputDir, e.cfg.MaxArtifactSizeBytes)
+	if err != nil {
+		e.handleFailure(ctx, deployment, project, logger, describeArtifactError(err))
+		return
+	}
+	if artifactSize == 0 {
 		e.handleFailure(ctx, deployment, project, logger,
-			fmt.Sprintf("Build output directory %q is empty — check your build command and output directory setting", fw.OutputDirectory))
+			fmt.Sprintf("Artifact output empty: build output directory %q has no files — check your build command and output directory setting", fw.OutputDirectory))
 		return
 	}
 
@@ -397,6 +466,7 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 		logger.Info("Build finalization skipped because deployment is no longer building")
 		return
 	}
+	artifactCommitted = true
 
 	logger.Infof("▶ Build complete (%s)", duration.Round(time.Second))
 	logger.Infof("  Artifact size: %s", humanizeBytes(artifactSize))
@@ -516,8 +586,8 @@ func (e *BuildExecutor) stepClone(
 	}
 
 	repoName := ""
-	if project.GitHubRepo != nil {
-		repoName = *project.GitHubRepo
+	if deployment.SourceRepository != nil {
+		repoName = *deployment.SourceRepository
 	}
 	if repoName == "" {
 		return "", fmt.Errorf("project is not linked to a GitHub repository")
@@ -527,8 +597,8 @@ func (e *BuildExecutor) stepClone(
 	}
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", repoName)
 	cloneToken := ""
-	if project.GitHubInstallationID != nil && e.tokenProvider != nil {
-		token, err := e.tokenProvider.GetInstallationToken(*project.GitHubInstallationID)
+	if deployment.SourceInstallationID != nil && e.tokenProvider != nil {
+		token, err := e.tokenProvider.GetInstallationToken(*deployment.SourceInstallationID)
 		if err != nil {
 			return "", fmt.Errorf("get github installation token: %w", err)
 		}
@@ -753,6 +823,20 @@ func describeContainerExecError(err error, memoryMB int64) string {
 	return msg
 }
 
+func describeArtifactError(err error) string {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "exceeds maximum size"):
+		return "Artifact output oversized: " + message
+	case strings.Contains(message, "symbolic link"),
+		strings.Contains(message, "non-regular"),
+		strings.Contains(message, "unsupported tar entry"):
+		return "Artifact output unsafe: " + message
+	default:
+		return "Artifact output missing or unreadable: " + message
+	}
+}
+
 func (e *BuildExecutor) invalidateCache(ctx context.Context, projectID string) {
 	_ = e.docker.RemoveVolume(ctx, fmt.Sprintf("cache-%s-modules", projectID))
 	_ = e.docker.RemoveVolume(ctx, fmt.Sprintf("cache-%s-build", projectID))
@@ -872,4 +956,22 @@ func (e *BuildExecutor) failDeployment(ctx context.Context, deployment *models.D
 		"status":  "failed",
 		"message": errMsg,
 	})
+}
+
+func pointerValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func stringPtr(value string) *string {
+	return &value
+}
+
+func optionalStringPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return stringPtr(value)
 }

@@ -490,6 +490,19 @@ func TestDetectPackageManager_PNPMPriorityOverNPM(t *testing.T) {
 	}
 }
 
+func TestPackageManagerVersion(t *testing.T) {
+	pkg := &PackageJSON{PackageManager: "pnpm@9.12.0"}
+	if got := PackageManagerVersion(pkg, "pnpm"); got != "9.12.0" {
+		t.Fatalf("version = %q, want 9.12.0", got)
+	}
+	if got := PackageManagerVersion(pkg, "npm"); got != "" {
+		t.Fatalf("mismatched manager version = %q, want empty", got)
+	}
+	if got := PackageManagerVersion(nil, "pnpm"); got != "" {
+		t.Fatalf("nil package version = %q, want empty", got)
+	}
+}
+
 // --- Hash Lock File Tests ---
 
 func TestHashLockFile(t *testing.T) {

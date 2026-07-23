@@ -174,7 +174,13 @@ func scanDomainRows(rows *sql.Rows) (*models.Domain, error) {
 
 // ListVerifiedWithProject returns verified domains joined with project info for Caddy sync.
 func (r *DomainRepository) ListVerifiedWithProject(ctx context.Context) ([]VerifiedDomainRow, error) {
-	query := `SELECT dom.id, dom.domain, dom.project_id, p.slug, p.framework,
+	query := `SELECT dom.id, dom.domain, dom.project_id, p.slug,
+		COALESCE(
+			(SELECT d.build_framework FROM deployments d
+			 WHERE d.project_id = p.id AND d.status = 'ready' AND d.is_production = 1
+			 ORDER BY d.created_at DESC LIMIT 1),
+			p.framework
+		),
 		(SELECT d.artifact_path FROM deployments d
 		 WHERE d.project_id = p.id AND d.status = 'ready' AND d.is_production = 1
 		 ORDER BY d.created_at DESC LIMIT 1) AS production_artifact
