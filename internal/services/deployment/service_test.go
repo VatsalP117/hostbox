@@ -141,6 +141,46 @@ func TestService_GetDeployment(t *testing.T) {
 	}
 }
 
+func TestService_QueuedSupersessionReportsCancellationOnce(t *testing.T) {
+	svc, deployRepo, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	reporter := &recordingLifecycleReporter{}
+	svc.SetLifecycleReporter(reporter)
+
+	first, err := svc.TriggerDeployment(context.Background(), TriggerRequest{
+		ProjectID: project.ID, Branch: "main", CommitSHA: "first",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reporter.statuses = nil
+	if _, err := svc.TriggerDeployment(context.Background(), TriggerRequest{
+		ProjectID: project.ID, Branch: "main", CommitSHA: "second",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := deployRepo.GetByID(context.Background(), first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("superseded status = %q, want cancelled", stored.Status)
+	}
+	want := []models.DeploymentStatus{
+		models.DeploymentStatusCancelled,
+		models.DeploymentStatusQueued,
+	}
+	if len(reporter.statuses) != len(want) {
+		t.Fatalf("reported statuses = %v, want %v", reporter.statuses, want)
+	}
+	for i := range want {
+		if reporter.statuses[i] != want[i] {
+			t.Fatalf("reported statuses = %v, want %v", reporter.statuses, want)
+		}
+	}
+}
+
 func TestService_GetDeployment_NotFound(t *testing.T) {
 	svc, _, _, _ := newTestService(t)
 

@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,17 +188,18 @@ func TestCleanupSuccessfulBuildIfCancelledRunsOptionalCleanupAndRefreshesDeploym
 		t.Fatal(err)
 	}
 	deploymentRepo := repository.NewDeploymentRepository(db)
-	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "feature/test", Status: models.DeploymentStatusReady}
+	deployment := &models.Deployment{ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "feature/test", Status: models.DeploymentStatusBuilding}
 	if err := deploymentRepo.Create(ctx, deployment); err != nil {
 		t.Fatal(err)
 	}
 	deployment.Status = models.DeploymentStatusCancelled
-	if err := deploymentRepo.Update(ctx, deployment); err != nil {
+	updated, err := deploymentRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if err != nil || !updated {
 		t.Fatal(err)
 	}
 
 	hook := &recordingCancellationHook{}
-	executor := &BuildExecutor{deploymentRepo: deploymentRepo, postBuild: hook}
+	executor := &BuildExecutor{deploymentRepo: deploymentRepo, readinessHook: &noopPostBuildHook{}, postBuild: hook}
 	stale := *deployment
 	stale.Status = models.DeploymentStatusReady
 	hub := NewSSEHub()
@@ -215,6 +217,231 @@ func TestCleanupSuccessfulBuildIfCancelledRunsOptionalCleanupAndRefreshesDeploym
 	if stale.Status != models.DeploymentStatusCancelled {
 		t.Fatalf("deployment status = %q, want cancelled", stale.Status)
 	}
+}
+
+func TestFinalizeDeploymentReadyCleansRoutesWhenReadinessCancelsBuild(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "worker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	userRepo := repository.NewUserRepository(db)
+	user := &models.User{Email: "readiness-race@hostbox.local", PasswordHash: "hash"}
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	projectRepo := repository.NewProjectRepository(db)
+	project := &models.Project{
+		OwnerID: user.ID, Name: "Readiness Race", Slug: "readiness-race",
+		ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20",
+	}
+	if err := projectRepo.Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "feature/race",
+		Status: models.DeploymentStatusBuilding,
+	}
+	if err := deploymentRepo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	hook := &cancellingReadinessHook{repo: deploymentRepo}
+	executor := &BuildExecutor{
+		deploymentRepo: deploymentRepo,
+		readinessHook:  hook,
+		postBuild:      &noopPostBuildHook{},
+		sseHub:         NewSSEHub(),
+	}
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "readiness.log"), executor.sseHub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+
+	updated, err := executor.finalizeDeploymentReady(ctx, project, deployment, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated {
+		t.Fatal("ready compare-and-set should lose to cancellation")
+	}
+	if hook.cleanupCalls != 1 {
+		t.Fatalf("cleanup calls = %d, want 1", hook.cleanupCalls)
+	}
+	stored, err := deploymentRepo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != models.DeploymentStatusCancelled {
+		t.Fatalf("stored status = %q, want cancelled", stored.Status)
+	}
+}
+
+func TestFinalizeDeploymentReadyCleansPartialRoutesWhenReadinessFails(t *testing.T) {
+	hook := &failingReadinessHook{}
+	executor := &BuildExecutor{
+		readinessHook: hook,
+		sseHub:        NewSSEHub(),
+	}
+	deployment := &models.Deployment{ID: "deployment", Status: models.DeploymentStatusBuilding}
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "readiness-error.log"), executor.sseHub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+
+	updated, err := executor.finalizeDeploymentReady(
+		context.Background(),
+		&models.Project{ID: "project"},
+		deployment,
+		logger,
+	)
+	if err == nil {
+		t.Fatal("expected readiness hook failure")
+	}
+	if updated {
+		t.Fatal("failed readiness must not persist ready")
+	}
+	if hook.cleanupCalls != 1 {
+		t.Fatalf("cleanup calls = %d, want 1", hook.cleanupCalls)
+	}
+	if deployment.Status != models.DeploymentStatusBuilding {
+		t.Fatalf("in-memory status = %q, want building", deployment.Status)
+	}
+}
+
+func TestFinalizeDeploymentReadyRestoresBuildingAfterPersistenceError(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "worker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := database.Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	userRepo := repository.NewUserRepository(db)
+	user := &models.User{Email: "ready-persistence@hostbox.local", PasswordHash: "hash"}
+	if err := userRepo.Create(ctx, user); err != nil {
+		t.Fatal(err)
+	}
+	projectRepo := repository.NewProjectRepository(db)
+	project := &models.Project{
+		OwnerID: user.ID, Name: "Ready Persistence", Slug: "ready-persistence",
+		ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20",
+	}
+	if err := projectRepo.Create(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	deploymentRepo := repository.NewDeploymentRepository(db)
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: strings.Repeat("a", 40), Branch: "main",
+		Status: models.DeploymentStatusBuilding,
+	}
+	if err := deploymentRepo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		CREATE TRIGGER fail_ready_persistence
+		BEFORE UPDATE OF status ON deployments
+		WHEN NEW.status = 'ready'
+		BEGIN
+			SELECT RAISE(FAIL, 'ready persistence failed');
+		END`); err != nil {
+		t.Fatal(err)
+	}
+
+	hook := &recordingCancellationHook{}
+	executor := &BuildExecutor{
+		deploymentRepo: deploymentRepo,
+		readinessHook:  hook,
+		postBuild:      &noopPostBuildHook{},
+		sseHub:         NewSSEHub(),
+	}
+	logger, err := NewBuildLogger(filepath.Join(t.TempDir(), "ready-persistence.log"), executor.sseHub, deployment.ID, 1024*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Close()
+
+	updated, err := executor.finalizeDeploymentReady(
+		ctx,
+		project,
+		deployment,
+		logger,
+	)
+	if err == nil {
+		t.Fatal("expected ready persistence failure")
+	}
+	if updated {
+		t.Fatal("failed persistence must not report ready")
+	}
+	if deployment.Status != models.DeploymentStatusBuilding {
+		t.Fatalf("in-memory status = %q, want building", deployment.Status)
+	}
+	if deployment.CompletedAt != nil {
+		t.Fatal("completion time should be cleared after persistence failure")
+	}
+	if hook.cancelled != 1 {
+		t.Fatalf("cleanup calls = %d, want 1", hook.cancelled)
+	}
+	executor.handleFailure(ctx, deployment, project, logger, "Deployment finalization failed")
+	stored, err := deploymentRepo.GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != models.DeploymentStatusFailed {
+		t.Fatalf("stored status = %q, want failed", stored.Status)
+	}
+}
+
+type cancellingReadinessHook struct {
+	repo         *repository.DeploymentRepository
+	cleanupCalls int
+}
+
+type failingReadinessHook struct {
+	cleanupCalls int
+}
+
+func (h *failingReadinessHook) OnBuildSuccess(context.Context, *models.Project, *models.Deployment) error {
+	return errors.New("partial route activation failed")
+}
+
+func (h *failingReadinessHook) OnBuildFailure(context.Context, *models.Project, *models.Deployment, error) error {
+	return nil
+}
+
+func (h *failingReadinessHook) OnBuildCancelled(context.Context, *models.Project, *models.Deployment) error {
+	h.cleanupCalls++
+	return nil
+}
+
+func (h *cancellingReadinessHook) OnBuildSuccess(ctx context.Context, _ *models.Project, deployment *models.Deployment) error {
+	cancelled := *deployment
+	cancelled.Status = models.DeploymentStatusCancelled
+	updated, err := h.repo.UpdateIfStatus(ctx, &cancelled, models.DeploymentStatusBuilding)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return errors.New("could not cancel deployment")
+	}
+	return nil
+}
+
+func (h *cancellingReadinessHook) OnBuildFailure(context.Context, *models.Project, *models.Deployment, error) error {
+	return nil
+}
+
+func (h *cancellingReadinessHook) OnBuildCancelled(context.Context, *models.Project, *models.Deployment) error {
+	h.cleanupCalls++
+	return nil
 }
 
 type recordingWorkerLifecycleReporter struct {

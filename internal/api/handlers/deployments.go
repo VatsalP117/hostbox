@@ -93,6 +93,10 @@ func (h *DeploymentHandler) ListByProject(c echo.Context) error {
 }
 
 func (h *DeploymentHandler) Create(c echo.Context) error {
+	if h.service == nil {
+		return apperrors.NewInternal(fmt.Errorf("build service not initialized"))
+	}
+
 	project, err := h.getOwnedProject(c, c.Param("projectId"))
 	if err != nil {
 		return err
@@ -101,6 +105,9 @@ func (h *DeploymentHandler) Create(c echo.Context) error {
 	var req dto.CreateDeploymentRequest
 	if err := c.Bind(&req); err != nil {
 		return apperrors.NewBadRequest("Invalid request body")
+	}
+	if appErr := dto.ValidateStruct(req); appErr != nil {
+		return appErr
 	}
 
 	branch := project.ProductionBranch
@@ -113,56 +120,10 @@ func (h *DeploymentHandler) Create(c echo.Context) error {
 		commitSHA = *req.CommitSHA
 	}
 
-	isProduction := branch == project.ProductionBranch
-
-	deployment := &models.Deployment{
-		ProjectID:    project.ID,
-		CommitSHA:    commitSHA,
-		Branch:       branch,
-		Status:       models.DeploymentStatusQueued,
-		IsProduction: isProduction,
-	}
-
-	if err := h.deploymentRepo.Create(c.Request().Context(), deployment); err != nil {
-		return apperrors.NewInternal(err)
-	}
-
-	user := middleware.GetUser(c)
-	h.activityRepo.Create(c.Request().Context(), &models.ActivityLog{
-		UserID:       &user.ID,
-		Action:       "deployment.created",
-		ResourceType: "deployment",
-		ResourceID:   &deployment.ID,
-	})
-
-	return c.JSON(http.StatusCreated, map[string]interface{}{
-		"deployment": toDeploymentResponse(deployment),
-	})
-}
-
-// TriggerDeploy creates a deployment via the build service and enqueues it.
-func (h *DeploymentHandler) TriggerDeploy(c echo.Context) error {
-	if h.service == nil {
-		return apperrors.NewInternal(fmt.Errorf("build service not initialized"))
-	}
-
-	project, err := h.getOwnedProject(c, c.Param("projectId"))
-	if err != nil {
-		return err
-	}
-
-	var req dto.TriggerDeployRequest
-	if err := c.Bind(&req); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
-	}
-	if appErr := dto.ValidateStruct(req); appErr != nil {
-		return appErr
-	}
-
 	deployment, err := h.service.TriggerDeployment(c.Request().Context(), deploysvc.TriggerRequest{
 		ProjectID:     project.ID,
-		Branch:        req.Branch,
-		CommitSHA:     req.CommitSHA,
+		Branch:        branch,
+		CommitSHA:     commitSHA,
 		CommitMessage: req.CommitMessage,
 		CommitAuthor:  req.CommitAuthor,
 	})
@@ -181,6 +142,11 @@ func (h *DeploymentHandler) TriggerDeploy(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]interface{}{
 		"deployment": toDeploymentResponse(deployment),
 	})
+}
+
+// TriggerDeploy creates a deployment via the build service and enqueues it.
+func (h *DeploymentHandler) TriggerDeploy(c echo.Context) error {
+	return h.Create(c)
 }
 
 // CancelDeploy cancels a queued or building deployment.

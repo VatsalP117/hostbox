@@ -151,3 +151,22 @@ func TestPostBuildRouteHook_CancelledCleanupRemovesDeploymentAndBranchRoutes(t *
 		t.Fatalf("requests = %v, want %v", paths, want)
 	}
 }
+
+func TestPostBuildRouteHook_PropagatesRouteFailures(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "caddy unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	manager := NewRouteManager(NewCaddyClient(server.URL, slog.Default()), newTestBuilder(), slog.Default())
+	hook := NewPostBuildRouteHook(manager, slog.Default())
+	project := &models.Project{ID: "prj_1", Slug: "app"}
+	artifactPath := "/tmp/artifact"
+	deployment := &models.Deployment{
+		ID: "dpl_1", Branch: "feature/failure", ArtifactPath: &artifactPath,
+	}
+
+	if err := hook.OnBuildSuccess(context.Background(), project, deployment); err == nil {
+		t.Fatal("expected route activation failure")
+	}
+}

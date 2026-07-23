@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -62,8 +63,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 
 	isProduction := req.Branch == project.ProductionBranch
 
-	// Deduplication: cancel any existing queued/building deploy for this project+branch
-	existing, _ := s.deployRepo.FindQueuedOrBuilding(ctx, req.ProjectID, req.Branch)
+	// Stop an active build explicitly. Queued supersession and replacement are
+	// committed atomically below.
+	existing, err := s.deployRepo.FindBuildingByProjectAndBranch(ctx, req.ProjectID, req.Branch)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("find active deployment: %w", err)
+	}
 	if existing != nil {
 		if _, err := s.cancelDeployment(ctx, existing); err != nil {
 			return nil, fmt.Errorf("cancel superseded deployment: %w", err)
@@ -83,12 +88,18 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 		CreatedAt:      time.Now().UTC(),
 	}
 
-	if err := s.deployRepo.Create(ctx, deployment); err != nil {
+	cancelled, err := s.deployRepo.ReplaceQueued(ctx, deployment)
+	if err != nil {
 		return nil, fmt.Errorf("create deployment: %w", err)
+	}
+	for i := range cancelled {
+		s.reportLifecycle(ctx, project, &cancelled[i])
 	}
 	s.reportLifecycle(ctx, project, deployment)
 
-	s.pool.Enqueue(deployment.ID)
+	if s.pool != nil {
+		s.pool.Offer(deployment.ID)
+	}
 	s.logger.Info("deployment triggered", "id", deployment.ID, "project", req.ProjectID, "branch", req.Branch)
 
 	return deployment, nil
@@ -177,7 +188,6 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 		return nil, fmt.Errorf("production activation is unavailable")
 	}
 
-	now := time.Now().UTC()
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	deployment := &models.Deployment{
 		ID:                util.NewID(),
@@ -186,15 +196,14 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 		CommitMessage:     target.CommitMessage,
 		CommitAuthor:      target.CommitAuthor,
 		Branch:            target.Branch,
-		Status:            models.DeploymentStatusReady,
+		Status:            models.DeploymentStatusBuilding,
 		IsProduction:      true,
 		ArtifactPath:      &artifactPath,
 		ArtifactSizeBytes: target.ArtifactSizeBytes,
 		DeploymentURL:     &deploymentURL,
 		IsRollback:        true,
 		RollbackSourceID:  &target.ID,
-		CompletedAt:       &now,
-		CreatedAt:         now,
+		CreatedAt:         time.Now().UTC(),
 	}
 
 	if err := s.deployRepo.Create(ctx, deployment); err != nil {
@@ -203,6 +212,9 @@ func (s *Service) Rollback(ctx context.Context, projectID, targetDeploymentID st
 
 	if err := s.activateProduction(ctx, project, deployment); err != nil {
 		return nil, err
+	}
+	if err := s.markReady(ctx, deployment); err != nil {
+		return nil, fmt.Errorf("finalize rollback deployment: %w", err)
 	}
 	s.reportLifecycle(ctx, project, deployment)
 
@@ -236,7 +248,6 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 		return nil, fmt.Errorf("production activation is unavailable")
 	}
 
-	now := time.Now().UTC()
 	deploymentURL := fmt.Sprintf("https://%s", hostnames.ProductionHost(project.Slug, s.platformDomain))
 	promoted := &models.Deployment{
 		ID:                util.NewID(),
@@ -245,13 +256,12 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 		CommitMessage:     source.CommitMessage,
 		CommitAuthor:      source.CommitAuthor,
 		Branch:            project.ProductionBranch,
-		Status:            models.DeploymentStatusReady,
+		Status:            models.DeploymentStatusBuilding,
 		IsProduction:      true,
 		ArtifactPath:      &artifactPath,
 		ArtifactSizeBytes: source.ArtifactSizeBytes,
 		DeploymentURL:     &deploymentURL,
-		CompletedAt:       &now,
-		CreatedAt:         now,
+		CreatedAt:         time.Now().UTC(),
 	}
 
 	if err := s.deployRepo.Create(ctx, promoted); err != nil {
@@ -260,6 +270,9 @@ func (s *Service) Promote(ctx context.Context, projectID, deploymentID string) (
 
 	if err := s.activateProduction(ctx, project, promoted); err != nil {
 		return nil, err
+	}
+	if err := s.markReady(ctx, promoted); err != nil {
+		return nil, fmt.Errorf("finalize promoted deployment: %w", err)
 	}
 	s.reportLifecycle(ctx, project, promoted)
 
@@ -403,9 +416,12 @@ func (s *Service) activateProduction(ctx context.Context, project *models.Projec
 
 	activationErr := fmt.Errorf("activate production deployment: %w", err)
 	errorMessage := activationErr.Error()
+	now := time.Now().UTC()
 	deployment.Status = models.DeploymentStatusFailed
 	deployment.ErrorMessage = &errorMessage
-	if updateErr := s.deployRepo.Update(ctx, deployment); updateErr != nil {
+	deployment.CompletedAt = &now
+	updated, updateErr := s.deployRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if updateErr != nil || !updated {
 		s.logger.Error("failed to mark deployment failed after activation error",
 			"deployment_id", deployment.ID,
 			"activation_error", err,
@@ -415,6 +431,21 @@ func (s *Service) activateProduction(ctx context.Context, project *models.Projec
 	}
 
 	return activationErr
+}
+
+func (s *Service) markReady(ctx context.Context, deployment *models.Deployment) error {
+	now := time.Now().UTC()
+	deployment.Status = models.DeploymentStatusReady
+	deployment.ErrorMessage = nil
+	deployment.CompletedAt = &now
+	updated, err := s.deployRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return fmt.Errorf("deployment is no longer building")
+	}
+	return nil
 }
 
 func validateArtifact(artifactPath *string) (string, error) {

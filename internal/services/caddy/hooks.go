@@ -3,6 +3,7 @@ package caddy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/VatsalP117/hostbox/internal/models"
@@ -45,25 +46,25 @@ func (h *PostBuildRouteHook) OnBuildSuccess(ctx context.Context, project *models
 		Framework:    framework,
 	}
 
-	// Add preview route
+	var routeErrs []error
 	if err := h.manager.AddDeploymentRoute(ctx, activeDeploy); err != nil {
-		h.logger.Error("failed to add deployment route", "error", err, "deployment_id", deployment.ID)
+		routeErrs = append(routeErrs, fmt.Errorf("add deployment route: %w", err))
 	}
 
 	// If production, update production route
 	if deployment.IsProduction {
 		if err := h.manager.UpdateProductionRoute(ctx, project.Slug, project.ID, artifactPath, framework); err != nil {
-			h.logger.Error("failed to update production route", "error", err, "project_id", project.ID)
+			routeErrs = append(routeErrs, fmt.Errorf("update production route: %w", err))
 		}
 	}
 
 	// Update branch-stable route
 	branchSlug := Slugify(deployment.Branch)
 	if err := h.manager.UpdateBranchRoute(ctx, project.Slug, project.ID, branchSlug, artifactPath, framework); err != nil {
-		h.logger.Error("failed to update branch route", "error", err, "project_id", project.ID, "branch", deployment.Branch)
+		routeErrs = append(routeErrs, fmt.Errorf("update branch route: %w", err))
 	}
 
-	return nil
+	return errors.Join(routeErrs...)
 }
 
 // OnBuildFailure is a no-op for route management (failed builds don't get routes).

@@ -3,10 +3,90 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"sync"
 	"testing"
 
 	"github.com/VatsalP117/hostbox/internal/models"
 )
+
+func TestDeploymentRepository_RejectsIllegalAndStaleTransitions(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+	deployment := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "abc", Branch: "main",
+		Status: models.DeploymentStatusReady,
+	}
+	if err := repo.Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	deployment.Status = models.DeploymentStatusFailed
+	if _, err := repo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusReady); err == nil {
+		t.Fatal("expected terminal transition rejection")
+	}
+
+	building := &models.Deployment{
+		ProjectID: project.ID, CommitSHA: "def", Branch: "feature",
+		Status: models.DeploymentStatusBuilding,
+	}
+	if err := repo.Create(ctx, building); err != nil {
+		t.Fatal(err)
+	}
+	building.Status = models.DeploymentStatusBuilding
+	updated, err := repo.UpdateIfStatus(ctx, building, models.DeploymentStatusQueued)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated {
+		t.Fatal("stale compare-and-set should not update")
+	}
+}
+
+func TestDeploymentRepository_ReplaceQueuedIsAtomicUnderConcurrency(t *testing.T) {
+	db := setupTestDB(t)
+	_, project := createTestProject(t, db)
+	repo := NewDeploymentRepository(db)
+	ctx := context.Background()
+
+	const replacements = 8
+	errs := make(chan error, replacements)
+	var wg sync.WaitGroup
+	for i := 0; i < replacements; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := repo.ReplaceQueued(ctx, &models.Deployment{
+				ProjectID: project.ID, CommitSHA: "abc", Branch: "main",
+				Status: models.DeploymentStatusQueued,
+			})
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	queued, err := repo.FindByStatus(ctx, string(models.DeploymentStatusQueued))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queued) != 1 {
+		t.Fatalf("queued deployments = %d, want 1", len(queued))
+	}
+	cancelled, err := repo.FindByStatus(ctx, string(models.DeploymentStatusCancelled))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cancelled) != replacements-1 {
+		t.Fatalf("cancelled deployments = %d, want %d", len(cancelled), replacements-1)
+	}
+}
 
 func createTestProject(t *testing.T, db *sql.DB) (*models.User, *models.Project) {
 	t.Helper()
@@ -279,7 +359,7 @@ func TestDeploymentRepository_DeactivateBranchDeploymentsIsRetryableAndStopsActi
 	repo := NewDeploymentRepository(db)
 	ctx := context.Background()
 
-	var previewIDs []string
+	expectedStatuses := make(map[string]models.DeploymentStatus)
 	for _, status := range []models.DeploymentStatus{
 		models.DeploymentStatusQueued,
 		models.DeploymentStatusBuilding,
@@ -290,15 +370,27 @@ func TestDeploymentRepository_DeactivateBranchDeploymentsIsRetryableAndStopsActi
 			ProjectID: project.ID, CommitSHA: "abc123", Branch: "feature/retry",
 			Status: status, IsProduction: false,
 		}
+		if status == models.DeploymentStatusReady {
+			artifact := t.TempDir()
+			deployment.ArtifactPath = &artifact
+		}
 		if err := repo.Create(ctx, deployment); err != nil {
 			t.Fatal(err)
 		}
-		previewIDs = append(previewIDs, deployment.ID)
+		if status == models.DeploymentStatusQueued ||
+			status == models.DeploymentStatusBuilding ||
+			status == models.DeploymentStatusReady {
+			expectedStatuses[deployment.ID] = models.DeploymentStatusCancelled
+		} else {
+			expectedStatuses[deployment.ID] = status
+		}
 	}
 	production := &models.Deployment{
 		ProjectID: project.ID, CommitSHA: "def456", Branch: "feature/retry",
 		Status: models.DeploymentStatusReady, IsProduction: true,
 	}
+	productionArtifact := t.TempDir()
+	production.ArtifactPath = &productionArtifact
 	if err := repo.Create(ctx, production); err != nil {
 		t.Fatal(err)
 	}
@@ -308,21 +400,18 @@ func TestDeploymentRepository_DeactivateBranchDeploymentsIsRetryableAndStopsActi
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(deployments) != len(previewIDs) {
-			t.Fatalf("attempt %d returned %d previews, want %d", attempt, len(deployments), len(previewIDs))
+		if len(deployments) != len(expectedStatuses) {
+			t.Fatalf("attempt %d returned %d previews, want %d", attempt, len(deployments), len(expectedStatuses))
 		}
 	}
 
-	for _, id := range previewIDs {
+	for id, expectedStatus := range expectedStatuses {
 		deployment, err := repo.GetByID(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if deployment.Status != models.DeploymentStatusCancelled {
-			t.Fatalf("preview %s status = %q, want cancelled", id, deployment.Status)
-		}
-		if deployment.CompletedAt == nil {
-			t.Fatalf("preview %s missing completion time", id)
+		if deployment.Status != expectedStatus {
+			t.Fatalf("preview %s status = %q, want %q", id, deployment.Status, expectedStatus)
 		}
 	}
 	gotProduction, err := repo.GetByID(ctx, production.ID)
@@ -331,6 +420,13 @@ func TestDeploymentRepository_DeactivateBranchDeploymentsIsRetryableAndStopsActi
 	}
 	if gotProduction.Status != models.DeploymentStatusReady {
 		t.Fatalf("production status = %q, want ready", gotProduction.Status)
+	}
+	active, err := repo.ListActiveWithProject(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 1 || active[0].DeploymentID != production.ID {
+		t.Fatalf("active deployments = %+v, want only production %s", active, production.ID)
 	}
 }
 

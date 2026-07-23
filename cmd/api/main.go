@@ -200,7 +200,8 @@ func main() {
 		// Wire Caddy route updates and notifications into the build pipeline
 		caddyHook := caddysvc.NewPostBuildRouteHook(routeManager, l)
 		notifHook := notification.NewPostBuildNotificationHook(notificationService, cfg.DashboardBaseURL())
-		executor.SetPostBuildHook(worker.NewCompositePostBuildHook(caddyHook, notifHook))
+		executor.SetReadinessHook(caddyHook)
+		executor.SetPostBuildHook(notifHook)
 		executor.SetLifecycleReporter(ghLifecycleReporter)
 
 		pool := worker.NewPool(

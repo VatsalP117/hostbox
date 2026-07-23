@@ -105,16 +105,13 @@ type UpdateProjectRequest struct {
 // --- Deployments ---
 
 type CreateDeploymentRequest struct {
-	Branch    *string `json:"branch" validate:"omitempty,min=1,max=200"`
-	CommitSHA *string `json:"commit_sha" validate:"omitempty,len=40"`
-}
-
-type TriggerDeployRequest struct {
-	Branch        string  `json:"branch" validate:"required,min=1,max=200"`
-	CommitSHA     string  `json:"commit_sha" validate:"omitempty,max=40"`
+	Branch        *string `json:"branch" validate:"omitempty,min=1,max=200"`
+	CommitSHA     *string `json:"commit_sha" validate:"omitempty,max=40"`
 	CommitMessage *string `json:"commit_message,omitempty" validate:"omitempty,max=500"`
 	CommitAuthor  *string `json:"commit_author,omitempty" validate:"omitempty,max=100"`
 }
+
+type TriggerDeployRequest = CreateDeploymentRequest
 
 type RollbackRequest struct {
 	DeploymentID string `json:"deployment_id" validate:"required"`

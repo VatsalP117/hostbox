@@ -36,6 +36,8 @@ type PostBuildCancellationHook interface {
 
 type noopPostBuildHook struct{}
 
+var errReadinessHook = errors.New("readiness hook failed")
+
 func (n *noopPostBuildHook) OnBuildSuccess(_ context.Context, _ *models.Project, _ *models.Deployment) error {
 	return nil
 }
@@ -62,6 +64,7 @@ type BuildExecutor struct {
 	projectRepo    *repository.ProjectRepository
 	envVarRepo     *repository.EnvVarRepository
 	sseHub         *SSEHub
+	readinessHook  PostBuildHook
 	postBuild      PostBuildHook
 	reporter       LifecycleReporter
 	platformDomain string
@@ -91,6 +94,7 @@ func NewBuildExecutor(
 		projectRepo:    projectRepo,
 		envVarRepo:     envVarRepo,
 		sseHub:         sseHub,
+		readinessHook:  &noopPostBuildHook{},
 		postBuild:      &noopPostBuildHook{},
 		platformDomain: platformDomain,
 		tokenProvider:  tokenProvider,
@@ -101,6 +105,12 @@ func NewBuildExecutor(
 // SetPostBuildHook allows Phase 4/5 to register callbacks.
 func (e *BuildExecutor) SetPostBuildHook(hook PostBuildHook) {
 	e.postBuild = hook
+}
+
+// SetReadinessHook installs the route activation hook that must succeed before
+// the deployment can transition to ready.
+func (e *BuildExecutor) SetReadinessHook(hook PostBuildHook) {
+	e.readinessHook = hook
 }
 
 func (e *BuildExecutor) SetLifecycleReporter(reporter LifecycleReporter) {
@@ -367,24 +377,24 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	deploymentURL := generateDeploymentURL(project, deployment, e.platformDomain)
 	durationMs := duration.Milliseconds()
 
-	completedAt := time.Now().UTC()
-	deployment.Status = models.DeploymentStatusReady
 	deployment.ArtifactPath = &deployOutputDir
 	sizePtr := &artifactSize
 	deployment.ArtifactSizeBytes = sizePtr
 	durationMsPtr := &durationMs
 	deployment.BuildDurationMs = durationMsPtr
 	deployment.DeploymentURL = &deploymentURL
-	deployment.CompletedAt = &completedAt
 
-	updated, err = e.deploymentRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	updated, err = e.finalizeDeploymentReady(ctx, project, deployment, logger)
 	if err != nil {
-		logger.Errorf("Failed to update deployment record: %v", err)
+		message := "Deployment finalization failed: " + err.Error()
+		if errors.Is(err, errReadinessHook) {
+			message = "Route activation failed: " + err.Error()
+		}
+		e.handleFailure(ctx, deployment, project, logger, message)
 		return
 	}
 	if !updated {
 		logger.Info("Build finalization skipped because deployment is no longer building")
-		e.publishCancelledIfCurrent(context.Background(), deployment.ID)
 		return
 	}
 
@@ -407,6 +417,46 @@ func (e *BuildExecutor) Execute(parentCtx context.Context, deploymentID string) 
 	e.reportLifecycle(ctx, project, deployment, logger)
 }
 
+func (e *BuildExecutor) finalizeDeploymentReady(
+	ctx context.Context,
+	project *models.Project,
+	deployment *models.Deployment,
+	logger *BuildLogger,
+) (bool, error) {
+	if err := e.readinessHook.OnBuildSuccess(ctx, project, deployment); err != nil {
+		e.cleanupReadinessSideEffects(project, deployment, logger)
+		return false, fmt.Errorf("%w: %v", errReadinessHook, err)
+	}
+
+	completedAt := time.Now().UTC()
+	deployment.Status = models.DeploymentStatusReady
+	deployment.CompletedAt = &completedAt
+	updated, err := e.deploymentRepo.UpdateIfStatus(ctx, deployment, models.DeploymentStatusBuilding)
+	if err != nil {
+		e.cleanupReadinessSideEffects(project, deployment, logger)
+		deployment.Status = models.DeploymentStatusBuilding
+		deployment.CompletedAt = nil
+		return false, err
+	}
+	if !updated {
+		e.cleanupReadinessSideEffects(project, deployment, logger)
+		e.publishCancelledIfCurrent(context.Background(), deployment.ID)
+	}
+	return updated, nil
+}
+
+func (e *BuildExecutor) cleanupReadinessSideEffects(project *models.Project, deployment *models.Deployment, logger *BuildLogger) {
+	cleanup, ok := e.readinessHook.(PostBuildCancellationHook)
+	if !ok {
+		return
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := cleanup.OnBuildCancelled(cleanupCtx, project, deployment); err != nil {
+		logger.Warn("Deployment readiness cleanup failed: " + err.Error())
+	}
+}
+
 func (e *BuildExecutor) cleanupSuccessfulBuildIfCancelled(project *models.Project, deployment *models.Deployment, logger *BuildLogger) {
 	checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -421,12 +471,14 @@ func (e *BuildExecutor) cleanupSuccessfulBuildIfCancelled(project *models.Projec
 	}
 
 	*deployment = *current
-	cleanup, ok := e.postBuild.(PostBuildCancellationHook)
-	if !ok {
-		return
-	}
-	if err := cleanup.OnBuildCancelled(checkCtx, project, deployment); err != nil {
-		logger.Warn("Cancelled deployment route cleanup failed: " + err.Error())
+	for _, hook := range []PostBuildHook{e.readinessHook, e.postBuild} {
+		cleanup, ok := hook.(PostBuildCancellationHook)
+		if !ok {
+			continue
+		}
+		if err := cleanup.OnBuildCancelled(checkCtx, project, deployment); err != nil {
+			logger.Warn("Cancelled deployment route cleanup failed: " + err.Error())
+		}
 	}
 }
 

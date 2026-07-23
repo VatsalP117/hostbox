@@ -22,10 +22,12 @@ import (
 	"github.com/VatsalP117/hostbox/internal/database"
 	"github.com/VatsalP117/hostbox/internal/dto"
 	apperrors "github.com/VatsalP117/hostbox/internal/errors"
+	"github.com/VatsalP117/hostbox/internal/models"
 	"github.com/VatsalP117/hostbox/internal/repository"
 	"github.com/VatsalP117/hostbox/internal/services"
 	adminsvc "github.com/VatsalP117/hostbox/internal/services/admin"
 	caddysvc "github.com/VatsalP117/hostbox/internal/services/caddy"
+	deploysvc "github.com/VatsalP117/hostbox/internal/services/deployment"
 	"github.com/VatsalP117/hostbox/migrations"
 )
 
@@ -120,6 +122,11 @@ func setupTestEnv(t *testing.T) *testEnv {
 		logger,
 	)
 	deploymentHandler := handlers.NewDeploymentHandler(repos.Deployment, repos.Project, repos.Activity, logger)
+	deploymentHandler.SetBuildDeps(
+		deploysvc.NewService(repos.Deployment, repos.Project, nil, nil, nil, cfg.PlatformDomain, logger),
+		nil,
+		"",
+	)
 	domainHandler := handlers.NewDomainHandler(repos.Domain, repos.Project, repos.Activity, "test.example.com", logger)
 	envVarHandler := handlers.NewEnvVarHandler(repos.EnvVar, repos.Project, repos.Activity, cfg, logger)
 	adminHandler := handlers.NewAdminHandler(repos.User, repos.Project, repos.Deployment, repos.Activity, repos.Settings, cfg, logger)
@@ -500,7 +507,7 @@ func TestDeploymentCreateAndList(t *testing.T) {
 		"branch":     "main",
 	})
 	rec := doRequest(env.echo, http.MethodPost, fmt.Sprintf("/api/v1/projects/%s/deployments", projectID), body, headers)
-	if rec.Code != http.StatusCreated {
+	if rec.Code != http.StatusAccepted {
 		t.Fatalf("create deployment: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -532,6 +539,42 @@ func TestDeploymentCreateAndList(t *testing.T) {
 	rec = doRequest(env.echo, http.MethodGet, "/api/v1/deployments/"+deployID, nil, headers)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("get deployment: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeploymentCreatePathsShareServiceBehavior(t *testing.T) {
+	env := setupTestEnv(t)
+	token := setupAdmin(t, env)
+	headers := map[string]string{"Authorization": "Bearer " + token}
+	for _, suffix := range []string{"", "/trigger"} {
+		t.Run(suffix, func(t *testing.T) {
+			projectID := createTestProject(t, env, token, "Deploy Alias Test "+suffix)
+			body := jsonBody(map[string]interface{}{
+				"commit_sha": "abc123def456",
+				"branch":     "main",
+			})
+
+			rec := doRequest(env.echo, http.MethodPost,
+				fmt.Sprintf("/api/v1/projects/%s/deployments%s", projectID, suffix),
+				body, headers)
+			if rec.Code != http.StatusAccepted {
+				t.Fatalf("create deployment: %d %s", rec.Code, rec.Body.String())
+			}
+			var wrapper struct {
+				Deployment dto.DeploymentResponse `json:"deployment"`
+			}
+			mustDecode(t, rec, &wrapper)
+			if wrapper.Deployment.Status != string(models.DeploymentStatusQueued) {
+				t.Fatalf("status = %q, want queued", wrapper.Deployment.Status)
+			}
+			stored, err := env.repos.Deployment.GetByID(context.Background(), wrapper.Deployment.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.Status != models.DeploymentStatusQueued {
+				t.Fatalf("stored status = %q, want queued", stored.Status)
+			}
+		})
 	}
 }
 

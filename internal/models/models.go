@@ -68,6 +68,40 @@ const (
 	DeploymentStatusCancelled DeploymentStatus = "cancelled"
 )
 
+// Valid reports whether the status is part of the persisted deployment
+// lifecycle.
+func (s DeploymentStatus) Valid() bool {
+	switch s {
+	case DeploymentStatusQueued, DeploymentStatusBuilding, DeploymentStatusReady,
+		DeploymentStatusFailed, DeploymentStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+// CanTransitionTo reports whether a deployment may move from s to next.
+// Failed and cancelled are terminal. Ready may only be cancelled by the
+// preview-deactivation repository workflow.
+func (s DeploymentStatus) CanTransitionTo(next DeploymentStatus) bool {
+	switch s {
+	case DeploymentStatusQueued:
+		return next == DeploymentStatusBuilding ||
+			next == DeploymentStatusFailed ||
+			next == DeploymentStatusCancelled
+	case DeploymentStatusBuilding:
+		return next == DeploymentStatusReady ||
+			next == DeploymentStatusFailed ||
+			next == DeploymentStatusCancelled
+	case DeploymentStatusReady:
+		// Ready deployments are otherwise terminal. This transition is used
+		// only when deactivating non-production preview routes.
+		return next == DeploymentStatusCancelled
+	default:
+		return false
+	}
+}
+
 type Deployment struct {
 	ID                string           `db:"id"`
 	ProjectID         string           `db:"project_id"`

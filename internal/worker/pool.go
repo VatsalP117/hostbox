@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VatsalP117/hostbox/internal/models"
 	dockerpkg "github.com/VatsalP117/hostbox/internal/platform/docker"
 	"github.com/VatsalP117/hostbox/internal/repository"
 )
@@ -22,6 +23,8 @@ type Pool struct {
 	deployRepo *repository.DeploymentRepository
 	docker     dockerpkg.DockerClient
 }
+
+const queueReconcileInterval = 250 * time.Millisecond
 
 // NewPool creates a worker pool. Call Start() to begin processing.
 func NewPool(
@@ -55,9 +58,11 @@ func (p *Pool) Start() error {
 		p.wg.Add(1)
 		go p.worker(i)
 	}
+	p.wg.Add(1)
+	go p.dispatchQueued()
 	slog.Info("worker pool started", "workers", p.maxWorkers)
 
-	p.reEnqueuePending()
+	p.dispatchOnce()
 
 	return nil
 }
@@ -85,8 +90,7 @@ func (p *Pool) worker(id int) {
 							"panic", r,
 							"stack", string(debug.Stack()),
 						)
-						errMsg := "Internal error: build worker panic"
-						_ = p.deployRepo.UpdateStatus(context.Background(), deploymentID, "failed", &errMsg)
+						p.failActiveDeployment(deploymentID, "Internal error: build worker panic")
 					}
 				}()
 				p.executor.Execute(p.ctx, deploymentID)
@@ -95,13 +99,19 @@ func (p *Pool) worker(id int) {
 	}
 }
 
-// Enqueue adds a deployment ID to the job queue.
-func (p *Pool) Enqueue(deploymentID string) {
+// Offer wakes a worker for a durable queued deployment without blocking the
+// caller. The dispatcher will offer it again while the database row is queued.
+func (p *Pool) Offer(deploymentID string) bool {
 	select {
 	case p.jobs <- deploymentID:
 		slog.Debug("job enqueued", "deployment_id", deploymentID)
+		return true
+	default:
+		slog.Debug("job channel full; durable queue will retry", "deployment_id", deploymentID)
+		return false
 	case <-p.ctx.Done():
 		slog.Warn("pool shutdown: dropping job", "deployment_id", deploymentID)
+		return false
 	}
 }
 
@@ -125,7 +135,6 @@ func (p *Pool) Shutdown(timeout time.Duration) {
 		p.forceKillContainers()
 	}
 
-	close(p.jobs)
 }
 
 func (p *Pool) recoverCrashedBuilds() error {
@@ -138,11 +147,12 @@ func (p *Pool) recoverCrashedBuilds() error {
 	for _, d := range stuck {
 		slog.Warn("recovering stuck build", "deployment_id", d.ID)
 		now := time.Now().UTC()
-		d.Status = "failed"
+		d.Status = models.DeploymentStatusFailed
 		errMsg := "Build interrupted by server restart"
 		d.ErrorMessage = &errMsg
 		d.CompletedAt = &now
-		if err := p.deployRepo.Update(ctx, &d); err != nil {
+		updated, err := p.deployRepo.UpdateIfStatus(ctx, &d, models.DeploymentStatusBuilding)
+		if err != nil || !updated {
 			slog.Error("failed to mark deployment as failed", "id", d.ID, "err", err)
 		}
 	}
@@ -169,18 +179,53 @@ func (p *Pool) cleanOrphanedContainers() {
 	}
 }
 
-func (p *Pool) reEnqueuePending() {
-	ctx := context.Background()
-	queued, err := p.deployRepo.FindByStatus(ctx, "queued")
+func (p *Pool) dispatchQueued() {
+	defer p.wg.Done()
+	ticker := time.NewTicker(queueReconcileInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			p.dispatchOnce()
+		}
+	}
+}
+
+func (p *Pool) dispatchOnce() {
+	queued, err := p.deployRepo.FindByStatus(p.ctx, string(models.DeploymentStatusQueued))
 	if err != nil {
+		if p.ctx.Err() != nil {
+			return
+		}
 		slog.Error("failed to load queued deployments", "err", err)
 		return
 	}
 
 	for _, d := range queued {
-		slog.Info("re-enqueuing pending deployment", "deployment_id", d.ID)
-		p.Enqueue(d.ID)
+		if !p.Offer(d.ID) {
+			return
+		}
 	}
+}
+
+func (p *Pool) failActiveDeployment(deploymentID, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	deployment, err := p.deployRepo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return
+	}
+	expected := deployment.Status
+	if expected != models.DeploymentStatusQueued && expected != models.DeploymentStatusBuilding {
+		return
+	}
+	now := time.Now().UTC()
+	deployment.Status = models.DeploymentStatusFailed
+	deployment.ErrorMessage = &message
+	deployment.CompletedAt = &now
+	_, _ = p.deployRepo.UpdateIfStatus(ctx, deployment, expected)
 }
 
 func (p *Pool) forceKillContainers() {

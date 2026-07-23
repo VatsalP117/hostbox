@@ -37,11 +37,27 @@ func NewDeploymentRepository(db *sql.DB) *DeploymentRepository {
 }
 
 func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.Deployment) error {
+	if !deployment.Status.Valid() {
+		return fmt.Errorf("create deployment: invalid status %q", deployment.Status)
+	}
 	if deployment.ID == "" {
 		deployment.ID = util.NewID()
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := r.db.ExecContext(ctx,
+	err := insertDeployment(ctx, r.db, deployment, now)
+	if err != nil {
+		return fmt.Errorf("create deployment: %w", err)
+	}
+	deployment.CreatedAt, _ = time.Parse(time.RFC3339, now)
+	return nil
+}
+
+type sqlExecer interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
+
+func insertDeployment(ctx context.Context, execer sqlExecer, deployment *models.Deployment, createdAt string) error {
+	_, err := execer.ExecContext(ctx,
 		`INSERT INTO deployments (id, project_id, commit_sha, commit_message, commit_author,
 		  branch, status, is_production, deployment_url, artifact_path, artifact_size_bytes,
 		  log_path, error_message, is_rollback, rollback_source_id, github_pr_number,
@@ -57,13 +73,63 @@ func (r *DeploymentRepository) Create(ctx context.Context, deployment *models.De
 		deployment.GitHubDeployID, deployment.BuildDurationMs,
 		formatNullableTime(deployment.StartedAt),
 		formatNullableTime(deployment.CompletedAt),
-		now,
+		createdAt,
+	)
+	return err
+}
+
+// ReplaceQueued atomically cancels queued deployments for the same
+// project/branch and inserts their queued replacement.
+func (r *DeploymentRepository) ReplaceQueued(ctx context.Context, deployment *models.Deployment) ([]models.Deployment, error) {
+	if deployment.Status != models.DeploymentStatusQueued {
+		return nil, fmt.Errorf("replacement deployment must be queued")
+	}
+	if deployment.ID == "" {
+		deployment.ID = util.NewID()
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin queued replacement: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx,
+		`UPDATE deployments
+		 SET status = 'cancelled', completed_at = COALESCE(completed_at, ?)
+		 WHERE project_id = ? AND branch = ? AND status = 'queued'
+		 RETURNING id, project_id, commit_sha, commit_message, commit_author,
+		   branch, status, is_production, deployment_url, artifact_path, artifact_size_bytes,
+		   log_path, error_message, is_rollback, rollback_source_id, github_pr_number,
+		   github_deploy_id, build_duration_ms, started_at, completed_at, created_at`,
+		now, deployment.ProjectID, deployment.Branch,
 	)
 	if err != nil {
-		return fmt.Errorf("create deployment: %w", err)
+		return nil, fmt.Errorf("cancel superseded queued deployments: %w", err)
+	}
+	var cancelled []models.Deployment
+	for rows.Next() {
+		d, scanErr := scanDeploymentRows(rows)
+		if scanErr != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan superseded queued deployment: %w", scanErr)
+		}
+		cancelled = append(cancelled, *d)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close superseded queued deployments: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read superseded queued deployments: %w", err)
+	}
+	if err := insertDeployment(ctx, tx, deployment, now); err != nil {
+		return nil, fmt.Errorf("insert queued replacement: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit queued replacement: %w", err)
 	}
 	deployment.CreatedAt, _ = time.Parse(time.RFC3339, now)
-	return nil
+	return cancelled, nil
 }
 
 func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*models.Deployment, error) {
@@ -72,17 +138,20 @@ func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*models.
 }
 
 func (r *DeploymentRepository) Update(ctx context.Context, deployment *models.Deployment) error {
+	if !deployment.Status.Valid() {
+		return fmt.Errorf("update deployment: invalid status %q", deployment.Status)
+	}
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
 		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
 		  github_deploy_id = COALESCE(?, github_deploy_id), build_duration_ms = ?, started_at = ?, completed_at = ?
-		 WHERE id = ?`,
+		 WHERE id = ? AND status = ?`,
 		deployment.Status, deployment.DeploymentURL, deployment.ArtifactPath,
 		deployment.ArtifactSizeBytes, deployment.LogPath, deployment.ErrorMessage,
 		deployment.GitHubDeployID, deployment.BuildDurationMs,
 		formatNullableTime(deployment.StartedAt),
 		formatNullableTime(deployment.CompletedAt),
-		deployment.ID,
+		deployment.ID, deployment.Status,
 	)
 	if err != nil {
 		return fmt.Errorf("update deployment: %w", err)
@@ -99,6 +168,12 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *models.De
 // terminal cancellation cannot be overwritten by a concurrent failure or
 // success update.
 func (r *DeploymentRepository) UpdateIfStatus(ctx context.Context, deployment *models.Deployment, expected models.DeploymentStatus) (bool, error) {
+	if !expected.Valid() || !deployment.Status.Valid() {
+		return false, fmt.Errorf("conditionally update deployment: invalid status transition %q -> %q", expected, deployment.Status)
+	}
+	if !expected.CanTransitionTo(deployment.Status) {
+		return false, fmt.Errorf("conditionally update deployment: illegal status transition %q -> %q", expected, deployment.Status)
+	}
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE deployments SET status = ?, deployment_url = ?, artifact_path = ?,
 		  artifact_size_bytes = ?, log_path = ?, error_message = ?,
@@ -167,15 +242,18 @@ func (r *DeploymentRepository) SetGitHubDeployIDIfUnset(ctx context.Context, dep
 }
 
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status models.DeploymentStatus, errorMsg *string) error {
-	result, err := r.db.ExecContext(ctx,
-		`UPDATE deployments SET status = ?, error_message = ? WHERE id = ?`,
-		status, errorMsg, id,
-	)
+	deployment, err := r.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("update deployment status: %w", err)
+		return err
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	expected := deployment.Status
+	deployment.Status = status
+	deployment.ErrorMessage = errorMsg
+	updated, err := r.UpdateIfStatus(ctx, deployment, expected)
+	if err != nil {
+		return err
+	}
+	if !updated {
 		return sql.ErrNoRows
 	}
 	return nil
@@ -411,6 +489,13 @@ func (r *DeploymentRepository) FindQueuedOrBuilding(ctx context.Context, project
 	return scanDeployment(row)
 }
 
+func (r *DeploymentRepository) FindBuildingByProjectAndBranch(ctx context.Context, projectID, branch string) (*models.Deployment, error) {
+	row := r.db.QueryRowContext(ctx,
+		deploymentSelectSQL+` WHERE d.project_id = ? AND d.branch = ? AND d.status = 'building' ORDER BY d.created_at ASC LIMIT 1`,
+		projectID, branch)
+	return scanDeployment(row)
+}
+
 // FindLatestReady returns the latest ready deployment for a project,
 // optionally filtered to production-only.
 func (r *DeploymentRepository) FindLatestReady(ctx context.Context, projectID string, production bool) (*models.Deployment, error) {
@@ -562,14 +647,13 @@ func (r *DeploymentRepository) DeactivateBranchDeployments(ctx context.Context, 
 		return nil, nil
 	}
 
-	// Cancel queued/building work as well as ready previews. Build finalization
-	// uses a compare-and-swap from building, so this prevents an in-flight build
-	// from recreating routes after its branch has been deleted or PR closed.
+	// Deactivate active work and ready previews. The production constraint keeps
+	// ready production history terminal and eligible for reconciliation.
 	_, err = r.db.ExecContext(ctx,
 		`UPDATE deployments
 		 SET status = 'cancelled', completed_at = COALESCE(completed_at, ?)
 		 WHERE project_id = ? AND branch = ?
-		   AND status IN ('queued', 'building', 'ready', 'cancelled') AND is_production = FALSE`,
+		   AND status IN ('queued', 'building', 'ready') AND is_production = FALSE`,
 		time.Now().UTC(), projectID, branch)
 	if err != nil {
 		return nil, fmt.Errorf("deactivate branch deployments: %w", err)
