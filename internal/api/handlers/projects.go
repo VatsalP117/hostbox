@@ -81,7 +81,8 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 	if err := h.validateProjectSlug(slug); err != nil {
 		return err
 	}
-	if err := h.validateGitHubRepository(c.Request().Context(), req.GitHubRepo, req.GitHubInstallationID); err != nil {
+	githubRepo, err := h.validateGitHubRepository(c.Request().Context(), req.GitHubRepo, req.GitHubInstallationID)
+	if err != nil {
 		return err
 	}
 
@@ -99,6 +100,10 @@ func (h *ProjectHandler) Create(c echo.Context) error {
 		NodeVersion:          "20",
 		AutoDeploy:           true,
 		PreviewDeployments:   true,
+	}
+	if githubRepo != nil {
+		project.GitHubRepositoryID = &githubRepo.ID
+		project.GitHubConnectionStatus = models.GitHubConnectionActive
 	}
 
 	if req.RootDirectory != nil {
@@ -318,35 +323,39 @@ func (h *ProjectHandler) validateProjectSlug(slug string) error {
 	return nil
 }
 
-func (h *ProjectHandler) validateGitHubRepository(ctx context.Context, repo *string, installationID *int64) error {
+func (h *ProjectHandler) validateGitHubRepository(ctx context.Context, repo *string, installationID *int64) (*github.Repository, error) {
 	if installationID == nil {
-		return nil
+		return nil, nil
 	}
 
 	if repo == nil || strings.TrimSpace(*repo) == "" {
-		return apperrors.NewBadRequest("github_repo is required when github_installation_id is provided")
+		return nil, apperrors.NewBadRequest("github_repo is required when github_installation_id is provided")
 	}
 	if h.githubRuntime == nil {
-		return apperrors.NewBadRequest("GitHub App integration is not configured")
+		return nil, apperrors.NewBadRequest("GitHub App integration is not configured")
 	}
 
 	owner, name, ok := splitGitHubRepo(*repo)
 	if !ok {
-		return apperrors.NewBadRequest("github_repo must be in owner/repository format")
+		return nil, apperrors.NewBadRequest("github_repo must be in owner/repository format")
 	}
 
-	if _, err := h.githubRuntime.GetRepo(ctx, *installationID, owner, name); err != nil {
+	repository, err := h.githubRuntime.GetRepo(ctx, *installationID, owner, name)
+	if err != nil {
 		h.logger.Warn("selected github repository is not accessible through installation",
 			"repo", strings.TrimSpace(*repo),
 			"installation_id", *installationID,
 			"error", err,
 		)
-		return apperrors.NewBadRequest("Selected repository is not accessible by this GitHub installation")
+		return nil, apperrors.NewBadRequest("Selected repository is not accessible by this GitHub installation")
 	}
 
-	normalized := owner + "/" + name
+	normalized := strings.TrimSpace(repository.FullName)
+	if normalized == "" {
+		normalized = owner + "/" + name
+	}
 	*repo = normalized
-	return nil
+	return repository, nil
 }
 
 func splitGitHubRepo(repo string) (string, string, bool) {
@@ -359,24 +368,26 @@ func splitGitHubRepo(repo string) (string, string, bool) {
 
 func toProjectResponse(p *models.Project, status string) dto.ProjectResponse {
 	resp := dto.ProjectResponse{
-		ID:                   p.ID,
-		OwnerID:              p.OwnerID,
-		Name:                 p.Name,
-		Slug:                 p.Slug,
-		GitHubRepo:           p.GitHubRepo,
-		GitHubInstallationID: p.GitHubInstallationID,
-		ProductionBranch:     p.ProductionBranch,
-		Framework:            p.Framework,
-		BuildCommand:         p.BuildCommand,
-		InstallCommand:       p.InstallCommand,
-		OutputDirectory:      p.OutputDirectory,
-		RootDirectory:        p.RootDirectory,
-		NodeVersion:          p.NodeVersion,
-		AutoDeploy:           p.AutoDeploy,
-		PreviewDeployments:   p.PreviewDeployments,
-		Status:               status,
-		CreatedAt:            p.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:            p.UpdatedAt.Format(time.RFC3339),
+		ID:                     p.ID,
+		OwnerID:                p.OwnerID,
+		Name:                   p.Name,
+		Slug:                   p.Slug,
+		GitHubRepo:             p.GitHubRepo,
+		GitHubInstallationID:   p.GitHubInstallationID,
+		GitHubRepositoryID:     p.GitHubRepositoryID,
+		GitHubConnectionStatus: p.GitHubConnectionStatus,
+		ProductionBranch:       p.ProductionBranch,
+		Framework:              p.Framework,
+		BuildCommand:           p.BuildCommand,
+		InstallCommand:         p.InstallCommand,
+		OutputDirectory:        p.OutputDirectory,
+		RootDirectory:          p.RootDirectory,
+		NodeVersion:            p.NodeVersion,
+		AutoDeploy:             p.AutoDeploy,
+		PreviewDeployments:     p.PreviewDeployments,
+		Status:                 status,
+		CreatedAt:              p.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:              p.UpdatedAt.Format(time.RFC3339),
 	}
 	return resp
 }

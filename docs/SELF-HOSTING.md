@@ -267,6 +267,10 @@ Hostbox stores the generated GitHub App ID, slug, private key, and webhook secre
 
 You can still provide `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PEM`, and `GITHUB_WEBHOOK_SECRET` in `.env` if you want to manage the GitHub App manually.
 
+Multiple Hostbox projects may use the same GitHub repository; each push and pull-request event is applied to every matching project for that exact App installation. If the installation is suspended or repository access is removed, Hostbox keeps existing sites online but blocks new deployments until access returns.
+
+Fork pull-request previews are intentionally unsupported in v1. Hostbox records a terminal webhook-delivery failure instead of attempting to build the fork SHA from the base repository. Branches and pull requests originating in the selected repository continue to receive previews normally.
+
 ## Operations
 
 ### View logs

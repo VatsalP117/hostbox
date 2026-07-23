@@ -124,7 +124,20 @@ The GitHub primary-experience slice has now:
 - serialized full Caddy reconciliation with incremental mutations and added post-build cancellation cleanup so stale snapshots or in-flight success hooks cannot resurrect a closed preview; and
 - added focused migration, repository, HTTP, processor, feedback, worker, and Caddy race coverage.
 
-The remaining GitHub v1 work is still explicit below: fork-PR policy, installation suspension/access removal, repository rename/transfer, multi-project repository semantics, delivery diagnostics/manual retry UI, and real public/private repository validation on the test VM.
+The remaining GitHub v1 work is still explicit below: delivery diagnostics/manual retry UI and real public/private repository validation on the test VM.
+
+### GitHub source-lifecycle progress — 2026-07-23
+
+The repository-lifecycle slice has now:
+
+- defined multiple projects per repository as supported and made push, PR, close, and branch-delete events fan out deterministically by exact installation plus repository;
+- persisted the stable GitHub repository ID and explicit `active`, `suspended`, `access_removed`, or `disconnected` state on every project;
+- rejected fork PR previews as terminal durable-delivery failures instead of cloning the base repository at an unrelated fork SHA;
+- handled installation create/delete/suspend/unsuspend and repository access added/removed events, including cached-token invalidation and early deployment rejection while access is unavailable;
+- followed repository rename/transfer and installation-account rename events while preserving historical exact-rebuild source locators; and
+- surfaced unavailable GitHub state in project API/CLI/dashboard contracts and disabled misleading deploy actions.
+
+The remaining proof requirement is live GitHub acceptance: public and private repositories, installation suspension/recovery, access removal/re-addition, rename/transfer, multi-project fan-out, and the documented fork rejection must run on the disposable test VM.
 
 ### Deployment reproducibility and recovery progress — 2026-07-23
 

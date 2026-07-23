@@ -111,6 +111,56 @@ func TestDeploymentManifestMigrationBackfillsQueuedProjectSettings(t *testing.T)
 	}
 }
 
+func TestGitHubProjectLifecycleMigrationBackfillsConnectionStatus(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "pre-github-lifecycle.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	oldMigrations := fstest.MapFS{}
+	for _, name := range []string{
+		"001_initial.sql", "002_password_reset.sql", "003_deployments_cache.sql",
+		"004_github_deploy_id.sql", "005_system_metrics.sql", "006_github_webhook_deliveries.sql",
+		"007_deployment_build_manifest.sql",
+	} {
+		data, err := fs.ReadFile(migrations.FS, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		oldMigrations[name] = &fstest.MapFile{Data: data}
+	}
+	if err := Migrate(db, oldMigrations); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO users (id, email, password_hash) VALUES ('user', 'user@example.com', 'hash');
+		INSERT INTO projects (
+			id, owner_id, name, slug, github_repo, github_installation_id
+		) VALUES ('connected', 'user', 'Connected', 'connected', 'owner/repo', 42);
+		INSERT INTO projects (
+			id, owner_id, name, slug
+		) VALUES ('local', 'user', 'Local', 'local');
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(db, migrations.FS); err != nil {
+		t.Fatal(err)
+	}
+
+	var connectedStatus, localStatus string
+	if err := db.QueryRow(`SELECT github_connection_status FROM projects WHERE id = 'connected'`).Scan(&connectedStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT github_connection_status FROM projects WHERE id = 'local'`).Scan(&localStatus); err != nil {
+		t.Fatal(err)
+	}
+	if connectedStatus != "active" || localStatus != "disconnected" {
+		t.Fatalf("statuses = %q, %q", connectedStatus, localStatus)
+	}
+}
+
 func TestRealMigrationIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.db")

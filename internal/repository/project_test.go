@@ -184,6 +184,97 @@ func TestProjectRepository_ListByOwner_Search(t *testing.T) {
 	}
 }
 
+func TestProjectRepository_GitHubSourceLifecycleAndFanout(t *testing.T) {
+	db := setupTestDB(t)
+	user := createTestUserForProject(t, db, "github-lifecycle@test.com")
+	repo := NewProjectRepository(db)
+	ctx := context.Background()
+	repositoryName := "Octo/Repo"
+	installationID := int64(99)
+	repositoryID := int64(123)
+
+	var createdProjects []*models.Project
+	for _, project := range []*models.Project{
+		{
+			OwnerID: user.ID, Name: "Frontend", Slug: "frontend-github",
+			GitHubRepo: &repositoryName, GitHubInstallationID: &installationID, GitHubRepositoryID: &repositoryID,
+			ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20",
+		},
+		{
+			OwnerID: user.ID, Name: "Docs", Slug: "docs-github",
+			GitHubRepo: &repositoryName, GitHubInstallationID: &installationID, GitHubRepositoryID: &repositoryID,
+			ProductionBranch: "main", RootDirectory: "/", NodeVersion: "20",
+		},
+	} {
+		if err := repo.Create(ctx, project); err != nil {
+			t.Fatal(err)
+		}
+		createdProjects = append(createdProjects, project)
+	}
+	sourceRepository := "octo/repo"
+	sourceInstallationID := int64(99)
+	deployment := &models.Deployment{
+		ProjectID: createdProjects[0].ID, CommitSHA: "0123456789012345678901234567890123456789",
+		Branch: "main", Status: models.DeploymentStatusFailed,
+		SourceRepository: &sourceRepository, SourceInstallationID: &sourceInstallationID,
+	}
+	if err := NewDeploymentRepository(db).Create(ctx, deployment); err != nil {
+		t.Fatal(err)
+	}
+
+	projects, err := repo.ListByGitHubSource(ctx, installationID, "octo/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("active projects = %d, want 2", len(projects))
+	}
+
+	if err := repo.SetInstallationStatus(ctx, installationID, models.GitHubConnectionSuspended); err != nil {
+		t.Fatal(err)
+	}
+	projects, err = repo.ListByGitHubSource(ctx, installationID, "octo/repo")
+	if err != nil || len(projects) != 0 {
+		t.Fatalf("suspended projects = %d, err=%v", len(projects), err)
+	}
+	if err := repo.SetInstallationStatus(ctx, installationID, models.GitHubConnectionActive); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetRepositoryAccess(ctx, installationID, []string{"octo/repo"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetInstallationStatus(ctx, installationID, models.GitHubConnectionSuspended); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetInstallationStatus(ctx, installationID, models.GitHubConnectionActive); err != nil {
+		t.Fatal(err)
+	}
+	projects, err = repo.ListByGitHubSource(ctx, installationID, "octo/repo")
+	if err != nil || len(projects) != 0 {
+		t.Fatalf("access-removed projects = %d, err=%v", len(projects), err)
+	}
+	if err := repo.SetRepositoryAccess(ctx, installationID, []string{"octo/repo"}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.UpdateGitHubRepositoryIdentity(ctx, 100, repositoryID, "octo/repo", "new-owner/new-repo"); err != nil {
+		t.Fatal(err)
+	}
+	projects, err = repo.ListByGitHubSource(ctx, 100, "new-owner/new-repo")
+	if err != nil || len(projects) != 2 {
+		t.Fatalf("renamed projects = %d, err=%v", len(projects), err)
+	}
+	storedDeployment, err := NewDeploymentRepository(db).GetByID(ctx, deployment.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedDeployment.SourceRepository == nil || *storedDeployment.SourceRepository != "new-owner/new-repo" ||
+		storedDeployment.SourceInstallationID == nil || *storedDeployment.SourceInstallationID != 100 {
+		t.Fatalf("deployment source after rename = %v installation=%v",
+			storedDeployment.SourceRepository, storedDeployment.SourceInstallationID)
+	}
+}
+
 func TestProjectRepository_CountByOwner(t *testing.T) {
 	db := setupTestDB(t)
 	user := createTestUserForProject(t, db, "count@test.com")

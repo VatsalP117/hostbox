@@ -293,12 +293,13 @@ func (p *DeliveryProcessor) process(ctx context.Context, delivery *models.GitHub
 	}
 
 	lastError := boundedError(routeErr)
-	if delivery.Attempts >= p.config.MaxAttempts {
+	var permanentErr *PermanentWebhookError
+	if errors.As(routeErr, &permanentErr) || delivery.Attempts >= p.config.MaxAttempts {
 		changed, err := p.repository.MarkFailed(persistCtx, delivery.DeliveryID, lastError, now)
 		if err != nil {
 			p.logger.Error("failed to mark github webhook delivery terminal", "delivery_id", delivery.DeliveryID, "error", err)
 		} else if changed {
-			p.logger.Error("github webhook delivery exhausted retries", "delivery_id", delivery.DeliveryID, "attempts", delivery.Attempts, "error", routeErr)
+			p.logger.Error("github webhook delivery failed terminally", "delivery_id", delivery.DeliveryID, "attempts", delivery.Attempts, "error", routeErr)
 		}
 		return
 	}

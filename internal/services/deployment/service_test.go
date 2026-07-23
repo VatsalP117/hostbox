@@ -141,6 +141,28 @@ func TestService_GetDeployment(t *testing.T) {
 	}
 }
 
+func TestService_RejectsDeploymentWhenGitHubAccessIsUnavailable(t *testing.T) {
+	svc, _, projectRepo, userID := newTestService(t)
+	project := createTestProject(t, projectRepo, userID)
+	source := "owner/repo"
+	installationID := int64(99)
+	project.GitHubRepo = &source
+	project.GitHubInstallationID = &installationID
+	project.GitHubConnectionStatus = models.GitHubConnectionAccessRemoved
+	if err := projectRepo.Update(context.Background(), project); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.TriggerDeployment(context.Background(), TriggerRequest{
+		ProjectID: project.ID,
+		Branch:    "main",
+		CommitSHA: "0123456789012345678901234567890123456789",
+	})
+	if err == nil || !strings.Contains(err.Error(), "access_removed") {
+		t.Fatalf("TriggerDeployment() error = %v, want access_removed", err)
+	}
+}
+
 func TestService_QueuedSupersessionReportsCancellationOnce(t *testing.T) {
 	svc, deployRepo, projectRepo, userID := newTestService(t)
 	project := createTestProject(t, projectRepo, userID)
@@ -193,6 +215,7 @@ func TestService_TriggerDeploymentSnapshotsProjectBuildSettings(t *testing.T) {
 	installationID := int64(42)
 	project.GitHubRepo = &repositoryName
 	project.GitHubInstallationID = &installationID
+	project.GitHubConnectionStatus = models.GitHubConnectionActive
 	if err := projectRepo.Update(context.Background(), project); err != nil {
 		t.Fatal(err)
 	}

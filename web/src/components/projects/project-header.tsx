@@ -25,6 +25,7 @@ import {
   FileText,
   HelpCircle,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -66,6 +67,9 @@ export function ProjectHeader({
     ? frameworkConfigMap[framework]
     : { label: "Unknown", icon: "HelpCircle" };
   const FrameworkIcon = iconMap[fwConfig?.icon] ?? HelpCircle;
+  const githubUnavailable =
+    Boolean(project.github_installation_id) &&
+    project.github_connection_status !== "active";
 
   const handleDeploy = () => {
     trigger.mutate(
@@ -152,7 +156,7 @@ export function ProjectHeader({
 
           <Button
             onClick={handleDeploy}
-            disabled={trigger.isPending}
+            disabled={trigger.isPending || githubUnavailable}
             className="font-headline font-bold bg-primary text-on-primary hover:bg-primary/90"
           >
             {trigger.isPending ? (
@@ -178,6 +182,12 @@ export function ProjectHeader({
             <span className="font-body">{project.github_repo}</span>
             <ExternalLink className="h-3 w-3" />
           </a>
+        )}
+        {githubUnavailable && (
+          <span className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="h-4 w-4" />
+            GitHub {project.github_connection_status.replace("_", " ")}
+          </span>
         )}
 
         <div className="flex items-center gap-2 text-on-surface-variant">

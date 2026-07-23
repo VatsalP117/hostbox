@@ -86,6 +86,27 @@ func TestDeliveryProcessorFailsAfterBoundedAttempts(t *testing.T) {
 	}
 }
 
+func TestDeliveryProcessorDoesNotRetryPermanentWebhookError(t *testing.T) {
+	repo := deliveryProcessorTestRepository(t)
+	var calls atomic.Int32
+	processor := newTestDeliveryProcessor(repo, deliveryRouterFunc(func(context.Context, string, []byte, string) error {
+		calls.Add(1)
+		return NewPermanentWebhookError("unsupported fork pull request")
+	}))
+	startTestDeliveryProcessor(t, processor)
+	if _, err := processor.Accept(context.Background(), "delivery-permanent", "pull_request", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	delivery := waitForWebhookStatus(t, repo, "delivery-permanent", models.GitHubWebhookDeliveryFailed)
+	if delivery.Attempts != 1 || calls.Load() != 1 {
+		t.Fatalf("failed attempts=%d calls=%d, want 1,1", delivery.Attempts, calls.Load())
+	}
+	if delivery.LastError == nil || *delivery.LastError != "unsupported fork pull request" {
+		t.Fatalf("last error = %v", delivery.LastError)
+	}
+}
+
 func TestDeliveryProcessorRecoversFromRouterPanicAndKeepsWorkerAlive(t *testing.T) {
 	repo := deliveryProcessorTestRepository(t)
 	var calls atomic.Int32

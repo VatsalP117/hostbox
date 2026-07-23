@@ -37,14 +37,23 @@ func (r *ProjectRepository) Create(ctx context.Context, project *models.Project)
 	if !project.PreviewDeployments {
 		project.PreviewDeployments = true
 	}
+	if project.GitHubConnectionStatus == "" {
+		if project.GitHubRepo != nil && project.GitHubInstallationID != nil {
+			project.GitHubConnectionStatus = models.GitHubConnectionActive
+		} else {
+			project.GitHubConnectionStatus = models.GitHubConnectionDisconnected
+		}
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO projects (id, owner_id, name, slug, github_repo, github_installation_id,
+		  github_repository_id, github_connection_status,
 		  production_branch, framework, build_command, install_command, output_directory,
 		  root_directory, node_version, auto_deploy, preview_deployments, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		project.ID, project.OwnerID, project.Name, project.Slug,
 		project.GitHubRepo, project.GitHubInstallationID,
+		project.GitHubRepositoryID, project.GitHubConnectionStatus,
 		project.ProductionBranch, project.Framework,
 		project.BuildCommand, project.InstallCommand,
 		project.OutputDirectory, project.RootDirectory,
@@ -69,20 +78,43 @@ func (r *ProjectRepository) GetBySlug(ctx context.Context, slug string) (*models
 	return scanProject(row)
 }
 
-func (r *ProjectRepository) GetByGitHubRepo(ctx context.Context, repo string) (*models.Project, error) {
-	row := r.db.QueryRowContext(ctx, projectSelectSQL+` WHERE p.github_repo = ?`, repo)
-	return scanProject(row)
+// ListByGitHubSource returns every active project associated with an exact
+// installation/repository pair. Multiple projects may intentionally map to one
+// repository, so webhook handlers must fan out deterministically.
+func (r *ProjectRepository) ListByGitHubSource(ctx context.Context, installationID int64, repo string) ([]models.Project, error) {
+	rows, err := r.db.QueryContext(ctx, projectSelectSQL+`
+		WHERE p.github_installation_id = ?
+		  AND LOWER(p.github_repo) = LOWER(?)
+		  AND p.github_connection_status = ?
+		ORDER BY p.created_at ASC, p.id ASC`,
+		installationID, repo, models.GitHubConnectionActive)
+	if err != nil {
+		return nil, fmt.Errorf("list projects by github source: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []models.Project
+	for rows.Next() {
+		project, err := scanProjectRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, *project)
+	}
+	return projects, rows.Err()
 }
 
 func (r *ProjectRepository) Update(ctx context.Context, project *models.Project) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := r.db.ExecContext(ctx,
 		`UPDATE projects SET name = ?, slug = ?, github_repo = ?, github_installation_id = ?,
+		  github_repository_id = ?, github_connection_status = ?,
 		  production_branch = ?, framework = ?, build_command = ?, install_command = ?,
 		  output_directory = ?, root_directory = ?, node_version = ?,
 		  auto_deploy = ?, preview_deployments = ?, updated_at = ?
 		 WHERE id = ?`,
 		project.Name, project.Slug, project.GitHubRepo, project.GitHubInstallationID,
+		project.GitHubRepositoryID, project.GitHubConnectionStatus,
 		project.ProductionBranch, project.Framework,
 		project.BuildCommand, project.InstallCommand,
 		project.OutputDirectory, project.RootDirectory,
@@ -163,6 +195,7 @@ func (r *ProjectRepository) CountByOwner(ctx context.Context, ownerID string) (i
 }
 
 const projectSelectSQL = `SELECT p.id, p.owner_id, p.name, p.slug, p.github_repo, p.github_installation_id,
+	p.github_repository_id, p.github_connection_status,
 	p.production_branch, p.framework, p.build_command, p.install_command, p.output_directory,
 	p.root_directory, p.node_version, p.auto_deploy, p.preview_deployments,
 	p.lock_file_hash, p.detected_package_manager, p.created_at, p.updated_at
@@ -172,6 +205,7 @@ func scanProject(s scanner) (*models.Project, error) {
 	var p models.Project
 	var createdAt, updatedAt string
 	err := s.Scan(&p.ID, &p.OwnerID, &p.Name, &p.Slug, &p.GitHubRepo, &p.GitHubInstallationID,
+		&p.GitHubRepositoryID, &p.GitHubConnectionStatus,
 		&p.ProductionBranch, &p.Framework, &p.BuildCommand, &p.InstallCommand, &p.OutputDirectory,
 		&p.RootDirectory, &p.NodeVersion, &p.AutoDeploy, &p.PreviewDeployments,
 		&p.LockFileHash, &p.DetectedPackageManager, &createdAt, &updatedAt)
@@ -232,11 +266,148 @@ func (r *ProjectRepository) Exists(ctx context.Context, id string) (bool, error)
 // ClearInstallation clears the GitHub installation ID for all projects with the given installation.
 func (r *ProjectRepository) ClearInstallation(ctx context.Context, installationID int64) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE projects SET github_installation_id = NULL, updated_at = ? WHERE github_installation_id = ?`,
-		time.Now().UTC().Format(time.RFC3339), installationID,
+		`UPDATE projects
+		 SET github_installation_id = NULL, github_connection_status = ?, updated_at = ?
+		 WHERE github_installation_id = ?`,
+		models.GitHubConnectionDisconnected, time.Now().UTC().Format(time.RFC3339), installationID,
 	)
 	if err != nil {
 		return fmt.Errorf("clear installation: %w", err)
+	}
+	return nil
+}
+
+// SetInstallationStatus updates every project still associated with an
+// installation. Suspension is reversible and deliberately retains source
+// identity so an unsuspend event can reactivate it.
+func (r *ProjectRepository) SetInstallationStatus(ctx context.Context, installationID int64, status string) error {
+	if status != models.GitHubConnectionActive && status != models.GitHubConnectionSuspended {
+		return fmt.Errorf("invalid github installation status %q", status)
+	}
+	fromStatus := models.GitHubConnectionSuspended
+	if status == models.GitHubConnectionSuspended {
+		fromStatus = models.GitHubConnectionActive
+	}
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE projects
+		 SET github_connection_status = ?, updated_at = ?
+		 WHERE github_installation_id = ? AND github_connection_status = ?`,
+		status, time.Now().UTC().Format(time.RFC3339), installationID, fromStatus)
+	if err != nil {
+		return fmt.Errorf("set installation status: %w", err)
+	}
+	return nil
+}
+
+// SetRepositoryAccess marks matching projects as active or access-removed.
+// The installation ID is retained so a later "added" event can reconnect the
+// project without guessing which installation previously owned the mapping.
+func (r *ProjectRepository) SetRepositoryAccess(ctx context.Context, installationID int64, repos []string, granted bool) error {
+	if len(repos) == 0 {
+		return nil
+	}
+	status := models.GitHubConnectionAccessRemoved
+	if granted {
+		status = models.GitHubConnectionActive
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, repo := range repos {
+		query := `UPDATE projects
+			 SET github_connection_status = ?, updated_at = ?
+			 WHERE github_installation_id = ? AND LOWER(github_repo) = LOWER(?)`
+		if granted {
+			query += ` AND github_connection_status <> 'suspended'`
+		}
+		if _, err := r.db.ExecContext(ctx,
+			query,
+			status, now, installationID, repo); err != nil {
+			return fmt.Errorf("set repository access for %q: %w", repo, err)
+		}
+	}
+	return nil
+}
+
+// UpdateGitHubRepositoryIdentity follows a repository across rename or
+// transfer. Repository ID is preferred because the full name changes; the old
+// full name is retained as a migration fallback for projects created before ID
+// persistence existed.
+func (r *ProjectRepository) UpdateGitHubRepositoryIdentity(
+	ctx context.Context,
+	installationID, repositoryID int64,
+	oldFullName, newFullName string,
+) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin github repository identity update: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Repository names are mutable locators. Update historical source snapshots
+	// for the same stable repository identity so exact rebuild remains possible
+	// after rename/transfer; commit and build recipe fields remain unchanged.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE deployments
+		 SET source_repository = ?, source_installation_id = ?
+		 WHERE project_id IN (
+		     SELECT id FROM projects
+		     WHERE github_repository_id = ?
+		        OR (github_repository_id IS NULL AND LOWER(github_repo) = LOWER(?))
+		 )
+		   AND LOWER(source_repository) = LOWER(?)`,
+		newFullName, installationID, repositoryID, oldFullName, oldFullName); err != nil {
+		return fmt.Errorf("update deployment github source identity: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx,
+		`UPDATE projects
+		 SET github_repo = ?, github_installation_id = ?, github_repository_id = ?,
+		     github_connection_status = ?, updated_at = ?
+		 WHERE (github_repository_id = ? OR (github_repository_id IS NULL AND LOWER(github_repo) = LOWER(?)))`,
+		newFullName, installationID, repositoryID, models.GitHubConnectionActive,
+		time.Now().UTC().Format(time.RFC3339), repositoryID, oldFullName)
+	if err != nil {
+		return fmt.Errorf("update github repository identity: %w", err)
+	}
+	if _, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("read github repository identity update result: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit github repository identity update: %w", err)
+	}
+	return nil
+}
+
+// RenameInstallationOwner updates legacy owner/repository strings after the
+// account hosting an installation is renamed.
+func (r *ProjectRepository) RenameInstallationOwner(ctx context.Context, installationID int64, oldOwner, newOwner string) error {
+	oldPrefix := oldOwner + "/"
+	newPrefix := newOwner + "/"
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin github installation owner rename: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE deployments
+		 SET source_repository = ? || SUBSTR(source_repository, LENGTH(?) + 1)
+		 WHERE project_id IN (
+		     SELECT id FROM projects WHERE github_installation_id = ?
+		 )
+		   AND LOWER(source_repository) LIKE LOWER(?) || '%'`,
+		newPrefix, oldPrefix, installationID, oldPrefix); err != nil {
+		return fmt.Errorf("rename deployment github source owner: %w", err)
+	}
+	_, err = tx.ExecContext(ctx,
+		`UPDATE projects
+		 SET github_repo = ? || SUBSTR(github_repo, LENGTH(?) + 1), updated_at = ?
+		 WHERE github_installation_id = ? AND LOWER(github_repo) LIKE LOWER(?) || '%'`,
+		newPrefix, oldPrefix, time.Now().UTC().Format(time.RFC3339), installationID, oldPrefix)
+	if err != nil {
+		return fmt.Errorf("rename github installation owner: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit github installation owner rename: %w", err)
 	}
 	return nil
 }

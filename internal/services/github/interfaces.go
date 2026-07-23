@@ -8,8 +8,12 @@ import (
 
 // ProjectRepository defines the project data access methods needed by GitHub handlers.
 type ProjectRepository interface {
-	GetByGitHubRepo(ctx context.Context, repoFullName string) (*models.Project, error)
+	ListByGitHubSource(ctx context.Context, installationID int64, repoFullName string) ([]models.Project, error)
 	ClearInstallation(ctx context.Context, installationID int64) error
+	SetInstallationStatus(ctx context.Context, installationID int64, status string) error
+	SetRepositoryAccess(ctx context.Context, installationID int64, repos []string, granted bool) error
+	UpdateGitHubRepositoryIdentity(ctx context.Context, installationID, repositoryID int64, oldFullName, newFullName string) error
+	RenameInstallationOwner(ctx context.Context, installationID int64, oldOwner, newOwner string) error
 }
 
 // DeploymentCreator defines the deployment creation methods needed by webhook handlers.
@@ -24,6 +28,10 @@ type DeploymentCreator interface {
 type RouteRemover interface {
 	RemoveDeploymentRoute(ctx context.Context, deploymentID string) error
 	RemoveBranchRoute(ctx context.Context, projectID, branch string) error
+}
+
+type InstallationTokenInvalidator interface {
+	InvalidateInstallationToken(installationID int64)
 }
 
 // WebhookTriggerParams contains parameters for creating a deployment from a webhook.

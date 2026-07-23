@@ -3,13 +3,16 @@ package client
 import "fmt"
 
 type Project struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Slug             string  `json:"slug"`
-	Framework        *string `json:"framework"`
-	GitHubRepo       *string `json:"github_repo"`
-	ProductionBranch string  `json:"production_branch"`
-	CreatedAt        string  `json:"created_at"`
+	ID                     string  `json:"id"`
+	Name                   string  `json:"name"`
+	Slug                   string  `json:"slug"`
+	Framework              *string `json:"framework"`
+	GitHubRepo             *string `json:"github_repo"`
+	GitHubInstallationID   *int64  `json:"github_installation_id"`
+	GitHubRepositoryID     *int64  `json:"github_repository_id"`
+	GitHubConnectionStatus string  `json:"github_connection_status"`
+	ProductionBranch       string  `json:"production_branch"`
+	CreatedAt              string  `json:"created_at"`
 }
 
 type ProjectListResponse struct {

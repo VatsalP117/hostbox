@@ -40,6 +40,8 @@ type Project struct {
 	Slug                   string    `db:"slug"`
 	GitHubRepo             *string   `db:"github_repo"`
 	GitHubInstallationID   *int64    `db:"github_installation_id"`
+	GitHubRepositoryID     *int64    `db:"github_repository_id"`
+	GitHubConnectionStatus string    `db:"github_connection_status"`
 	ProductionBranch       string    `db:"production_branch"`
 	Framework              *string   `db:"framework"`
 	BuildCommand           *string   `db:"build_command"`
@@ -54,6 +56,13 @@ type Project struct {
 	CreatedAt              time.Time `db:"created_at"`
 	UpdatedAt              time.Time `db:"updated_at"`
 }
+
+const (
+	GitHubConnectionActive        = "active"
+	GitHubConnectionSuspended     = "suspended"
+	GitHubConnectionAccessRemoved = "access_removed"
+	GitHubConnectionDisconnected  = "disconnected"
+)
 
 // --- Deployment ---
 

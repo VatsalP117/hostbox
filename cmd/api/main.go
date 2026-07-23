@@ -227,7 +227,7 @@ func main() {
 
 		pushHandler := ghsvc.NewPushHandler(repos.Project, deploymentService, routeManager, l)
 		prHandler := ghsvc.NewPullRequestHandler(repos.Project, deploymentService, routeManager, l)
-		installHandler := ghsvc.NewInstallationHandler(repos.Project, l)
+		installHandler := ghsvc.NewInstallationHandler(repos.Project, ghRuntime, l)
 		ghRuntime.SetEventRouter(ghsvc.NewGitHubEventRouter(pushHandler, prHandler, installHandler, l))
 		webhookProcessorCtx, webhookProcessorCancel := context.WithCancel(context.Background())
 		if err := ghDeliveryProcessor.Start(webhookProcessorCtx); err != nil {

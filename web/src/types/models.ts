@@ -71,6 +71,8 @@ export interface Project {
   slug: string;
   github_repo: string | null;
   github_installation_id: number | null;
+  github_repository_id: number | null;
+  github_connection_status: "active" | "suspended" | "access_removed" | "disconnected";
   production_branch: string;
   framework: Framework | null;
   build_command: string | null;

@@ -198,24 +198,26 @@ type AuthResponse struct {
 }
 
 type ProjectResponse struct {
-	ID                   string  `json:"id"`
-	OwnerID              string  `json:"owner_id"`
-	Name                 string  `json:"name"`
-	Slug                 string  `json:"slug"`
-	GitHubRepo           *string `json:"github_repo,omitempty"`
-	GitHubInstallationID *int64  `json:"github_installation_id,omitempty"`
-	ProductionBranch     string  `json:"production_branch"`
-	Framework            *string `json:"framework,omitempty"`
-	BuildCommand         *string `json:"build_command,omitempty"`
-	InstallCommand       *string `json:"install_command,omitempty"`
-	OutputDirectory      *string `json:"output_directory,omitempty"`
-	RootDirectory        string  `json:"root_directory"`
-	NodeVersion          string  `json:"node_version"`
-	AutoDeploy           bool    `json:"auto_deploy"`
-	PreviewDeployments   bool    `json:"preview_deployments"`
-	Status               string  `json:"status"`
-	CreatedAt            string  `json:"created_at"`
-	UpdatedAt            string  `json:"updated_at"`
+	ID                     string  `json:"id"`
+	OwnerID                string  `json:"owner_id"`
+	Name                   string  `json:"name"`
+	Slug                   string  `json:"slug"`
+	GitHubRepo             *string `json:"github_repo,omitempty"`
+	GitHubInstallationID   *int64  `json:"github_installation_id,omitempty"`
+	GitHubRepositoryID     *int64  `json:"github_repository_id,omitempty"`
+	GitHubConnectionStatus string  `json:"github_connection_status"`
+	ProductionBranch       string  `json:"production_branch"`
+	Framework              *string `json:"framework,omitempty"`
+	BuildCommand           *string `json:"build_command,omitempty"`
+	InstallCommand         *string `json:"install_command,omitempty"`
+	OutputDirectory        *string `json:"output_directory,omitempty"`
+	RootDirectory          string  `json:"root_directory"`
+	NodeVersion            string  `json:"node_version"`
+	AutoDeploy             bool    `json:"auto_deploy"`
+	PreviewDeployments     bool    `json:"preview_deployments"`
+	Status                 string  `json:"status"`
+	CreatedAt              string  `json:"created_at"`
+	UpdatedAt              string  `json:"updated_at"`
 }
 
 type ProjectListResponse struct {

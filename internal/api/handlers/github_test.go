@@ -13,7 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func TestGitHubHandler_ManifestExcludesUnsupportedDefaultEvents(t *testing.T) {
+func TestGitHubHandler_ManifestIncludesRepositoryLifecycleEvent(t *testing.T) {
 	db := setupTestDB(t)
 	configStore := github.NewAppConfigStore(
 		repository.NewSettingsRepository(db),
@@ -65,7 +65,7 @@ func TestGitHubHandler_ManifestExcludesUnsupportedDefaultEvents(t *testing.T) {
 		}
 	}
 
-	want := []string{"push", "pull_request"}
+	want := []string{"push", "pull_request", "repository"}
 	if len(got) != len(want) {
 		t.Fatalf("default_events = %v, want %v", got, want)
 	}

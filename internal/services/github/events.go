@@ -35,6 +35,12 @@ func (r *GitHubEventRouter) Route(ctx context.Context, eventType string, payload
 		return r.pullRequestHandler.Handle(ctx, payload, deliveryID)
 	case "installation":
 		return r.installationHandler.Handle(ctx, payload, deliveryID)
+	case "installation_repositories":
+		return r.installationHandler.HandleRepositories(ctx, payload, deliveryID)
+	case "installation_target":
+		return r.installationHandler.HandleTarget(ctx, payload, deliveryID)
+	case "repository":
+		return r.installationHandler.HandleRepository(ctx, payload, deliveryID)
 	case "ping":
 		r.logger.Info("github ping received", "delivery_id", deliveryID)
 		return nil

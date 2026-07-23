@@ -107,6 +107,17 @@ func (r *Runtime) GetInstallationToken(installationID int64) (string, error) {
 	return tokenProvider.GetInstallationToken(installationID)
 }
 
+// InvalidateInstallationToken drops cached credentials after installation
+// suspension, deletion, or repository-access changes.
+func (r *Runtime) InvalidateInstallationToken(installationID int64) {
+	r.mu.RLock()
+	tokenProvider := r.tokenProvider
+	r.mu.RUnlock()
+	if tokenProvider != nil {
+		tokenProvider.InvalidateToken(installationID)
+	}
+}
+
 // FeedbackClient returns the currently configured GitHub client through the
 // narrow lifecycle-feedback interface.
 func (r *Runtime) FeedbackClient() (FeedbackClient, error) {

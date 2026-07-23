@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/VatsalP117/hostbox/internal/models"
 )
@@ -19,8 +20,12 @@ type PullRequestPayload struct {
 		Title  string `json:"title"`
 		State  string `json:"state"`
 		Head   struct {
-			Ref string `json:"ref"`
-			SHA string `json:"sha"`
+			Ref  string `json:"ref"`
+			SHA  string `json:"sha"`
+			Repo struct {
+				FullName string `json:"full_name"`
+				Fork     bool   `json:"fork"`
+			} `json:"repo"`
 		} `json:"head"`
 		Base struct {
 			Ref string `json:"ref"`
@@ -63,21 +68,46 @@ func (h *PullRequestHandler) Handle(ctx context.Context, payload []byte, deliver
 	}
 
 	repoFullName := event.Repository.FullName
-
-	project, err := h.projectRepo.GetByGitHubRepo(ctx, repoFullName)
+	projects, err := h.projectRepo.ListByGitHubSource(ctx, event.Installation.ID, repoFullName)
 	if err != nil {
+		return fmt.Errorf("list projects for github source: %w", err)
+	}
+	if len(projects) == 0 {
 		return nil
 	}
 
-	switch event.Action {
-	case "opened", "synchronize", "reopened":
-		return h.handleOpenedOrSync(ctx, project, event)
-	case "closed":
-		return h.handleClosed(ctx, project, event)
-	default:
-		h.logger.Debug("ignoring pull_request action", "action", event.Action)
-		return nil
+	if event.Action != "closed" &&
+		event.PullRequest.Head.Repo.FullName != "" &&
+		!strings.EqualFold(event.PullRequest.Head.Repo.FullName, repoFullName) {
+		h.logger.Warn("rejecting unsupported fork pull request",
+			"repo", repoFullName,
+			"head_repo", event.PullRequest.Head.Repo.FullName,
+			"pr_number", event.Number,
+		)
+		return NewPermanentWebhookError(
+			"fork pull request previews are not supported: head repository %q differs from base repository %q",
+			event.PullRequest.Head.Repo.FullName,
+			repoFullName,
+		)
 	}
+
+	var eventErrors []error
+	for i := range projects {
+		project := &projects[i]
+		switch event.Action {
+		case "opened", "synchronize", "reopened":
+			err = h.handleOpenedOrSync(ctx, project, event)
+		case "closed":
+			err = h.handleClosed(ctx, project, event)
+		default:
+			h.logger.Debug("ignoring pull_request action", "action", event.Action)
+			return nil
+		}
+		if err != nil {
+			eventErrors = append(eventErrors, fmt.Errorf("project %s: %w", project.ID, err))
+		}
+	}
+	return errors.Join(eventErrors...)
 }
 
 func (h *PullRequestHandler) handleOpenedOrSync(ctx context.Context, project *models.Project, event PullRequestPayload) error {

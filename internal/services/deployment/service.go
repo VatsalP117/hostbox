@@ -61,6 +61,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req TriggerRequest) (*m
 	if err != nil {
 		return nil, fmt.Errorf("project not found: %w", err)
 	}
+	if project.GitHubInstallationID != nil &&
+		project.GitHubConnectionStatus != "" &&
+		project.GitHubConnectionStatus != models.GitHubConnectionActive {
+		return nil, fmt.Errorf(
+			"github source is unavailable: connection status is %q",
+			project.GitHubConnectionStatus,
+		)
+	}
 
 	isProduction := req.Branch == project.ProductionBranch
 	if req.IsProduction != nil {

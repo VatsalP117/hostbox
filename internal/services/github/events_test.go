@@ -13,20 +13,70 @@ import (
 // --- Mock implementations ---
 
 type mockProjectRepo struct {
-	projects map[string]*models.Project // keyed by github_repo
-	cleared  []int64
+	projects          map[string]*models.Project // keyed by github_repo
+	projectLists      map[string][]models.Project
+	cleared           []int64
+	statuses          map[int64]string
+	accessChanges     []repositoryAccessChange
+	identityChanges   []repositoryIdentityChange
+	installationMoves []installationOwnerChange
 }
 
-func (m *mockProjectRepo) GetByGitHubRepo(ctx context.Context, repo string) (*models.Project, error) {
+type repositoryAccessChange struct {
+	installationID int64
+	repositories   []string
+	granted        bool
+}
+
+type repositoryIdentityChange struct {
+	installationID int64
+	repositoryID   int64
+	oldFullName    string
+	newFullName    string
+}
+
+type installationOwnerChange struct {
+	installationID int64
+	oldOwner       string
+	newOwner       string
+}
+
+func (m *mockProjectRepo) ListByGitHubSource(ctx context.Context, installationID int64, repo string) ([]models.Project, error) {
+	if projects, ok := m.projectLists[repo]; ok {
+		return projects, nil
+	}
 	p, ok := m.projects[repo]
 	if !ok {
-		return nil, context.DeadlineExceeded
+		return nil, nil
 	}
-	return p, nil
+	return []models.Project{*p}, nil
 }
 
 func (m *mockProjectRepo) ClearInstallation(ctx context.Context, installationID int64) error {
 	m.cleared = append(m.cleared, installationID)
+	return nil
+}
+
+func (m *mockProjectRepo) SetInstallationStatus(ctx context.Context, installationID int64, status string) error {
+	if m.statuses == nil {
+		m.statuses = make(map[int64]string)
+	}
+	m.statuses[installationID] = status
+	return nil
+}
+
+func (m *mockProjectRepo) SetRepositoryAccess(ctx context.Context, installationID int64, repos []string, granted bool) error {
+	m.accessChanges = append(m.accessChanges, repositoryAccessChange{installationID, append([]string(nil), repos...), granted})
+	return nil
+}
+
+func (m *mockProjectRepo) UpdateGitHubRepositoryIdentity(ctx context.Context, installationID, repositoryID int64, oldFullName, newFullName string) error {
+	m.identityChanges = append(m.identityChanges, repositoryIdentityChange{installationID, repositoryID, oldFullName, newFullName})
+	return nil
+}
+
+func (m *mockProjectRepo) RenameInstallationOwner(ctx context.Context, installationID int64, oldOwner, newOwner string) error {
+	m.installationMoves = append(m.installationMoves, installationOwnerChange{installationID, oldOwner, newOwner})
 	return nil
 }
 
@@ -86,6 +136,14 @@ type mockRouteRemover struct {
 	removedBranches  []string
 	deploymentErrors map[string]error
 	branchError      error
+}
+
+type mockTokenInvalidator struct {
+	installationIDs []int64
+}
+
+func (m *mockTokenInvalidator) InvalidateInstallationToken(installationID int64) {
+	m.installationIDs = append(m.installationIDs, installationID)
 }
 
 func (m *mockRouteRemover) RemoveDeploymentRoute(ctx context.Context, deploymentID string) error {
@@ -445,7 +503,7 @@ func TestInstallationHandler_Deleted(t *testing.T) {
 		projects: make(map[string]*models.Project),
 	}
 
-	handler := NewInstallationHandler(projectRepo, slog.Default())
+	handler := NewInstallationHandler(projectRepo, nil, slog.Default())
 
 	payload, _ := json.Marshal(map[string]interface{}{
 		"action": "deleted",
@@ -461,6 +519,144 @@ func TestInstallationHandler_Deleted(t *testing.T) {
 	}
 	if len(projectRepo.cleared) != 1 || projectRepo.cleared[0] != 99 {
 		t.Error("expected ClearInstallation to be called with 99")
+	}
+}
+
+func TestPushHandler_FansOutToEveryProjectForSource(t *testing.T) {
+	projectRepo := &mockProjectRepo{projectLists: map[string][]models.Project{
+		"user/repo": {
+			{ID: "proj-1", ProductionBranch: "main", AutoDeploy: true},
+			{ID: "proj-2", ProductionBranch: "main", AutoDeploy: true},
+		},
+	}}
+	deployments := &mockDeploymentCreator{commits: make(map[string]*models.Deployment)}
+	handler := NewPushHandler(projectRepo, deployments, &mockRouteRemover{}, slog.Default())
+	payload, _ := json.Marshal(map[string]any{
+		"ref":          "refs/heads/main",
+		"after":        "0123456789012345678901234567890123456789",
+		"repository":   map[string]string{"full_name": "user/repo"},
+		"installation": map[string]int64{"id": 99},
+		"head_commit":  map[string]any{"message": "fan out", "author": map[string]string{"name": "Test"}},
+	})
+
+	if err := handler.Handle(context.Background(), payload, "delivery-fanout"); err != nil {
+		t.Fatal(err)
+	}
+	if len(deployments.created) != 2 {
+		t.Fatalf("deployments created = %d, want 2", len(deployments.created))
+	}
+	if deployments.created[0].ProjectID != "proj-1" || deployments.created[1].ProjectID != "proj-2" {
+		t.Fatalf("project fan-out = %q, %q", deployments.created[0].ProjectID, deployments.created[1].ProjectID)
+	}
+}
+
+func TestPullRequestHandler_RejectsForkPreviewPermanently(t *testing.T) {
+	projectRepo := &mockProjectRepo{projects: map[string]*models.Project{
+		"base/repo": {ID: "proj-1", PreviewDeployments: true},
+	}}
+	deployments := &mockDeploymentCreator{}
+	handler := NewPullRequestHandler(projectRepo, deployments, &mockRouteRemover{}, slog.Default())
+	payload, _ := json.Marshal(map[string]any{
+		"action": "opened",
+		"number": 7,
+		"pull_request": map[string]any{
+			"title": "Fork PR",
+			"head": map[string]any{
+				"ref": "feature", "sha": "abc",
+				"repo": map[string]any{"full_name": "contributor/repo", "fork": true},
+			},
+			"base": map[string]string{"ref": "main"},
+		},
+		"repository":   map[string]string{"full_name": "base/repo"},
+		"installation": map[string]int64{"id": 99},
+	})
+
+	err := handler.Handle(context.Background(), payload, "delivery-fork")
+	var permanentErr *PermanentWebhookError
+	if !errors.As(err, &permanentErr) {
+		t.Fatalf("error = %v, want PermanentWebhookError", err)
+	}
+	if len(deployments.created) != 0 {
+		t.Fatalf("deployments created = %d, want 0", len(deployments.created))
+	}
+}
+
+func TestInstallationHandler_TracksSuspensionAndRepositoryAccess(t *testing.T) {
+	projectRepo := &mockProjectRepo{}
+	tokens := &mockTokenInvalidator{}
+	handler := NewInstallationHandler(projectRepo, tokens, slog.Default())
+
+	suspendPayload, _ := json.Marshal(map[string]any{
+		"action":       "suspend",
+		"installation": map[string]any{"id": 99, "account": map[string]string{"login": "octo"}},
+	})
+	if err := handler.Handle(context.Background(), suspendPayload, "suspend"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projectRepo.statuses[99]; got != models.GitHubConnectionSuspended {
+		t.Fatalf("suspended status = %q", got)
+	}
+
+	repositoriesPayload, _ := json.Marshal(map[string]any{
+		"action":       "removed",
+		"installation": map[string]int64{"id": 99},
+		"repositories_added": []any{
+			map[string]any{"id": 1, "full_name": "octo/added"},
+		},
+		"repositories_removed": []any{
+			map[string]any{"id": 2, "full_name": "octo/removed"},
+		},
+	})
+	if err := handler.HandleRepositories(context.Background(), repositoriesPayload, "access"); err != nil {
+		t.Fatal(err)
+	}
+	if len(projectRepo.accessChanges) != 2 ||
+		!projectRepo.accessChanges[0].granted ||
+		projectRepo.accessChanges[1].granted {
+		t.Fatalf("access changes = %#v", projectRepo.accessChanges)
+	}
+	if got := tokens.installationIDs; len(got) != 2 || got[0] != 99 || got[1] != 99 {
+		t.Fatalf("token invalidations = %v, want [99 99]", got)
+	}
+}
+
+func TestInstallationHandler_FollowsRepositoryAndOwnerRenames(t *testing.T) {
+	projectRepo := &mockProjectRepo{}
+	handler := NewInstallationHandler(projectRepo, nil, slog.Default())
+
+	repositoryPayload, _ := json.Marshal(map[string]any{
+		"action": "renamed",
+		"repository": map[string]any{
+			"id": 123, "name": "new-name", "full_name": "octo/new-name",
+			"owner": map[string]string{"login": "octo"},
+		},
+		"installation": map[string]int64{"id": 99},
+		"changes": map[string]any{
+			"repository": map[string]any{"name": map[string]string{"from": "old-name"}},
+		},
+	})
+	if err := handler.HandleRepository(context.Background(), repositoryPayload, "rename-repo"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projectRepo.identityChanges; len(got) != 1 ||
+		got[0].oldFullName != "octo/old-name" ||
+		got[0].newFullName != "octo/new-name" ||
+		got[0].repositoryID != 123 {
+		t.Fatalf("identity changes = %#v", got)
+	}
+
+	targetPayload, _ := json.Marshal(map[string]any{
+		"action":       "renamed",
+		"installation": map[string]int64{"id": 99},
+		"account":      map[string]string{"login": "new-owner"},
+		"changes":      map[string]any{"login": map[string]string{"from": "old-owner"}},
+	})
+	if err := handler.HandleTarget(context.Background(), targetPayload, "rename-owner"); err != nil {
+		t.Fatal(err)
+	}
+	if got := projectRepo.installationMoves; len(got) != 1 ||
+		got[0].oldOwner != "old-owner" || got[0].newOwner != "new-owner" {
+		t.Fatalf("owner changes = %#v", got)
 	}
 }
 

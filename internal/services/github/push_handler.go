@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/VatsalP117/hostbox/internal/models"
 )
 
 // PushPayload is the GitHub push webhook payload.
@@ -71,20 +73,45 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 	repoFullName := event.Repository.FullName
 	installationID := event.Installation.ID
 
-	project, err := h.projectRepo.GetByGitHubRepo(ctx, repoFullName)
+	projects, err := h.projectRepo.ListByGitHubSource(ctx, installationID, repoFullName)
 	if err != nil {
-		h.logger.Debug("no project found for repo", "repo", repoFullName)
+		return fmt.Errorf("list projects for github source: %w", err)
+	}
+	if len(projects) == 0 {
+		h.logger.Debug("no active project found for github source",
+			"repo", repoFullName,
+			"installation_id", installationID,
+		)
 		return nil
 	}
 
-	if event.Deleted {
-		return h.cleanupDeletedBranch(ctx, project.ID, branch)
+	var eventErrors []error
+	for i := range projects {
+		project := &projects[i]
+		if event.Deleted {
+			if err := h.cleanupDeletedBranch(ctx, project.ID, branch); err != nil {
+				eventErrors = append(eventErrors, fmt.Errorf("project %s: %w", project.ID, err))
+			}
+			continue
+		}
+		if err := h.deployPush(ctx, project, event, branch, installationID); err != nil {
+			eventErrors = append(eventErrors, fmt.Errorf("project %s: %w", project.ID, err))
+		}
 	}
+	return errors.Join(eventErrors...)
+}
 
+func (h *PushHandler) deployPush(
+	ctx context.Context,
+	project *models.Project,
+	event PushPayload,
+	branch string,
+	installationID int64,
+) error {
 	if !project.AutoDeploy {
 		h.logger.Debug("auto_deploy disabled, skipping",
 			"project_id", project.ID,
-			"repo", repoFullName,
+			"repo", event.Repository.FullName,
 		)
 		return nil
 	}
@@ -115,7 +142,7 @@ func (h *PushHandler) Handle(ctx context.Context, payload []byte, deliveryID str
 		"is_production", isProduction,
 	)
 
-	_, err = h.deploymentSvc.CreateFromWebhook(ctx, WebhookTriggerParams{
+	_, err := h.deploymentSvc.CreateFromWebhook(ctx, WebhookTriggerParams{
 		ProjectID:      project.ID,
 		Branch:         branch,
 		CommitSHA:      event.After,
