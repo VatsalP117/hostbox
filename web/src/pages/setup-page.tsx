@@ -73,11 +73,12 @@ export function SetupPage() {
   };
 
   return (
-    <Card>
+    <Card className="border-border bg-[#0d0d0d]">
       <CardHeader>
-        <CardTitle>Initial Setup</CardTitle>
+        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"><span className="h-1.5 w-1.5 rounded-full bg-[#52a8ff]" />First-run configuration</div>
+        <CardTitle className="text-lg">Create the administrator</CardTitle>
         <CardDescription>
-          Create your admin account to get started.
+          This account owns projects, users, and system settings on this Hostbox instance.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -88,7 +89,7 @@ export function SetupPage() {
               name="display_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Display Name</FormLabel>
+                  <FormLabel>Display name</FormLabel>
                   <FormControl>
                     <Input placeholder="Admin" {...field} />
                   </FormControl>
@@ -147,7 +148,7 @@ export function SetupPage() {
               {setup.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Complete Setup
+              Finish setup
             </Button>
           </form>
         </Form>

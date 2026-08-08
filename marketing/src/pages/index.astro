@@ -2,184 +2,53 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Hostbox — The Sovereign Architect">
-  <!-- Hero Section -->
-  <section class="px-6 py-12 glow-accent relative overflow-hidden pt-28">
-    <div class="max-w-xl mx-auto">
-      <div class="inline-block mb-6">
-        <span class="font-label text-[10px] uppercase tracking-[0.2em] text-primary">Built for the Sovereign Architect</span>
-      </div>
-      <h1 class="font-headline text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
-        The Vercel experience,<br/>on your own VPS.
-      </h1>
-      <p class="font-body text-on-surface-variant text-base leading-relaxed mb-10">
-        Zero-config deployments, automatic SSL, and instant rollbacks. Reclaim your infrastructure without sacrificing the developer experience.
-      </p>
-
-      <!-- Terminal Install CTA -->
-      <div class="mb-6">
-        <div class="terminal-window">
-          <div class="terminal-header">
-            <div class="terminal-dots">
-              <div class="terminal-dot"></div>
-              <div class="terminal-dot"></div>
-              <div class="terminal-dot"></div>
-            </div>
-            <span class="font-label text-[10px] text-outline uppercase tracking-widest">bash — install</span>
-            <div class="w-10"></div>
-          </div>
-          <div class="p-4 flex items-center justify-between gap-4">
-            <code class="font-label text-xs text-primary truncate">curl -sL https://hostbox.dev/install | bash</code>
-            <button class="p-2 text-outline-variant hover:text-white transition-colors" id="copy-btn" data-copy-value="curl -sL https://hostbox.dev/install | bash">
-              <span class="material-symbols-outlined text-lg" data-icon="content_copy">content_copy</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- CTAs -->
-      <div class="flex flex-col sm:flex-row gap-3">
-        <a class="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-xl bg-primary text-on-primary font-headline font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md" target="_blank" rel="noopener noreferrer">
-          Get Started
-        </a>
-        <a class="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-xl border border-outline-variant/20 font-headline font-bold text-white hover:bg-surface-container-low transition-all" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">
-          <span class="material-symbols-outlined" data-icon="star">star</span>
-          GitHub
-        </a>
+<Layout title="Hostbox — Deploy to your own VM">
+  <section class="site-container hero-grid">
+    <div class="hero-content">
+      <span class="eyebrow">Open-source deployment platform</span>
+      <h1 class="display">Your code.<br/><span class="word-accent">Your server.</span></h1>
+      <p class="hero-copy">The polished git-to-production workflow you expect, running entirely on infrastructure you control.</p>
+      <div class="hero-actions">
+        <a class="button button-primary" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md">Deploy Hostbox <span aria-hidden="true">→</span></a>
+        <a class="button" href="https://github.com/VatsalP117/hostbox">View on GitHub</a>
       </div>
     </div>
   </section>
 
-  <!-- Dashboard Screenshot Placeholder -->
-  <section class="px-6 py-8 max-w-[1400px] mx-auto">
-    <div class="bg-surface-container-low rounded-xl p-6 text-center">
-      <span class="font-label text-[10px] uppercase tracking-widest text-outline">hostbox.dev/dashboard</span>
+  <div class="product-window" aria-label="Hostbox dashboard preview">
+    <div class="product-bar"><svg aria-hidden="true" viewBox="0 0 32 32" fill="none" style="width:16px;height:16px;color:#52a8ff"><path d="M6.5 10.5 16 5l9.5 5.5v11L16 27l-9.5-5.5v-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m6.5 10.5 9.5 5.5 9.5-5.5M16 16v11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><strong>Hostbox</strong><span>/</span><span>Projects</span><span style="margin-left:auto">⌘ K</span></div>
+    <div class="product-body">
+      <aside class="product-nav"><span class="active">Overview</span><span>Projects</span><span>Deployments</span><span>Domains</span><span>Environment</span><span>System</span></aside>
+      <div class="product-main">
+        <div class="product-heading"><div><strong style="font-size:18px">Projects</strong><div style="margin-top:5px;color:#777;font-size:12px">Everything running on your VM</div></div><span class="button button-primary" style="min-height:34px;padding-inline:14px">Add project</span></div>
+        <div class="project-grid">
+          <div class="project"><strong>web-app</strong><p>app.example.com</p><small><i class="status-dot"></i>Ready · main · 42s ago</small></div>
+          <div class="project"><strong>docs</strong><p>docs.example.com</p><small><i class="status-dot"></i>Ready · main · 3m ago</small></div>
+          <div class="project"><strong>api</strong><p>api.example.com</p><small><i class="status-dot"></i>Ready · production · 9m ago</small></div>
+          <div class="project"><strong>storefront</strong><p>shop.example.com</p><small><i class="status-dot" style="background:#f5a623"></i>Building · feature/cart</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="section site-container">
+    <div class="section-heading">
+      <div><span class="eyebrow">A familiar workflow</span><h2 class="section-title" style="margin-top:20px">From git push to a live URL.</h2></div>
+      <p class="section-copy">Connect a repository once. Hostbox detects your framework, builds in isolation, routes traffic, provisions TLS, and keeps every deployment ready to roll back.</p>
+    </div>
+    <div class="panel-grid">
+      <article class="panel panel-wide"><span class="panel-label">01 / DEPLOY</span><div class="panel-visual"><span class="flow-node">git push</span><span class="flow-line"></span><span class="flow-node">build</span><span class="flow-line"></span><span class="flow-node">live</span></div><h3>Zero-config when you want it.</h3><p>Automatic framework detection with explicit build settings available whenever your project needs them.</p></article>
+      <article class="panel"><span class="panel-label">02 / DOMAINS</span><div class="panel-visual"><span style="font-size:44px">◎</span></div><h3>HTTPS, automatically.</h3><p>Add a domain. Hostbox configures routing and lets Caddy provision and renew the certificate.</p></article>
+      <article class="panel"><span class="panel-label">03 / PREVIEWS</span><div class="panel-visual"><span class="flow-node">feature/login</span></div><h3>Preview every change.</h3><p>Branch deployments give changes a production-like URL before they reach your users.</p></article>
+      <article class="panel"><span class="panel-label">04 / SECRETS</span><div class="panel-visual"><code style="color:#777">API_KEY=••••••••</code></div><h3>Encrypted variables.</h3><p>Environment values are encrypted at rest and scoped to the projects that need them.</p></article>
+      <article class="panel"><span class="panel-label">05 / ROLLBACK</span><div class="panel-visual"><span style="font-size:42px">↶</span></div><h3>Back to healthy, fast.</h3><p>Immutable build artifacts make prior deployments available for immediate rollback.</p></article>
     </div>
   </section>
 
-  <!-- Workflow Section -->
-  <section class="px-6 py-16 max-w-[1400px] mx-auto">
-    <div class="text-center mb-12">
-      <span class="font-label text-[10px] uppercase tracking-[0.3em] text-outline block mb-4">The Workflow You Know</span>
-      <h2 class="font-headline text-3xl md:text-4xl font-extrabold text-white">No new CLIs to learn.</h2>
-      <p class="font-body text-on-surface-variant mt-2">Just push your code and let Hostbox handle the rest.</p>
-    </div>
-
-    <div class="flex flex-col items-center justify-center gap-8 max-w-md mx-auto">
-      <!-- git push -->
-      <div class="flex flex-col items-center">
-        <div class="w-16 h-16 rounded-2xl bg-surface-container-low flex items-center justify-center border border-outline-variant/10">
-          <span class="material-symbols-outlined text-3xl text-primary" data-icon="code">code</span>
-        </div>
-        <span class="font-label text-[10px] mt-2 uppercase tracking-widest text-outline">git push</span>
-      </div>
-
-      <div class="h-16 w-0.5 bg-outline-variant/30"></div>
-
-      <!-- build -->
-      <div class="flex flex-col items-center">
-        <div class="w-16 h-16 rounded-2xl bg-primary-container flex items-center justify-center shadow-lg shadow-primary-container/20">
-          <span class="material-symbols-outlined text-3xl text-on-primary-container" data-icon="rocket_launch">rocket_launch</span>
-        </div>
-        <span class="font-label text-[10px] mt-2 uppercase tracking-widest text-white">Build</span>
-        <span class="font-label text-[10px] text-outline">Hostbox detects framework</span>
-      </div>
-
-      <div class="h-16 w-0.5 bg-outline-variant/30"></div>
-
-      <!-- live -->
-      <div class="flex flex-col items-center">
-        <div class="w-16 h-16 rounded-2xl bg-surface-container-low flex items-center justify-center border border-outline-variant/10">
-          <span class="material-symbols-outlined text-3xl text-primary" data-icon="public">public</span>
-        </div>
-        <span class="font-label text-[10px] mt-2 uppercase tracking-widest text-white">Live URL</span>
-        <span class="font-label text-[10px] text-outline">Instant SSL secured</span>
-      </div>
-    </div>
-
-    <!-- Framework Logos with bullets -->
-    <div class="flex flex-wrap justify-center items-center gap-2 mt-16 text-center">
-      {['Next.js', 'Vite', 'Astro', 'SvelteKit', 'Hugo', 'React', 'Nuxt', 'Gatsby'].map((fw, i, arr) => (
-        <>
-          <span class="font-headline font-bold text-lg text-outline-variant/50">{fw}</span>
-          {i < arr.length - 1 && <span class="text-outline-variant/30 mx-2">•</span>}
-        </>
-      ))}
-    </div>
+  <section class="section site-container site-rule">
+    <div class="section-heading"><h2 class="section-title">Small footprint.<br/>Full control.</h2><p class="section-copy">Hostbox is a Go service, a React dashboard, and infrastructure primitives you can inspect. No per-seat pricing. No proprietary runtime.</p></div>
+    <div class="metric-row"><div class="metric"><strong>~200MB</strong><span>Typical idle memory</span></div><div class="metric"><strong>1 VM</strong><span>Minimum infrastructure</span></div><div class="metric"><strong>0</strong><span>Platform markups</span></div><div class="metric"><strong>MIT</strong><span>Open-source license</span></div></div>
   </section>
 
-  <!-- Value Props -->
-  <section class="px-6 py-16 max-w-[1400px] mx-auto">
-    <div class="text-center mb-12">
-      <span class="font-label text-[10px] uppercase tracking-[0.3em] text-outline block mb-4">Engineering without the bloat</span>
-      <h2 class="font-headline text-3xl md:text-4xl font-extrabold text-white">Radically lightweight.</h2>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-      <div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all duration-500">
-        <div class="mb-4 text-primary">
-          <span class="material-symbols-outlined text-3xl" data-icon="memory">memory</span>
-        </div>
-        <h3 class="font-headline text-lg font-bold text-white mb-2">200MB Idle Memory</h3>
-        <p class="font-body text-sm text-on-surface-variant">Extremely lightweight footprint. Hostbox doesn't consume your server resources.</p>
-      </div>
-      <div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all duration-500">
-        <div class="mb-4 text-primary">
-          <span class="material-symbols-outlined text-3xl" data-icon="deployed_code">deployed_code</span>
-        </div>
-        <h3 class="font-headline text-lg font-bold text-white mb-2">Single Go Binary</h3>
-        <p class="font-body text-sm text-on-surface-variant">No complex dependencies. Just drop a single binary onto your server.</p>
-      </div>
-      <div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all duration-500">
-        <div class="mb-4 text-primary">
-          <span class="material-symbols-outlined text-3xl" data-icon="lock">lock</span>
-        </div>
-        <h3 class="font-headline text-lg font-bold text-white mb-2">Zero-Config SSL</h3>
-        <p class="font-body text-sm text-on-surface-variant">Automatic Let's Encrypt provisioning for every domain you add.</p>
-      </div>
-      <div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all duration-500">
-        <div class="mb-4 text-primary">
-          <span class="material-symbols-outlined text-3xl" data-icon="history">history</span>
-        </div>
-        <h3 class="font-headline text-lg font-bold text-white mb-2">Instant Rollbacks</h3>
-        <p class="font-body text-sm text-on-surface-variant">Immutable deployments mean you can revert to a previous state instantly.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Final CTA -->
-  <section class="px-6 py-20 text-center bg-surface-container-lowest relative overflow-hidden">
-    <div class="absolute inset-0 bg-primary/5 blur-[120px] rounded-full scale-150 -z-10"></div>
-    <h2 class="font-headline text-3xl md:text-4xl font-extrabold text-white mb-6">Start deploying in 60 seconds.</h2>
-    <p class="font-body text-on-surface-variant mb-10 max-w-md mx-auto">
-      No credit card required. Connect your VPS and reclaim your independence.
-    </p>
-    <a class="inline-block w-full max-w-sm py-4 px-8 bg-primary rounded-xl font-headline font-bold text-on-primary shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md" target="_blank" rel="noopener noreferrer">
-      Deploy Now
-    </a>
-    <div class="mt-8 flex justify-center gap-6">
-      <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-        <span class="font-label text-[10px] uppercase text-outline tracking-wider">Self-hosted</span>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-        <span class="font-label text-[10px] uppercase text-outline tracking-wider">Open Source</span>
-      </div>
-    </div>
-  </section>
+  <section class="cta"><h2 class="section-title" style="margin-inline:auto">Your next deployment can be yours.</h2><p class="section-copy">Install Hostbox on a VM, connect GitHub, and ship your first project.</p><div class="hero-actions"><a class="button button-primary" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md">Read the self-hosting guide</a><a class="button" href="/features">Explore the platform</a></div></section>
 </Layout>
-
-<script>
-  document.querySelectorAll('[data-copy-value]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const value = button.getAttribute('data-copy-value');
-      if (!value) return;
-      try {
-        await navigator.clipboard.writeText(value);
-        button.classList.add('text-primary');
-        setTimeout(() => button.classList.remove('text-primary'), 800);
-      } catch (_) {}
-    });
-  });
-</script>

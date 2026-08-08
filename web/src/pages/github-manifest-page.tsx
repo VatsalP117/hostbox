@@ -48,13 +48,13 @@ export function GitHubManifestPage() {
       : "";
 
   return (
-    <div className="mx-auto flex min-h-[50vh] max-w-lg items-center">
-      <Card className="w-full">
+    <div className="mx-auto flex min-h-[60vh] max-w-lg items-center">
+      <Card className="w-full border-border bg-card">
         <CardHeader>
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md border bg-background">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-black">
             <Github className="h-5 w-5" />
           </div>
-          <CardTitle>
+          <CardTitle className="text-lg">
             {errorMessage ? "GitHub connection failed" : "Connecting GitHub"}
           </CardTitle>
           <CardDescription>

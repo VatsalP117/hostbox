@@ -1,183 +1,23 @@
 ---
 import Layout from '../layouts/Layout.astro';
+const commands = [
+  ['hbx deploy --prod','Build the current directory and promote it to production.'],
+  ['hbx status','Inspect the linked project and its current production deployment.'],
+  ['hbx logs -f','Stream application and build output without leaving the terminal.'],
+  ['hbx env pull','Sync project environment variables into a local file.'],
+  ['hbx rollback','Promote a previous healthy deployment immediately.'],
+];
 ---
-
-<Layout title="Hostbox | Sovereign CLI" description="Absolute control from your terminal. Deploy, monitor, and scale with a single binary.">
-  <section class="pt-24 pb-12 px-6 flex-grow flex flex-col gap-12 max-w-3xl mx-auto">
-    <!-- Hero Section & Install Guide -->
-    <section class="flex flex-col gap-8">
-      <div class="space-y-2">
-        <span class="font-label text-[0.6875rem] uppercase tracking-widest text-primary">Deployment Sovereign</span>
-        <h1 class="font-headline text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-          Command the<br/>Sovereign Cloud.
-        </h1>
-        <p class="text-on-surface-variant text-sm leading-relaxed">Absolute control from your terminal. Manage deployments, domains, and environments with precision and zero friction.</p>
-      </div>
-
-      <!-- Install Terminal -->
-      <div class="terminal-window relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-primary/10 to-transparent pointer-events-none"></div>
-        <div class="terminal-header">
-          <div class="terminal-dots">
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-          </div>
-          <span class="font-label text-[10px] text-outline tracking-widest">bash — install</span>
-          <div class="w-10"></div>
-        </div>
-        <div class="p-4 font-label text-sm text-primary">
-          <span class="text-outline">$</span> curl -fsSL https://hostbox.sh/cli | bash
-        </div>
-      </div>
-      <p class="font-label text-[10px] text-outline -mt-6 ml-1">Requires Node.js 18+</p>
-    </section>
-
-    <!-- Core Commands -->
-    <section class="space-y-6">
-      <div class="flex justify-between items-end">
-        <h2 class="font-headline text-2xl md:text-3xl font-bold text-white tracking-tight">Core Commands</h2>
-        <span class="font-label text-[0.6875rem] text-outline">v2.4.0-STABLE</span>
-      </div>
-      <p class="text-on-surface-variant text-sm -mt-2">The tools you need, mapped directly to your workflow.</p>
-
-      <div class="grid grid-cols-1 gap-3">
-        <!-- deploy -->
-        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
-          <div class="flex justify-between items-start mb-3">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary text-2xl" data-icon="rocket_launch">rocket_launch</span>
-              <span>
-                <code class="text-primary font-label text-sm block">hbx deploy --prod</code>
-                <span class="font-label text-[10px] text-outline uppercase tracking-wider">deploy</span>
-              </span>
-            </div>
-          </div>
-          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
-            <div class="text-on-surface-variant">Building...</div>
-            <div class="text-on-surface-variant">Uploading artifacts (42MB)...</div>
-            <div class="text-primary mt-1">✓ Deployment ready: https://app.sovereign.sh</div>
-          </div>
-          <p class="text-xs text-on-surface-variant mt-3">Deploys the current directory. Automatically detects framework and configuration.</p>
-        </div>
-
-        <!-- status -->
-        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="query_stats">query_stats</span>
-            <div>
-              <code class="text-primary font-label text-sm">hbx status</code>
-              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">status</span>
-            </div>
-          </div>
-          <p class="text-xs text-on-surface-variant">Check health and current deployment state.</p>
-          <div class="mt-3 bg-surface-container-lowest rounded-lg p-3 font-label text-[11px]">
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-              <span class="text-primary">Production: Healthy</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- logs -->
-        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="receipt_long">receipt_long</span>
-            <div>
-              <code class="text-primary font-label text-sm">hbx logs -f</code>
-              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">logs</span>
-            </div>
-          </div>
-          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
-            <div class="text-on-surface-variant">[info] Server listening on :8080</div>
-            <div class="text-on-surface-variant">[req] GET /api/v1/users 200</div>
-          </div>
-          <p class="text-xs text-on-surface-variant mt-3">Stream live application and infrastructure logs.</p>
-        </div>
-
-        <!-- env -->
-        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="vpn_key">vpn_key</span>
-            <div>
-              <code class="text-primary font-label text-sm">hbx env pull</code>
-              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">env</span>
-            </div>
-          </div>
-          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
-            <div class="text-on-surface-variant">$ hbx env add DB_URL</div>
-            <div class="text-primary mt-1">Updated production environment.</div>
-          </div>
-          <p class="text-xs text-on-surface-variant mt-3">Manage secrets and environment variables securely.</p>
-        </div>
-
-        <!-- rollback -->
-        <div class="bg-surface-container-low hover:bg-surface-container transition-colors p-4 rounded-xl border border-outline-variant/10 group">
-          <div class="flex items-center gap-3 mb-2">
-            <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors text-2xl" data-icon="history">history</span>
-            <div>
-              <code class="text-primary font-label text-sm">hbx rollback</code>
-              <span class="font-label text-[10px] text-outline ml-2 uppercase tracking-wider">rollback</span>
-            </div>
-          </div>
-          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] leading-relaxed">
-            <div class="text-on-surface-variant">Reverting to d9f2a1...</div>
-            <div class="text-primary mt-1">Rollback complete.</div>
-          </div>
-          <p class="text-xs text-on-surface-variant mt-3">Instantly revert to a previous healthy state.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Dual Interface -->
-    <section class="space-y-8">
-      <div>
-        <h2 class="font-headline text-2xl md:text-3xl font-bold text-white">One Core. Two Interfaces.</h2>
-        <p class="text-on-surface-variant text-sm mt-2 max-w-lg leading-relaxed">
-          Whether you prefer the visual overview of a dashboard or the speed of a terminal, you sacrifice nothing. Both interfaces command the exact same sovereign infrastructure API.
-        </p>
-      </div>
-      <div class="flex items-center gap-4 text-sm font-label flex-wrap">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-          <span class="text-on-surface-variant">100% feature parity</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-          <span class="text-on-surface-variant">Shared authentication state</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle">check_circle</span>
-          <span class="text-on-surface-variant">Real-time sync between CLI and Web</span>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Web GUI Card -->
-        <div class="bg-surface-container-low rounded-xl border border-outline-variant/10 p-6 hover:border-primary/20 transition-all">
-          <span class="material-symbols-outlined text-primary text-2xl mb-3 block" data-icon="dashboard">dashboard</span>
-          <h3 class="font-headline text-lg font-bold text-white mb-2">Web GUI</h3>
-          <p class="text-on-surface-variant text-sm">Visual overview of all deployments, logs, and domains.</p>
-        </div>
-        <!-- Terminal Card -->
-        <div class="bg-surface-container-low rounded-xl border border-primary/20 p-6">
-          <span class="material-symbols-outlined text-primary text-2xl mb-3 block" data-icon="terminal">terminal</span>
-          <h3 class="font-headline text-lg font-bold text-white mb-2">Terminal</h3>
-          <div class="bg-surface-container-lowest rounded-lg p-3 font-label text-[11px] mt-3 leading-relaxed">
-            <div class="text-primary">$ hbx status</div>
-            <div class="text-on-surface-variant mt-1">[ok] all systems go</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CTA -->
-    <section class="mt-4 pb-8">
-      <a class="w-full bg-primary text-on-primary font-headline font-bold py-4 rounded-xl flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(173,198,255,0.2)] active:scale-[0.98] transition-transform" href="https://github.com/VatsalP117/hostbox/tree/main/docs" target="_blank" rel="noopener noreferrer">
-        Deep dive into the docs
-        <span class="material-symbols-outlined text-lg" data-icon="arrow_forward">arrow_forward</span>
-      </a>
-      <p class="text-center text-[10px] font-label text-outline mt-4 tracking-tighter uppercase">Comprehensive guides for API, CLI, and Edge deployment.</p>
-    </section>
+<Layout title="Hostbox CLI — Your deployment workflow in the terminal">
+  <section class="site-container cli-hero">
+    <div><span class="eyebrow">Hostbox CLI</span><h1 class="display">The dashboard,<br/><span class="word-accent">at your fingertips.</span></h1><p class="hero-copy" style="margin-left:0;text-align:left">Deploy, inspect, and recover projects from a small CLI that talks directly to your Hostbox instance.</p><div class="hero-actions" style="justify-content:flex-start"><a class="button button-primary" href="https://github.com/VatsalP117/hostbox/tree/main/cmd/cli">View CLI source</a><a class="button" href="https://github.com/VatsalP117/hostbox#readme">Read the docs</a></div></div>
+    <div class="terminal"><div class="terminal-bar"><div class="terminal-dots"><i></i><i></i><i></i></div><span>hostbox — zsh</span><span>⌘K</span></div><div class="terminal-body"><div><span class="muted">$</span> curl -fsSL hostbox.dev/cli | sh</div><div class="muted">Downloading hbx for darwin/arm64...</div><div class="success">Installed hbx to /usr/local/bin</div><br/><div><span class="muted">$</span> hbx deploy --prod</div><div>Building web-app...</div><div class="accent">Ready: https://app.example.com</div></div></div>
   </section>
+  <section class="site-container command-section"><div class="section-heading"><h2 class="section-title">One API.<br/>Two interfaces.</h2><p class="section-copy">The dashboard and CLI share the same authentication and platform API. Switch between them without losing context.</p></div><div class="commands">{commands.map(([command,copy])=><article><code>$ {command}</code><p>{copy}</p><span>→</span></article>)}</div></section>
+  <section class="site-container section site-rule"><div class="metric-row"><div class="metric"><strong>1</strong><span>Portable binary</span></div><div class="metric"><strong>5</strong><span>Core workflows</span></div><div class="metric"><strong>100%</strong><span>Same platform API</span></div><div class="metric"><strong>0</strong><span>Cloud accounts required</span></div></div></section>
+  <section class="cta"><h2 class="section-title" style="margin-inline:auto">Ship from where you work.</h2><p class="section-copy">Link a project once, then deploy it in one command.</p><div class="hero-actions"><a class="button button-primary" href="https://github.com/VatsalP117/hostbox#readme">Install the CLI</a></div></section>
 </Layout>
+<style>
+  .cli-hero{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;padding:180px 0 120px}.cli-hero .display{font-size:clamp(3rem,5.6vw,5.3rem)}.command-section{padding:100px 0}.commands{border-top:1px solid #222}.commands article{display:grid;grid-template-columns:minmax(220px,.7fr) 1fr 30px;gap:32px;align-items:center;padding:26px 8px;border-bottom:1px solid #222}.commands code{color:#ddd;font:13px "JetBrains Mono",monospace}.commands p{margin:0;color:#888;font-size:14px}.commands span{color:#555}
+  @media(max-width:800px){.cli-hero{grid-template-columns:1fr;gap:48px;padding-top:140px}.commands article{grid-template-columns:1fr}.commands span{display:none}}
+</style>

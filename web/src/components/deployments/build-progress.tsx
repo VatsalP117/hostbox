@@ -62,11 +62,11 @@ export function BuildProgress({ phase, status }: BuildProgressProps) {
   );
 
   return (
-    <div className="bg-[hsl(0,0%,11%)] rounded-xl border border-[hsl(220,10%,28%)]/10 overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-[hsl(220,10%,28%)]/10 flex items-center justify-between">
-        <h3 className="font-headline font-bold text-lg">Build Progress</h3>
-        <span className="text-sm text-[hsl(30,4%,70%)] font-label">
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+        <h3 className="text-base font-medium">Build progress</h3>
+        <span className="text-sm text-muted-foreground font-sans">
           {status === "building"
             ? "Building..."
             : status === "queued"
@@ -82,9 +82,9 @@ export function BuildProgress({ phase, status }: BuildProgressProps) {
       <div className="p-6 space-y-6">
         {/* Progress Bar */}
         <div className="relative">
-          <div className="h-2 bg-[hsl(0,0%,16%)] rounded-full overflow-hidden">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div 
-              className="h-full bg-gradient-to-r from-[hsl(220,100%,84%)] to-[hsl(217,91%,65%)] transition-all duration-500 ease-out"
+              className="h-full bg-[#52a8ff] transition-all duration-500 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -102,32 +102,32 @@ export function BuildProgress({ phase, status }: BuildProgressProps) {
                   {/* Phase Circle */}
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300",
-                    state === "done" && "bg-[hsl(142,76%,36%)]/20 border border-[hsl(142,76%,56%)]",
-                    state === "active" && "bg-[hsl(220,100%,84%)]/20 border border-[hsl(220,100%,84%)]",
-                    state === "failed" && "bg-[hsl(0,84%,60%)]/20 border border-[hsl(0,84%,60%)]",
-                    state === "pending" && "bg-[hsl(0,0%,16%)] border border-[hsl(220,10%,28%)]"
+                    state === "done" && "border border-success bg-success/10",
+                    state === "active" && "border border-[#52a8ff] bg-[#52a8ff]/10",
+                    state === "failed" && "border border-destructive bg-destructive/10",
+                    state === "pending" && "bg-muted border border-border"
                   )}>
                     {state === "done" && (
-                      <Check className="h-4 w-4 text-[hsl(142,76%,56%)]" />
+                      <Check className="h-4 w-4 text-success" />
                     )}
                     {state === "active" && (
-                      <Loader2 className="h-4 w-4 text-[hsl(220,100%,84%)] animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin text-[#52a8ff]" />
                     )}
                     {state === "failed" && (
-                      <XCircle className="h-4 w-4 text-[hsl(0,84%,60%)]" />
+                      <XCircle className="h-4 w-4 text-destructive" />
                     )}
                     {state === "pending" && (
-                      <Circle className="h-4 w-4 text-[hsl(220,10%,28%)]" />
+                      <Circle className="h-4 w-4 text-neutral-700" />
                     )}
                   </div>
                   
                   {/* Phase Label */}
                   <span className={cn(
-                    "text-xs font-label transition-colors duration-300",
-                    state === "done" && "text-[hsl(142,76%,56%)]",
-                    state === "active" && "text-[hsl(220,100%,84%)] font-medium",
-                    state === "failed" && "text-[hsl(0,84%,60%)]",
-                    state === "pending" && "text-[hsl(30,4%,50%)]"
+                    "text-xs font-sans transition-colors duration-300",
+                    state === "done" && "text-success",
+                    state === "active" && "font-medium text-[#52a8ff]",
+                    state === "failed" && "text-destructive",
+                    state === "pending" && "text-muted-foreground"
                   )}>
                     {p.label}
                   </span>
@@ -137,7 +137,7 @@ export function BuildProgress({ phase, status }: BuildProgressProps) {
                 {!isLast && (
                   <div className={cn(
                     "w-8 h-px mx-2 transition-colors duration-300",
-                    state === "done" ? "bg-[hsl(142,76%,56%)]" : "bg-[hsl(220,10%,28%)]/30"
+                    state === "done" ? "bg-success" : "bg-border"
                   )} />
                 )}
               </div>
@@ -146,8 +146,8 @@ export function BuildProgress({ phase, status }: BuildProgressProps) {
         </div>
 
         {/* Time Elapsed */}
-        <div className="flex items-center justify-between text-sm text-[hsl(30,4%,70%)] font-label pt-2 border-t border-[hsl(220,10%,28%)]/10">
-          <span>Time Elapsed</span>
+        <div className="flex items-center justify-between text-sm text-muted-foreground font-sans pt-2 border-t border-border">
+          <span>Time elapsed</span>
           <span className="font-mono">
             {status === "queued"
               ? "Waiting..."

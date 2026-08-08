@@ -32,13 +32,13 @@ export function GitHubSetupPage() {
   }, [navigate, queryClient]);
 
   return (
-    <div className="mx-auto flex min-h-[50vh] max-w-lg items-center">
-      <Card className="w-full">
+    <div className="mx-auto flex min-h-[60vh] max-w-lg items-center">
+      <Card className="w-full border-border bg-card">
         <CardHeader>
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md border bg-background">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-black">
             <Github className="h-5 w-5" />
           </div>
-          <CardTitle>GitHub {isUpdate ? "updated" : "connected"}</CardTitle>
+          <CardTitle className="text-lg">GitHub {isUpdate ? "updated" : "connected"}</CardTitle>
           <CardDescription>
             {installationId
               ? `Installation ${installationId} is ready for repository selection.`
@@ -47,7 +47,7 @@ export function GitHubSetupPage() {
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <CheckCircle2 className="h-4 w-4 text-success" />
             <span>Returning to project setup</span>
             <Loader2 className="h-4 w-4 animate-spin" />
           </div>

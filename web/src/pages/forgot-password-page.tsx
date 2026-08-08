@@ -51,9 +51,9 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <Card>
+    <Card className="border-border bg-[#0d0d0d]">
       <CardHeader>
-        <CardTitle>Forgot Password</CardTitle>
+        <CardTitle className="text-lg">Reset your password</CardTitle>
         <CardDescription>
           {submitted
             ? "Check your email for a reset link."
@@ -70,7 +70,7 @@ export function ForgotPasswordPage() {
             <Link to={routes.login}>
               <Button variant="outline" className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Login
+                Back to sign in
               </Button>
             </Link>
           </div>
@@ -98,14 +98,14 @@ export function ForgotPasswordPage() {
                 {loading && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Send Reset Link
+                Send reset link
               </Button>
               <div className="text-center text-sm">
                 <Link
                   to={routes.login}
                   className="text-muted-foreground hover:text-foreground underline"
                 >
-                  Back to Login
+                  Back to sign in
                 </Link>
               </div>
             </form>

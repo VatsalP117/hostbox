@@ -2,39 +2,41 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { routes } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
+import { BrandMark } from "@/components/shared/brand-mark";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
   LayoutDashboard,
   FolderKanban,
-  BarChart3,
-  Settings2,
+  Activity,
+  ServerCog,
   Users,
   Settings,
-  FileText,
-  HelpCircle,
+  BookOpen,
+  CircleHelp,
   Plus,
 } from "lucide-react";
 
 const navItems = [
-  { label: "Home", icon: LayoutDashboard, path: routes.dashboard },
+  { label: "Overview", icon: LayoutDashboard, path: routes.dashboard },
   { label: "Projects", icon: FolderKanban, path: routes.projects },
 ];
 
 const adminItems = [
-  { label: "System", icon: Settings2, path: routes.adminTab("overview") },
+  { label: "System", icon: ServerCog, path: routes.adminTab("overview") },
   { label: "Users", icon: Users, path: routes.adminTab("users") },
-  { label: "Activity", icon: BarChart3, path: routes.adminTab("activity") },
+  { label: "Activity", icon: Activity, path: routes.adminTab("activity") },
   { label: "Settings", icon: Settings, path: routes.adminTab("settings") },
 ];
 
 const footerItems = [
-  { label: "Docs", icon: FileText, href: "https://github.com/VatsalP117/hostbox#readme" },
-  { label: "Support", icon: HelpCircle, href: "https://github.com/VatsalP117/hostbox/issues" },
+  { label: "Documentation", icon: BookOpen, href: "https://github.com/VatsalP117/hostbox#readme" },
+  { label: "Support", icon: CircleHelp, href: "https://github.com/VatsalP117/hostbox/issues" },
 ];
 
 interface MobileNavProps {
@@ -57,35 +59,29 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="left"
-        className="w-72 p-0 bg-[#0e0e0e] border-r border-[hsl(var(--outline-variant)/0.15)]"
+        className="w-72 border-r border-border bg-black p-0"
       >
-        <SheetHeader className="border-b border-[hsl(var(--outline-variant)/0.15)] px-4 py-5">
+        <SheetHeader className="border-b border-border px-4 py-4">
           <SheetTitle className="flex items-center gap-3 text-left">
-            <div className="w-8 h-8 rounded-xl bg-[#ADC6FF] flex items-center justify-center text-[#0e0e0e] font-['Manrope'] font-black text-sm">
-              H
-            </div>
-            <div>
-              <div className="font-['Manrope'] font-black text-[#ADC6FF] text-lg leading-tight">
-                Hostbox
-              </div>
-              <div className="font-['Space_Grotesk'] text-[10px] text-[#e5e2e1]/70 uppercase tracking-widest">
-                Sovereign Control
-              </div>
-            </div>
+            <BrandMark className="text-[#52a8ff]" />
+            <span className="text-sm font-semibold text-white">Hostbox</span>
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            Navigate Hostbox projects and administration.
+          </SheetDescription>
         </SheetHeader>
 
         {/* Deploy Button */}
-        <div className="px-4 py-4 border-b border-[hsl(var(--outline-variant)/0.15)]">
+        <div className="border-b border-border px-4 py-4">
           <button
             onClick={() => {
               navigate(routes.newProject);
               onOpenChange(false);
             }}
-            className="w-full gradient-btn text-sm py-2.5 rounded-xl shadow-[0_4px_14px_0_rgba(173,198,255,0.15)] flex items-center justify-center gap-2"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-white bg-white text-sm font-medium text-black"
           >
             <Plus className="w-4 h-4" />
-            Deploy New
+            Add project
           </button>
         </div>
 
@@ -97,16 +93,14 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
               to={item.path}
               onClick={() => onOpenChange(false)}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                 isActive(item.path)
-                  ? "bg-[#201f1f] text-[#ADC6FF] border-r-2 border-[#ADC6FF]"
-                  : "text-[#e5e2e1]/50 hover:bg-[#1c1b1b] hover:text-[#e5e2e1]"
+                  ? "bg-[#1f1f1f] text-white"
+                  : "text-muted-foreground hover:bg-[#171717] hover:text-foreground"
               )}
             >
               <item.icon className="w-5 h-5 shrink-0" />
-              <span className="font-['Space_Grotesk'] text-xs uppercase tracking-widest">
-                {item.label}
-              </span>
+              <span>{item.label}</span>
             </Link>
           ))}
 
@@ -117,21 +111,19 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
                 to={item.path}
                 onClick={() => onOpenChange(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive(item.path)
-                    ? "bg-[#201f1f] text-[#ADC6FF] border-r-2 border-[#ADC6FF]"
-                    : "text-[#e5e2e1]/50 hover:bg-[#1c1b1b] hover:text-[#e5e2e1]"
+                    ? "bg-[#1f1f1f] text-white"
+                    : "text-muted-foreground hover:bg-[#171717] hover:text-foreground"
                 )}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
-                <span className="font-['Space_Grotesk'] text-xs uppercase tracking-widest">
-                  {item.label}
-                </span>
+                <span>{item.label}</span>
               </Link>
             ))}
 
           {/* Footer Items */}
-          <div className="pt-3 mt-3 border-t border-[hsl(var(--outline-variant)/0.15)] space-y-1">
+          <div className="mt-3 space-y-1 border-t border-border pt-3">
             {footerItems.map((item) => (
               <a
                 key={item.href}
@@ -139,12 +131,10 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => onOpenChange(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[#e5e2e1]/50 hover:bg-[#1c1b1b] hover:text-[#e5e2e1] transition-colors"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-[#171717] hover:text-foreground"
               >
                 <item.icon className="w-4 h-4 shrink-0" />
-                <span className="font-['Space_Grotesk'] text-xs uppercase tracking-widest">
-                  {item.label}
-                </span>
+                <span>{item.label}</span>
               </a>
             ))}
           </div>

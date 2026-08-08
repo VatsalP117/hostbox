@@ -40,7 +40,7 @@ function DeploymentItem({ deployment, projectId }: DeploymentItemProps) {
   const navigate = useNavigate();
 
   const statusIcons: Record<string, React.ReactNode> = {
-    ready: <Rocket className="h-5 w-5 text-primary-container" />,
+    ready: <Rocket className="h-4 w-4 text-success" />,
     failed: <AlertCircle className="h-5 w-5 text-error" />,
     building: <Clock className="h-5 w-5 text-outline" />,
     queued: <Clock className="h-5 w-5 text-outline" />,
@@ -51,8 +51,8 @@ function DeploymentItem({ deployment, projectId }: DeploymentItemProps) {
     <div
       onClick={() => navigate(routes.deployment(projectId, deployment.id))}
       className={cn(
-        "bg-surface-container rounded-lg p-4 flex items-start gap-4",
-        "hover:bg-surface-container-high transition-colors cursor-pointer group"
+        "group flex cursor-pointer items-start gap-3 border-b border-border px-1 py-4 last:border-0",
+        "transition-colors hover:bg-white/[0.02]"
       )}
     >
       <div className="mt-0.5">{statusIcons[deployment.status]}</div>
@@ -61,33 +61,33 @@ function DeploymentItem({ deployment, projectId }: DeploymentItemProps) {
           <p className="font-body text-sm font-medium text-on-surface truncate">
             {deployment.commit_message || "No commit message"}
           </p>
-          <span className="font-label text-xs text-outline group-hover:text-primary-container transition-colors shrink-0 ml-2">
+          <span className="ml-2 shrink-0 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
             <TimeAgo date={deployment.created_at} />
           </span>
         </div>
-        <p className="font-label text-xs text-on-surface-variant mb-2">
+        <p className="mb-2 text-xs text-on-surface-variant">
           Commit{" "}
-          <span className="text-primary-container">
+          <span className="font-mono text-foreground">
             {deployment.commit_sha.slice(0, 7)}
           </span>{" "}
           - {deployment.branch}
         </p>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="px-2 py-0.5 rounded bg-surface-container-lowest font-label text-[10px] text-outline ghost-border">
+          <span className="rounded border border-border bg-black px-2 py-0.5 text-[10px] text-muted-foreground">
             {deployment.branch}
           </span>
           {deployment.is_production && (
-            <span className="px-2 py-0.5 rounded bg-surface-container-lowest font-label text-[10px] text-primary-container ghost-border">
+            <span className="rounded border border-border bg-black px-2 py-0.5 text-[10px] text-foreground">
               Production
             </span>
           )}
           <span
             className={cn(
-              "px-2 py-0.5 rounded bg-surface-container-lowest font-label text-[10px] ghost-border",
+              "rounded border border-border bg-black px-2 py-0.5 text-[10px]",
               deployment.status === "failed"
                 ? "text-error"
                 : deployment.status === "ready"
-                  ? "text-primary-container"
+                  ? "text-success"
                   : "text-outline"
             )}
           >
@@ -115,20 +115,20 @@ function DomainCard({ domain }: DomainCardProps) {
   };
 
   return (
-    <div className="bg-surface-container rounded-xl p-5">
+    <div className="rounded-lg border border-border bg-card p-5">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
-          <Globe className="h-5 w-5 text-primary-container" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-black">
+          <Globe className="h-4 w-4 text-[#52a8ff]" />
         </div>
         <div>
-          <h4 className="font-label text-sm text-on-surface-variant uppercase tracking-wider">
-            Production Domain
+          <h4 className="text-sm font-medium text-on-surface">
+            Production domain
           </h4>
         </div>
       </div>
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between bg-surface-container-low rounded-lg p-3">
+        <div className="flex items-center justify-between rounded-md border border-border bg-black p-3">
           <a
             href={url}
             target="_blank"
@@ -155,16 +155,16 @@ function DomainCard({ domain }: DomainCardProps) {
         <div className="flex items-center gap-2">
           {domain.verified ? (
             <>
-              <div className="w-1.5 h-1.5 rounded-full bg-primary-container glow-active" />
-              <span className="font-label text-xs text-primary-container">
-                Verified & Propagated
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-xs text-success">
+                Verified and active
               </span>
             </>
           ) : (
             <>
               <div className="w-1.5 h-1.5 rounded-full bg-outline" />
-              <span className="font-label text-xs text-outline">
-                Pending Verification
+              <span className="text-xs text-muted-foreground">
+                Pending verification
               </span>
             </>
           )}
@@ -176,14 +176,14 @@ function DomainCard({ domain }: DomainCardProps) {
 
 function EmptyDomainCard() {
   return (
-    <div className="bg-surface-container rounded-xl p-5">
+    <div className="rounded-lg border border-dashed border-border bg-card/50 p-5">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
           <Globe className="h-5 w-5 text-outline" />
         </div>
         <div>
-          <h4 className="font-label text-sm text-on-surface-variant uppercase tracking-wider">
-            Production Domain
+          <h4 className="text-sm font-medium text-on-surface">
+            Production domain
           </h4>
         </div>
       </div>
@@ -193,7 +193,7 @@ function EmptyDomainCard() {
       <Button
         variant="outline"
         size="sm"
-        className="mt-3 font-label text-xs"
+        className="mt-3 font-sans text-xs"
         asChild
       >
         <Link to={`?tab=domains`}>Add Domain</Link>
@@ -228,25 +228,23 @@ export function OverviewTab({ project }: OverviewTabProps) {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left Column: Recent Deployments */}
       <div className="lg:col-span-2">
-        <div className="bg-surface-container-low rounded-xl p-6">
+        <div className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-label text-sm text-on-surface-variant uppercase tracking-widest">
-              Recent Deployments
-            </h3>
+            <div><h3 className="text-sm font-medium text-on-surface">Recent deployments</h3><p className="mt-1 text-xs text-muted-foreground">Latest builds across this project.</p></div>
             <Link
               to={`?tab=deployments`}
-              className="font-label text-xs text-primary-container hover:underline decoration-primary-container/30 underline-offset-4 flex items-center gap-1"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
-              View All
+              View all
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
           {isLoadingDeployments ? (
-            <div className="space-y-3">
+            <div>
               {Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-20 w-full rounded-lg" />
               ))}
@@ -262,12 +260,12 @@ export function OverviewTab({ project }: OverviewTabProps) {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-surface-container rounded-lg">
+            <div className="rounded-md border border-dashed border-border bg-black/30 py-12 text-center">
               <Rocket className="h-8 w-8 text-outline mx-auto mb-3" />
               <p className="font-body text-sm text-on-surface-variant">
                 No deployments yet
               </p>
-              <p className="font-label text-xs text-outline mt-1">
+              <p className="font-sans text-xs text-outline mt-1">
                 Trigger your first deployment to get started
               </p>
             </div>
@@ -279,7 +277,7 @@ export function OverviewTab({ project }: OverviewTabProps) {
       <div className="lg:col-span-1 space-y-6">
         {/* Production Domain */}
         {isLoadingDomains ? (
-          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-lg" />
         ) : productionDomain ? (
           <DomainCard domain={productionDomain} />
         ) : (
@@ -287,21 +285,21 @@ export function OverviewTab({ project }: OverviewTabProps) {
         )}
 
         {/* Configuration Summary */}
-        <div className="bg-surface-container-low rounded-xl p-6">
-          <h3 className="font-label text-sm text-on-surface-variant uppercase tracking-widest mb-6">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h3 className="mb-5 text-sm font-medium text-on-surface">
             Configuration
           </h3>
 
           <ul className="space-y-4">
             <li className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-black text-muted-foreground">
                 <Globe className="h-5 w-5" />
               </div>
               <div>
                 <p className="font-body text-sm font-medium text-on-surface">
                   {domains.length} Domain{domains.length !== 1 ? "s" : ""}
                 </p>
-                <p className="font-label text-xs text-outline">
+                <p className="font-sans text-xs text-outline">
                   {verifiedDomains.length} Verified
                   {domains.length - verifiedDomains.length > 0
                     ? `, ${domains.length - verifiedDomains.length} Pending`
@@ -311,28 +309,28 @@ export function OverviewTab({ project }: OverviewTabProps) {
             </li>
 
             <li className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-black text-muted-foreground">
                 <Database className="h-5 w-5" />
               </div>
               <div>
                 <p className="font-body text-sm font-medium text-on-surface">
                   {envVars.length} Env Var{envVars.length !== 1 ? "s" : ""}
                 </p>
-                <p className="font-label text-xs text-outline">
+                <p className="font-sans text-xs text-outline">
                   Production Environment
                 </p>
               </div>
             </li>
 
             <li className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-black text-muted-foreground">
                 <MessageSquare className="h-5 w-5" />
               </div>
               <div>
                 <p className="font-body text-sm font-medium text-on-surface">
                   {hasNotifications ? "Notifications Active" : "No Notifications"}
                 </p>
-                <p className="font-label text-xs text-outline">
+                <p className="font-sans text-xs text-outline">
                   {discordNotification
                     ? `Discord on #deployments`
                     : "Configure alerts"}
@@ -344,14 +342,14 @@ export function OverviewTab({ project }: OverviewTabProps) {
 
         {/* Environment Variables Preview */}
         {envVars.length > 0 && (
-          <div className="bg-surface-container-low rounded-xl p-6">
+          <div className="rounded-lg border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-label text-sm text-on-surface-variant uppercase tracking-widest">
-                Environment Variables
+              <h3 className="text-sm font-medium text-on-surface">
+                Environment variables
               </h3>
               <Link
                 to={`?tab=environment`}
-                className="font-label text-xs text-primary-container hover:underline decoration-primary-container/30 underline-offset-4"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Manage
               </Link>
@@ -360,18 +358,18 @@ export function OverviewTab({ project }: OverviewTabProps) {
               {envVars.slice(0, 3).map((envVar) => (
                 <div
                   key={envVar.id}
-                  className="flex items-center justify-between bg-surface-container rounded-lg p-3"
+                  className="flex items-center justify-between rounded-md border border-border bg-black p-3"
                 >
                   <code className="font-mono text-xs text-on-surface">
                     {envVar.key}
                   </code>
-                  <span className="font-label text-[10px] text-outline uppercase px-2 py-0.5 rounded bg-surface-container-lowest ghost-border">
+                  <span className="font-sans text-[10px] text-outline uppercase px-2 py-0.5 rounded bg-surface-container-lowest ghost-border">
                     {envVar.scope}
                   </span>
                 </div>
               ))}
               {envVars.length > 3 && (
-                <p className="font-label text-xs text-center text-outline pt-2">
+                <p className="font-sans text-xs text-center text-outline pt-2">
                   +{envVars.length - 3} more
                 </p>
               )}

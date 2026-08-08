@@ -18,7 +18,7 @@ export function ProjectDetailPage() {
             <Skeleton className="h-4 w-32" />
           </div>
           <div className="flex items-center gap-4">
-            <Skeleton className="h-12 w-12 rounded-xl" />
+            <Skeleton className="h-12 w-12 rounded-lg" />
             <div className="space-y-2">
               <Skeleton className="h-8 w-64" />
               <Skeleton className="h-4 w-32" />
@@ -33,14 +33,14 @@ export function ProjectDetailPage() {
         {/* Stats Bar Skeleton */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
 
         {/* Tabs Skeleton */}
         <div className="space-y-4">
-          <Skeleton className="h-10 w-full max-w-lg rounded-xl" />
-          <Skeleton className="h-96 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full max-w-lg rounded-lg" />
+          <Skeleton className="h-96 w-full rounded-lg" />
         </div>
       </div>
     );

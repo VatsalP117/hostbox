@@ -45,14 +45,15 @@ export function DashboardPage() {
   const hasAlerts = stats?.alerts && stats.alerts.length > 0;
   const errorAlerts = stats?.alerts?.filter((a) => a.severity === "error") || [];
   const systemState = errorAlerts.length > 0 ? "Degraded" : hasAlerts ? "Warning" : "Healthy";
+  const failedDeployments = stats?.deployment_health?.failed || 0;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {/* Alert Strip - Conditional */}
       {isAdmin && hasAlerts && (
         <div className="bg-destructive/10 border-b border-destructive/20 px-6 py-3 flex items-center justify-between -mx-6 -mt-6">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_12px_0_rgba(239,68,68,0.4)]" />
+            <div className="h-2 w-2 rounded-full bg-destructive" />
             <span className="font-sans text-sm text-destructive font-medium">
               {errorAlerts.length > 0
                 ? errorAlerts[0].message
@@ -71,17 +72,17 @@ export function DashboardPage() {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="font-sans font-extrabold text-4xl tracking-tight text-foreground mb-2">
-            Command Center
+          <h1 className="mb-1 text-2xl font-semibold tracking-tight text-foreground">
+            Overview
           </h1>
           <p className="font-sans text-muted-foreground text-sm">
-            {isAdmin ? "System Admin View" : "Deployment Overview"} • Last updated: Just now
+            {isAdmin ? "Projects, deployments, and VM health" : "Your deployment activity"} · Updated just now
           </p>
         </div>
         <div className="flex gap-3">
           <button
             onClick={() => navigate(routes.adminTab("activity"))}
-            className="px-4 py-2 rounded-lg border border-border/50 text-foreground font-sans text-sm hover:bg-accent transition-colors"
+            className="h-9 rounded-md border border-border bg-black px-4 text-sm text-foreground transition-colors hover:bg-accent"
           >
             Review Activity
           </button>
@@ -94,22 +95,22 @@ export function DashboardPage() {
           {/* Attention Cards - Left Column (spans 4) */}
           <div className="lg:col-span-4 flex flex-col gap-4">
             {/* Failed Deployments Card */}
-            <div className="bg-card rounded-xl p-5 border border-destructive/20 flex flex-col justify-between h-full relative overflow-hidden group">
+            <div className={`relative flex h-full flex-col justify-between overflow-hidden rounded-lg border bg-card p-5 ${failedDeployments > 0 ? "border-destructive/30" : "border-border"}`}>
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <AlertCircle className="w-16 h-16 text-destructive" />
+                {failedDeployments > 0 ? <AlertCircle className="h-16 w-16 text-destructive" /> : <CheckCircle2 className="h-16 w-16 text-success" />}
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <AlertCircle className="w-5 h-5 text-destructive" />
-                  <span className="font-sans text-xs uppercase tracking-widest text-destructive">
-                    Attention Required
+                  {failedDeployments > 0 ? <AlertCircle className="h-5 w-5 text-destructive" /> : <CheckCircle2 className="h-5 w-5 text-success" />}
+                  <span className={`font-sans text-xs font-medium ${failedDeployments > 0 ? "text-destructive" : "text-success"}`}>
+                    Deployment health
                   </span>
                 </div>
                 {statsLoading ? (
                   <Skeleton className="h-8 w-20 mb-1" />
                 ) : (
                   <div className="font-sans font-bold text-3xl text-foreground mb-1">
-                    {stats?.deployment_health?.failed || 0} Failed
+                    {failedDeployments} failed
                   </div>
                 )}
                 <div className="font-sans text-muted-foreground text-sm">
@@ -121,29 +122,29 @@ export function DashboardPage() {
                   onClick={() => navigate(routes.admin)}
                   className="font-sans text-sm text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
                 >
-                  Investigate{" "}
+                  View deployments{" "}
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Alerts Card */}
-            <div className="bg-card rounded-xl p-5 border border-warning/20 flex flex-col justify-between h-full relative overflow-hidden group">
+            <div className={`relative flex h-full flex-col justify-between overflow-hidden rounded-lg border bg-card p-5 ${hasAlerts ? "border-warning/30" : "border-border"}`}>
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Globe className="w-16 h-16 text-warning" />
+                <Globe className={`h-16 w-16 ${hasAlerts ? "text-warning" : "text-muted-foreground"}`} />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-5 h-5 text-warning" />
-                  <span className="font-sans text-xs uppercase tracking-widest text-warning">
-                    Action Needed
+                  <Clock className={`h-5 w-5 ${hasAlerts ? "text-warning" : "text-muted-foreground"}`} />
+                  <span className={`font-sans text-xs font-medium ${hasAlerts ? "text-warning" : "text-muted-foreground"}`}>
+                    System alerts
                   </span>
                 </div>
                 {statsLoading ? (
                   <Skeleton className="h-8 w-24 mb-1" />
                 ) : (
                   <div className="font-sans font-bold text-3xl text-foreground mb-1">
-                    {stats?.alerts?.length || 0} Open
+                    {stats?.alerts?.length || 0} open
                   </div>
                 )}
                 <div className="font-sans text-muted-foreground text-sm">
@@ -157,7 +158,7 @@ export function DashboardPage() {
                   onClick={() => navigate(routes.adminTab("overview"))}
                   className="font-sans text-sm text-warning hover:text-warning/80 transition-colors flex items-center gap-1"
                 >
-                  Open Monitoring{" "}
+                  Open monitoring{" "}
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -166,16 +167,16 @@ export function DashboardPage() {
 
           {/* System Health Summary - Right Column (spans 8) */}
           <div className="lg:col-span-8">
-            <div className="bg-card/50 border border-border/30 rounded-xl p-6 h-full">
+            <div className="bg-card/50 border border-border/30 rounded-lg p-6 h-full">
               <div className="flex items-center justify-between mb-6">
-                <span className="font-sans text-xs uppercase tracking-widest text-muted-foreground">
+                <span className="font-sans text-xs text-muted-foreground">
                   Global System Health
                 </span>
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
                       systemState === "Healthy"
-                        ? "bg-primary shadow-[0_0_12px_0_rgba(255,255,255,0.3)]"
+                        ? "bg-success"
                         : systemState === "Warning"
                           ? "bg-warning"
                           : "bg-destructive"
@@ -198,7 +199,7 @@ export function DashboardPage() {
               {/* System Stats Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 {/* CPU Usage */}
-                <div className="bg-card rounded-xl p-5 relative overflow-hidden group">
+                <div className="bg-card rounded-lg p-5 relative overflow-hidden group">
                   <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-30 transition-opacity">
                     <Cpu className="w-8 h-8 text-primary" />
                   </div>
@@ -226,7 +227,7 @@ export function DashboardPage() {
                 </div>
 
                 {/* Memory Usage */}
-                <div className="bg-card rounded-xl p-5 relative overflow-hidden group">
+                <div className="bg-card rounded-lg p-5 relative overflow-hidden group">
                   <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-30 transition-opacity">
                     <MemoryStick className="w-8 h-8 text-warning" />
                   </div>
@@ -256,7 +257,7 @@ export function DashboardPage() {
                 </div>
 
                 {/* Disk Usage */}
-                <div className="bg-card rounded-xl p-5 relative overflow-hidden group">
+                <div className="bg-card rounded-lg p-5 relative overflow-hidden group">
                   <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-30 transition-opacity">
                     <HardDrive className="w-8 h-8 text-primary" />
                   </div>
@@ -286,7 +287,7 @@ export function DashboardPage() {
                 </div>
 
                 {/* Build Queue */}
-                <div className="bg-card rounded-xl p-5 relative overflow-hidden group">
+                <div className="bg-card rounded-lg p-5 relative overflow-hidden group">
                   <div className="absolute top-3 right-3 opacity-20 group-hover:opacity-30 transition-opacity">
                     <Layers className="w-8 h-8 text-secondary" />
                   </div>
@@ -324,11 +325,11 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Deployments - Spans 2 */}
         <div className="lg:col-span-2">
-          <h2 className="font-sans font-bold text-xl text-foreground mb-6 flex items-center gap-2">
+          <h2 className="mb-4 flex items-center gap-2 font-sans text-base font-medium text-foreground">
             <LayoutGrid className="w-5 h-5 text-muted-foreground" />
-            Recent Deployments
+            Recent deployments
           </h2>
-          <div className="bg-card rounded-xl border border-border/30 overflow-hidden">
+          <div className="bg-card rounded-lg border border-border/30 overflow-hidden">
             {deploysLoading ? (
               <div className="p-4 space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -401,14 +402,11 @@ export function DashboardPage() {
 
         {/* Build Queue - Spans 1 */}
         <div className="lg:col-span-1">
-          <h2 className="font-sans font-bold text-xl text-foreground mb-6 flex items-center gap-2">
+          <h2 className="mb-4 flex items-center gap-2 font-sans text-base font-medium text-foreground">
             <Activity className="w-5 h-5 text-muted-foreground" />
-            Build Queue
+            Build queue
           </h2>
-          <div className="bg-card/50 border border-border/30 rounded-xl p-5 relative overflow-hidden">
-            {/* Scanning line effect */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-primary/20 animate-pulse" />
-
+          <div className="bg-card/50 border border-border/30 rounded-lg p-5 relative overflow-hidden">
             {statsLoading ? (
               <div className="space-y-4">
                 <Skeleton className="h-20 w-full" />
@@ -417,8 +415,8 @@ export function DashboardPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-4">
-                  <span className="font-sans text-xs uppercase tracking-widest text-muted-foreground">
-                    Build Capacity
+                  <span className="font-sans text-xs text-muted-foreground">
+                    Build capacity
                   </span>
                   <span className="font-mono text-xs text-primary">
                     {stats?.build_queue?.active_builds
@@ -451,7 +449,7 @@ export function DashboardPage() {
                     }`}
                   >
                     <div className="font-sans text-sm text-foreground font-medium mb-1">
-                      Queue Status
+                      Queue status
                     </div>
                     <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
                       {stats && stats.build_queue && stats.build_queue.queued_builds > 0 ? (

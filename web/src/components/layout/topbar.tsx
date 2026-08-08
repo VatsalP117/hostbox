@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLogout } from "@/hooks/use-auth";
+import { BrandMark } from "@/components/shared/brand-mark";
 import { routes } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, User, LogOut, Search } from "lucide-react";
+import { Bell, Menu, User, LogOut, Search, Plus } from "lucide-react";
 
 interface TopbarProps {
   onMobileMenuToggle: () => void;
@@ -38,9 +39,10 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
   };
 
   return (
-    <header className="md:hidden flex items-center justify-between px-6 h-16 bg-[#131313]/70 backdrop-blur-xl border-b border-[hsl(var(--outline-variant)/0.15)] z-40 shrink-0">
+    <header className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-border bg-black/90 px-4 backdrop-blur-xl md:hidden">
       {/* Mobile: Logo */}
-      <div className="font-['Manrope'] font-black text-[#ADC6FF] text-lg">
+      <div className="flex items-center gap-2 text-sm font-semibold text-white">
+        <BrandMark className="h-5 w-5 text-[#52a8ff]" />
         Hostbox
       </div>
 
@@ -48,8 +50,9 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
       <Button
         variant="ghost"
         size="icon"
-        className="h-10 w-10 text-[#e5e2e1] hover:bg-[#1c1b1b]"
+        className="h-9 w-9 text-foreground hover:bg-accent"
         onClick={onMobileMenuToggle}
+        aria-label="Open navigation"
       >
         <Menu className="h-6 w-6" />
       </Button>
@@ -78,12 +81,12 @@ export function DesktopTopbar() {
   };
 
   return (
-    <header className="hidden md:flex h-16 items-center justify-between px-6 border-b border-[hsl(var(--outline-variant)/0.15)] bg-[#131313]">
+    <header className="hidden h-14 items-center justify-between border-b border-border bg-background/90 px-6 backdrop-blur-xl md:flex">
       {/* Search */}
       <div className="flex flex-1 items-center gap-2">
         <Button
           variant="outline"
-          className="hidden h-9 w-72 justify-start text-sm text-[#e5e2e1]/50 bg-transparent border-[hsl(var(--outline-variant)/0.3)] hover:bg-[#1c1b1b] md:flex"
+          className="hidden h-8 w-64 justify-start border-border bg-black text-xs text-muted-foreground hover:bg-accent md:flex"
           onClick={() =>
             document.dispatchEvent(
               new KeyboardEvent("keydown", { key: "k", metaKey: true }),
@@ -91,23 +94,30 @@ export function DesktopTopbar() {
           }
         >
           <Search className="mr-2 h-4 w-4" />
-          Search...
-          <kbd className="ml-auto rounded border border-[hsl(var(--outline-variant)/0.3)] bg-[#1c1b1b] px-1.5 py-0.5 text-[10px] font-medium font-['Space_Grotesk']">
+          Find anything...
+          <kbd className="ml-auto rounded border border-border bg-[#171717] px-1.5 py-0.5 text-[10px] font-medium">
             ⌘K
           </kbd>
         </Button>
       </div>
 
       {/* User Menu */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Notifications">
+          <Bell className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="sm" className="mr-2 h-8 bg-black" onClick={() => navigate(routes.newProject)}>
+          <Plus className="h-3.5 w-3.5" />
+          Add new
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="relative h-9 w-9 rounded-full hover:bg-[#1c1b1b]"
+              className="relative h-8 w-8 rounded-full hover:bg-accent"
             >
-              <Avatar className="h-9 w-9 bg-[#201f1f] border border-[hsl(var(--outline-variant)/0.3)]">
-                <AvatarFallback className="text-xs font-['Space_Grotesk'] text-[#ADC6FF] bg-transparent">
+              <Avatar className="h-8 w-8 border border-border bg-[#171717]">
+                <AvatarFallback className="bg-transparent text-xs text-foreground">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -115,32 +125,32 @@ export function DesktopTopbar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="w-56 bg-[#1a1a1a] border-[hsl(var(--outline-variant)/0.3)]"
+            className="w-56 border-border bg-[#111]"
           >
             <div className="flex items-center gap-2 p-2">
               <div className="flex flex-col space-y-0.5">
-                <p className="text-sm font-medium text-[#e5e2e1] font-['Manrope']">
+                <p className="text-sm font-medium text-foreground">
                   {user?.display_name}
                 </p>
-                <p className="text-xs text-[#e5e2e1]/50 font-['Space_Grotesk']">
+                <p className="text-xs text-muted-foreground">
                   {user?.email}
                 </p>
               </div>
             </div>
-            <DropdownMenuSeparator className="bg-[hsl(var(--outline-variant)/0.3)]" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => navigate(routes.profile)}
-              className="text-[#e5e2e1] hover:bg-[#201f1f] focus:bg-[#201f1f] cursor-pointer"
+              className="cursor-pointer text-foreground focus:bg-accent"
             >
-              <User className="mr-2 h-4 w-4 text-[#ADC6FF]" />
+              <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-[hsl(var(--outline-variant)/0.3)]" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={handleLogout}
-              className="text-[#e5e2e1] hover:bg-[#201f1f] focus:bg-[#201f1f] cursor-pointer"
+              className="cursor-pointer text-foreground focus:bg-accent"
             >
-              <LogOut className="mr-2 h-4 w-4 text-[#ADC6FF]" />
+              <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

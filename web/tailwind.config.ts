@@ -92,8 +92,8 @@ const config: Config = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-        xl: "0.75rem",
-        "2xl": "1rem",
+        xl: "0.625rem",
+        "2xl": "0.75rem",
       },
       fontFamily: {
         sans: [
@@ -109,9 +109,9 @@ const config: Config = {
           "SFMono-Regular",
           "monospace",
         ],
-        headline: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
+        headline: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         body: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        label: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
+        label: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

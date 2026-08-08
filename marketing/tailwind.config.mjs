@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#131313',
+        background: '#000000',
         'surface-container-lowest': '#0e0e0e',
         'surface-container-low': '#1c1b1b',
         'surface-container': '#201f1f',
@@ -18,7 +18,7 @@ export default {
         'on-background': '#e5e2e1',
         'on-surface': '#e5e2e1',
         'on-surface-variant': '#c4c6d0',
-        primary: '#adc6ff',
+        primary: '#52a8ff',
         'primary-container': '#385283',
         'primary-fixed': '#d8e2ff',
         'primary-fixed-dim': '#adc6ff',
@@ -43,9 +43,9 @@ export default {
         'inverse-primary': '#455e90',
       },
       fontFamily: {
-        headline: ['Manrope', 'system-ui', 'sans-serif'],
+        headline: ['Inter', 'system-ui', 'sans-serif'],
         body: ['Inter', 'system-ui', 'sans-serif'],
-        label: ['Space Grotesk', 'monospace'],
+        label: ['Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         DEFAULT: '0.125rem',

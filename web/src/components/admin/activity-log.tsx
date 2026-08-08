@@ -44,7 +44,7 @@ function ActivityRow({ activity }: ActivityRowProps) {
           <p className="font-body text-sm font-medium text-foreground truncate">
             {actionLabel}
           </p>
-          <span className="font-label text-xs text-muted-foreground flex-shrink-0">
+          <span className="font-sans text-xs text-muted-foreground flex-shrink-0">
             <TimeAgo date={activity.created_at} />
           </span>
         </div>
@@ -57,7 +57,7 @@ function ActivityRow({ activity }: ActivityRowProps) {
               on {subjectLabel}
             </span>
           )}
-          <Badge variant="outline" className="text-[10px] font-label bg-surface-container-high border-outline-variant/30">
+          <Badge variant="outline" className="text-[10px] font-sans bg-surface-container-high border-outline-variant/30">
             {activity.resource_type}
           </Badge>
         </div>
@@ -72,7 +72,7 @@ export function ActivityLog() {
 
   if (isLoading) {
     return (
-      <div className="bg-surface-container-low rounded-xl p-6 space-y-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-6">
         <Skeleton className="h-8 w-48 bg-surface-container" />
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -85,7 +85,7 @@ export function ActivityLog() {
 
   if (!data?.activities?.length) {
     return (
-      <div className="bg-surface-container-low rounded-xl p-8">
+      <div className="rounded-lg border border-dashed border-border bg-card/50 p-8">
         <EmptyState
           icon={ActivityIcon}
           title="No activity"
@@ -96,10 +96,10 @@ export function ActivityLog() {
   }
 
   return (
-    <div className="bg-surface-container-low rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="p-6 border-b border-outline-variant/15">
-        <h3 className="font-headline text-lg font-bold text-foreground">Activity Log</h3>
-        <p className="font-label text-xs text-muted-foreground mt-1 uppercase tracking-wider">
+        <h3 className="text-base font-medium text-foreground">Activity log</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
           Recent platform events
         </p>
       </div>
