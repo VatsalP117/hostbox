@@ -69,7 +69,7 @@ export function BuildSettingsForm({
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Project Name</FormLabel>
+              <FormLabel>Project name</FormLabel>
               <FormControl>
                 <Input placeholder="my-project" {...field} />
               </FormControl>
@@ -102,7 +102,7 @@ export function BuildSettingsForm({
           name="build_command"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Build Command</FormLabel>
+              <FormLabel>Build command</FormLabel>
               <FormControl>
                 <Input placeholder="npm run build" {...field} />
               </FormControl>
@@ -118,7 +118,7 @@ export function BuildSettingsForm({
           name="install_command"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Install Command</FormLabel>
+              <FormLabel>Install command</FormLabel>
               <FormControl>
                 <Input placeholder="npm install" {...field} />
               </FormControl>
@@ -131,7 +131,7 @@ export function BuildSettingsForm({
           name="output_directory"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Output Directory</FormLabel>
+              <FormLabel>Output directory</FormLabel>
               <FormControl>
                 <Input placeholder="dist" {...field} />
               </FormControl>
@@ -144,7 +144,7 @@ export function BuildSettingsForm({
           name="root_directory"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Root Directory</FormLabel>
+              <FormLabel>Root directory</FormLabel>
               <FormControl>
                 <Input placeholder="./" {...field} />
               </FormControl>
@@ -160,7 +160,7 @@ export function BuildSettingsForm({
           name="node_version"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Node.js Version</FormLabel>
+              <FormLabel>Node.js version</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>

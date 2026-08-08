@@ -71,11 +71,12 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div className="border-b border-border pb-4"><h2 className="text-base font-medium">Project settings</h2><p className="mt-1 text-xs text-muted-foreground">Build behavior, deployment automation, and project lifecycle.</p></div>
       {/* Build Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Build Settings</CardTitle>
+          <CardTitle className="text-base">Build settings</CardTitle>
           <CardDescription>
             Configure how your project is built and deployed.
           </CardDescription>
@@ -97,7 +98,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
               {updateProject.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Save Changes
+              Save changes
             </Button>
           </BuildSettingsForm>
         </CardContent>
@@ -106,7 +107,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
       {/* Deploy Settings */}
       <Card>
         <CardHeader>
-          <CardTitle>Deploy Settings</CardTitle>
+          <CardTitle className="text-base">Deployment settings</CardTitle>
           <CardDescription>
             Configure automatic deployment behavior.
           </CardDescription>
@@ -114,7 +115,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
-              <Label>Auto Deploy</Label>
+              <Label>Automatic production deploys</Label>
               <p className="text-xs text-muted-foreground">
                 Automatically deploy when changes are pushed to the production
                 branch.
@@ -127,7 +128,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
           </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
-              <Label>Preview Deployments</Label>
+              <Label>Preview deployments</Label>
               <p className="text-xs text-muted-foreground">
                 Create preview deployments for pull requests.
               </p>
@@ -138,7 +139,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label>Production Branch</Label>
+            <Label>Production branch</Label>
             <Input value={project.production_branch} disabled />
             <p className="text-xs text-muted-foreground">
               The branch that triggers production deployments.
@@ -150,7 +151,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
       {/* Danger Zone */}
       <Card className="border-destructive/50">
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
           <CardDescription>
             These actions are irreversible. Please be certain.
           </CardDescription>
@@ -159,7 +160,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
           <Separator className="mb-4" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Delete Project</p>
+              <p className="text-sm font-medium">Delete project</p>
               <p className="text-xs text-muted-foreground">
                 Permanently delete this project and all its data.
               </p>

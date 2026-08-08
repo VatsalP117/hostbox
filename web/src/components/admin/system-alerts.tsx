@@ -52,15 +52,15 @@ export function SystemAlerts({ alerts }: SystemAlertsProps) {
         
         const Icon = isError ? AlertCircle : isWarning ? AlertTriangle : Info;
         const statusColor = isError 
-          ? "bg-destructive shadow-[0_0_12px_rgba(239,68,68,0.3)]" 
+          ? "bg-destructive"
           : isWarning 
-            ? "bg-warning shadow-[0_0_12px_rgba(245,158,11,0.3)]" 
-            : "bg-primary shadow-[0_0_12px_rgba(173,198,255,0.3)]";
+            ? "bg-warning"
+            : "bg-success";
 
         return (
           <div
             key={alertKey}
-            className={`flex items-center justify-between p-4 rounded-xl bg-surface-container-low border-l-4 ${
+            className={`flex items-center justify-between rounded-lg border border-border bg-card p-4 ${
               isError ? "border-l-destructive" : isWarning ? "border-l-warning" : "border-l-primary"
             } hover:bg-surface-container transition-colors group`}
           >
@@ -73,7 +73,7 @@ export function SystemAlerts({ alerts }: SystemAlertsProps) {
                     {alert.title}
                   </h4>
                 </div>
-                <p className="font-label text-xs text-muted-foreground mt-0.5">{alert.message}</p>
+                <p className="font-sans text-xs text-muted-foreground mt-0.5">{alert.message}</p>
               </div>
             </div>
             <button

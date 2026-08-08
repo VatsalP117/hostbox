@@ -41,7 +41,12 @@ export function AdminSettingsForm() {
           max_concurrent_builds: data.settings.max_concurrent_builds,
           artifact_retention_days: data.settings.artifact_retention_days,
         }
-      : undefined,
+      : {
+          registration_enabled: false,
+          max_projects: 1,
+          max_concurrent_builds: 1,
+          artifact_retention_days: 1,
+        },
   });
 
   const onSubmit = (values: SettingsValues) => {
@@ -53,7 +58,7 @@ export function AdminSettingsForm() {
 
   if (isLoading) {
     return (
-      <div className="bg-surface-container-low rounded-xl p-6 space-y-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-6">
         <Skeleton className="h-8 w-48 bg-surface-container" />
         <div className="space-y-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -65,10 +70,10 @@ export function AdminSettingsForm() {
   }
 
   return (
-    <div className="bg-surface-container-low rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="p-6 border-b border-outline-variant/15">
-        <h3 className="font-headline text-lg font-bold text-foreground">Platform Settings</h3>
-        <p className="font-label text-xs text-muted-foreground mt-1 uppercase tracking-wider">
+        <h3 className="text-base font-medium text-foreground">Platform settings</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
           Configure global platform settings
         </p>
       </div>
@@ -85,7 +90,7 @@ export function AdminSettingsForm() {
                   <div className="flex items-center space-x-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     <FormLabel className="font-body text-sm font-medium text-foreground">
-                      User Registration
+                    User registration
                     </FormLabel>
                   </div>
                   <FormDescription className="font-body text-xs text-muted-foreground">
@@ -114,7 +119,7 @@ export function AdminSettingsForm() {
                   <div className="flex items-center space-x-2">
                     <Box className="h-4 w-4 text-muted-foreground" />
                     <FormLabel className="font-body text-sm font-medium text-foreground">
-                      Max Projects per User
+                    Max projects per user
                     </FormLabel>
                   </div>
                   <FormControl>
@@ -139,7 +144,7 @@ export function AdminSettingsForm() {
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <FormLabel className="font-body text-sm font-medium text-foreground">
-                      Max Concurrent Builds
+                    Max concurrent builds
                     </FormLabel>
                   </div>
                   <FormControl>
@@ -165,7 +170,7 @@ export function AdminSettingsForm() {
                 <div className="flex items-center space-x-2">
                   <Archive className="h-4 w-4 text-muted-foreground" />
                   <FormLabel className="font-body text-sm font-medium text-foreground">
-                    Artifact Retention (days)
+                    Artifact retention (days)
                   </FormLabel>
                 </div>
                 <FormControl>
@@ -189,13 +194,13 @@ export function AdminSettingsForm() {
             <Button
               type="submit"
               disabled={update.isPending}
-              className="gradient-btn rounded-xl px-6 py-2.5 font-label text-sm font-semibold"
+              className="h-9 px-4 text-sm font-medium"
             >
               {update.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               <Save className="mr-2 h-4 w-4" />
-              Save Settings
+              Save settings
             </Button>
           </div>
         </form>

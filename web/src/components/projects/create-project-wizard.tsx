@@ -121,14 +121,14 @@ export function CreateProjectWizard() {
               : "text-muted-foreground"
           }
         >
-          2. Build Settings
+          2. Build settings
         </span>
       </div>
 
       {step === "repo" && (
         <Card>
           <CardHeader>
-            <CardTitle>Import from GitHub</CardTitle>
+            <CardTitle className="text-base">Import from GitHub</CardTitle>
             <CardDescription>
               Connect your GitHub account, choose which repositories Hostbox can
               access, then pick a project to deploy.
@@ -291,7 +291,7 @@ export function CreateProjectWizard() {
                 onClick={() => setStep("settings")}
                 disabled={!canContinue}
               >
-                Continue
+                      Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>

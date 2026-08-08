@@ -99,7 +99,7 @@ export function ProjectHeader({
             : "Unknown";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Main Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="space-y-3">
@@ -109,15 +109,15 @@ export function ProjectHeader({
               className={cn(
                 "w-2 h-2 rounded-full",
                 project.status === "healthy"
-                  ? "bg-primary-container glow-active"
+                  ? "bg-success"
                   : project.status === "failed"
-                    ? "bg-error glow-error"
+                    ? "bg-destructive"
                     : project.status === "building"
                       ? "bg-warning"
                       : "bg-outline",
               )}
             />
-            <span className="font-label text-xs text-primary-container tracking-widest uppercase">
+            <span className="font-sans text-xs text-muted-foreground">
               {projectStateLabel}
             </span>
           </div>
@@ -125,15 +125,15 @@ export function ProjectHeader({
           {/* Title Row */}
           <div className="flex items-center gap-4">
             {/* Framework Icon */}
-            <div className="w-12 h-12 rounded-xl bg-surface-container border border-outline-variant/20 flex items-center justify-center">
-              <FrameworkIcon className="h-6 w-6 text-on-surface-variant" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-black">
+              <FrameworkIcon className="h-5 w-5 text-on-surface-variant" />
             </div>
 
             <div>
-              <h1 className="font-headline text-3xl font-bold text-on-surface">
+              <h1 className="text-2xl font-semibold tracking-tight text-on-surface">
                 {project.name}
               </h1>
-              <p className="font-body text-on-surface-variant mt-1">
+              <p className="mt-1 text-sm text-on-surface-variant">
                 {fwConfig?.label || "Unknown Framework"}
               </p>
             </div>
@@ -146,7 +146,7 @@ export function ProjectHeader({
             <Button
               variant="outline"
               size="default"
-              className="font-label font-medium bg-surface-container-low border-outline-variant/20 hover:bg-surface-container text-on-surface"
+              className="border-border bg-black font-sans font-medium text-on-surface hover:bg-accent"
               onClick={() => window.open(productionUrl, "_blank")}
             >
               <Globe className="mr-2 h-4 w-4" />
@@ -157,7 +157,7 @@ export function ProjectHeader({
           <Button
             onClick={handleDeploy}
             disabled={trigger.isPending || githubUnavailable}
-            className="font-headline font-bold bg-primary text-on-primary hover:bg-primary/90"
+            className="font-sans font-medium"
           >
             {trigger.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -206,20 +206,20 @@ export function ProjectHeader({
 
       {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-surface-container-low rounded-xl p-4">
-          <p className="font-label text-xs text-on-surface-variant uppercase tracking-wider mb-1">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="mb-1 text-xs text-on-surface-variant">
             Total Deployments
           </p>
-          <p className="font-headline text-2xl font-bold text-on-surface">
+          <p className="text-xl font-semibold text-on-surface">
             {stats.total_deployments}
           </p>
         </div>
 
-        <div className="bg-surface-container-low rounded-xl p-4">
-          <p className="font-label text-xs text-on-surface-variant uppercase tracking-wider mb-1">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="mb-1 text-xs text-on-surface-variant">
             Last Deploy
           </p>
-          <p className="font-headline text-2xl font-bold text-on-surface">
+          <p className="text-xl font-semibold text-on-surface">
             {stats.last_deploy_at ? (
               <TimeAgo date={stats.last_deploy_at} />
             ) : (
@@ -228,17 +228,17 @@ export function ProjectHeader({
           </p>
         </div>
 
-        <div className="bg-surface-container-low rounded-xl p-4">
-          <p className="font-label text-xs text-on-surface-variant uppercase tracking-wider mb-1">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="mb-1 text-xs text-on-surface-variant">
             Avg Build Time
           </p>
-          <p className="font-headline text-2xl font-bold text-on-surface">
+          <p className="text-xl font-semibold text-on-surface">
             {avgBuildTime ? `${avgBuildTime}s` : "—"}
           </p>
         </div>
 
-        <div className="bg-surface-container-low rounded-xl p-4">
-          <p className="font-label text-xs text-on-surface-variant uppercase tracking-wider mb-1">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="mb-1 font-sans text-xs text-on-surface-variant">
             Current Status
           </p>
           <div className="flex items-center gap-2">

@@ -1,26 +1,39 @@
 ---
 const currentPath = Astro.url.pathname;
+const active = (path: string) => currentPath === path || currentPath === `${path}/`;
 ---
 
-<header class="fixed top-0 w-full z-50 bg-[#131313]/80 backdrop-blur-xl border-b border-[#434655]/15 shadow-2xl shadow-black/40">
-  <div class="flex justify-between items-center max-w-[1400px] mx-auto px-6 h-16">
-    <div class="flex items-center gap-3">
-      <span class="material-symbols-outlined text-primary text-2xl" data-icon="terminal">terminal</span>
-      <a class="text-2xl font-black tracking-tighter text-white font-headline" href="/">Hostbox</a>
-    </div>
-    <div class="flex items-center gap-6">
-      <nav class="hidden md:flex items-center gap-8 font-headline text-sm font-medium tracking-tight">
-        <a class:list={[
-          currentPath === '/features/' || currentPath === '/features' ? 'text-primary border-b-2 border-primary pb-1' : 'text-outline-variant hover:text-white transition-colors'
-        ]} href="/features">Features</a>
-        <a class:list={[
-          currentPath === '/cli/' || currentPath === '/cli' ? 'text-primary border-b-2 border-primary pb-1' : 'text-outline-variant hover:text-white transition-colors'
-        ]} href="/cli">CLI</a>
-        <a class="text-outline-variant hover:text-white transition-colors" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">Docs</a>
-      </nav>
-      <a class="bg-surface-container/50 hover:bg-surface-container transition-all duration-300 px-4 py-2 rounded-xl text-white font-headline text-sm font-medium flex items-center gap-2 active:scale-95" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">
-        GitHub
-      </a>
+<header class="site-header">
+  <div class="site-container nav-inner">
+    <a class="brand" href="/" aria-label="Hostbox home">
+      <svg class="brand-mark" aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M6.5 10.5 16 5l9.5 5.5v11L16 27l-9.5-5.5v-11Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m6.5 10.5 9.5 5.5 9.5-5.5M16 16v11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m11 8 9.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg>
+      <strong>Hostbox</strong>
+    </a>
+    <nav aria-label="Main navigation">
+      <a class:list={{ active: active('/features') }} href="/features">Features</a>
+      <a class:list={{ active: active('/cli') }} href="/cli">CLI</a>
+      <a href="https://github.com/VatsalP117/hostbox#readme" target="_blank" rel="noopener noreferrer">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-github" href="https://github.com/VatsalP117/hostbox" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-primary" href="https://github.com/VatsalP117/hostbox/blob/main/docs/SELF-HOSTING.md" target="_blank" rel="noopener noreferrer">Deploy</a>
     </div>
   </div>
 </header>
+
+<style>
+  .site-header { position: fixed; inset: 0 0 auto; z-index: 50; border-bottom: 1px solid rgba(42,42,42,.8); background: rgba(0,0,0,.78); backdrop-filter: blur(16px); }
+  .nav-inner { display: flex; height: 64px; align-items: center; gap: 36px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+  .brand strong { font-weight: 600; }
+  .brand-mark { width: 21px; height: 21px; color: #52a8ff; }
+  nav { display: flex; align-items: center; gap: 26px; }
+  nav a { color: #888; font-size: 14px; transition: color .15s; }
+  nav a:hover, nav a.active { color: #fff; }
+  .nav-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .nav-github, .nav-primary { display: inline-flex; height: 34px; align-items: center; padding: 0 13px; border: 1px solid #2a2a2a; border-radius: 7px; font-size: 13px; }
+  .nav-github:hover { background: #151515; }
+  .nav-primary { border-color: #fff; background: #fff; color: #000; }
+  .nav-primary:hover { background: #e8e8e8; }
+  @media(max-width:640px) { .nav-inner { gap: 20px; } nav { display:none; } .nav-github { display:none; } }
+</style>

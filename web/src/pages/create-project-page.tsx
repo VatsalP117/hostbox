@@ -5,8 +5,8 @@ export function CreateProjectPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="New Project"
-        description="Create a new project to deploy."
+        title="New project"
+        description="Import a repository and configure its first deployment."
       />
       <CreateProjectWizard />
     </div>

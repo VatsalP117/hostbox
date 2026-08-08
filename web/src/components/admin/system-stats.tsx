@@ -30,13 +30,13 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
         {/* Bento Grid Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-40 rounded-xl bg-surface-container-low" />
+            <Skeleton key={index} className="h-40 rounded-lg bg-surface-container-low" />
           ))}
         </div>
         {/* Main Content Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="h-80 rounded-xl bg-surface-container-low lg:col-span-2" />
-          <Skeleton className="h-80 rounded-xl bg-surface-container-low" />
+          <Skeleton className="h-80 rounded-lg bg-surface-container-low lg:col-span-2" />
+          <Skeleton className="h-80 rounded-lg bg-surface-container-low" />
         </div>
       </div>
     );
@@ -102,15 +102,15 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
         {/* Main Content (2/3) */}
         <section className="lg:col-span-2 space-y-6">
           {/* Component Health & Platform Activity */}
-          <div className="bg-surface-container-low rounded-xl p-6 relative overflow-hidden">
+          <div className="rounded-lg border border-border bg-card p-6 relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="font-headline text-xl font-bold text-foreground">Platform Health</h3>
-                <p className="font-label text-xs text-muted-foreground mt-1 uppercase tracking-wider">
+                <h3 className="text-base font-medium text-foreground">Platform health</h3>
+                <p className="mt-1 font-sans text-xs text-muted-foreground">
                   Component Status
                 </p>
               </div>
-              <div className="font-headline text-2xl font-bold text-primary">
+              <div className="font-sans text-2xl font-bold text-primary">
                 {formatPercent(stats.deployment_health.success_rate)}
               </div>
             </div>
@@ -141,10 +141,10 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
           </div>
 
           {/* Resource Trends */}
-          <div className="bg-surface-container-low rounded-xl p-6">
+          <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-headline text-lg font-bold text-foreground">Resource Trends</h3>
-              <p className="font-label text-xs text-muted-foreground">Last 24 hours</p>
+              <h3 className="text-base font-medium text-foreground">Resource trends</h3>
+              <p className="font-sans text-xs text-muted-foreground">Last 24 hours</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <TrendCard
@@ -174,8 +174,8 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
         {/* Sidebar (1/3) */}
         <section className="space-y-6">
           {/* Storage Breakdown */}
-          <div className="bg-surface-container-low rounded-xl p-6">
-            <h3 className="font-headline text-lg font-bold text-foreground mb-6">Storage Breakdown</h3>
+          <div className="rounded-lg border border-border bg-card p-6">
+            <h3 className="mb-6 text-base font-medium text-foreground">Storage breakdown</h3>
             <div className="space-y-4">
               <StorageRow
                 label="Deployments"
@@ -210,8 +210,8 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
             </div>
             <div className="mt-6 pt-4 border-t border-outline-variant/15">
               <div className="flex items-center justify-between">
-                <span className="font-body text-sm text-muted-foreground">Total Platform Data</span>
-                <span className="font-headline font-bold text-foreground">
+                <span className="font-body text-sm text-muted-foreground">Total platform data</span>
+                <span className="font-sans font-bold text-foreground">
                   {formatBytes(stats.disk_usage.platform_bytes)}
                 </span>
               </div>
@@ -219,15 +219,15 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
           </div>
 
           {/* Deployment Stats */}
-          <div className="bg-surface-container-low rounded-xl p-6">
-            <h3 className="font-headline text-lg font-bold text-foreground mb-4">Deployment Stats</h3>
+          <div className="rounded-lg border border-border bg-card p-6">
+            <h3 className="mb-4 text-base font-medium text-foreground">Deployment stats</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <ArrowUpRight className="h-4 w-4 text-chart-2" />
                   <span className="font-body text-sm text-muted-foreground">Successful</span>
                 </div>
-                <span className="font-label font-medium text-foreground">
+                <span className="font-sans font-medium text-foreground">
                   {stats.deployment_health.successful}
                 </span>
               </div>
@@ -236,7 +236,7 @@ export function SystemStatsGrid({ stats, isLoading }: SystemStatsProps) {
                   <ArrowDownRight className="h-4 w-4 text-destructive" />
                   <span className="font-body text-sm text-muted-foreground">Failed</span>
                 </div>
-                <span className="font-label font-medium text-foreground">
+                <span className="font-sans font-medium text-foreground">
                   {stats.deployment_health.failed}
                 </span>
               </div>
@@ -284,16 +284,16 @@ function MetricCard({
   segments?: boolean;
 }) {
   return (
-    <div className="bg-surface-container-low rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group hover:bg-surface-container transition-colors duration-300">
+    <div className="rounded-lg border border-border bg-card p-5 flex flex-col justify-between relative overflow-hidden group hover:bg-surface-container transition-colors duration-300">
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-primary/10 transition-colors" />
       <div className="flex justify-between items-start mb-4 relative z-10">
-        <span className="font-label text-xs uppercase tracking-widest text-muted-foreground">{title}</span>
+        <span className="text-xs text-muted-foreground">{title}</span>
         <Icon className="h-5 w-5 text-muted-foreground/50" />
       </div>
       <div className="relative z-10">
         <div className="flex items-baseline space-x-1">
-          <span className="font-headline text-3xl font-bold tracking-tight text-foreground">{value}</span>
-          <span className="font-label text-sm text-muted-foreground">{unit}</span>
+          <span className="font-sans text-3xl font-bold tracking-tight text-foreground">{value}</span>
+          <span className="font-sans text-sm text-muted-foreground">{unit}</span>
         </div>
         <p className="font-body text-xs text-muted-foreground mt-1">{description}</p>
         {segments ? (
@@ -328,9 +328,9 @@ function HealthRow({
   health: ServiceHealth;
 }) {
   const statusColors = {
-    healthy: "bg-chart-2 shadow-[0_0_12px_rgba(34,197,94,0.3)]",
-    degraded: "bg-warning shadow-[0_0_12px_rgba(245,158,11,0.3)]",
-    unhealthy: "bg-destructive shadow-[0_0_12px_rgba(239,68,68,0.3)]",
+    healthy: "bg-success",
+    degraded: "bg-warning",
+    unhealthy: "bg-destructive",
   };
 
   return (
@@ -355,7 +355,7 @@ function HealthBadge({ health }: { health: ServiceHealth }) {
         : "bg-destructive/10 text-destructive border-destructive/30";
 
   return (
-    <Badge variant="outline" className={`${className} font-label text-xs uppercase tracking-wider`}>
+    <Badge variant="outline" className={`${className} text-xs`}>
       {health.status}
     </Badge>
   );
@@ -373,11 +373,11 @@ function TrendCard({
   return (
     <div className="rounded-lg bg-surface-container p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="font-label text-xs text-muted-foreground uppercase tracking-wider">{title}</span>
-        <span className="font-headline text-sm font-bold text-foreground">{value}</span>
+        <span className="font-sans text-xs text-muted-foreground">{title}</span>
+        <span className="font-sans text-sm font-bold text-foreground">{value}</span>
       </div>
       <MetricSparkline points={points} />
-      <p className="font-label text-[0.65rem] text-muted-foreground mt-2">{points.length} samples</p>
+      <p className="font-sans text-[0.65rem] text-muted-foreground mt-2">{points.length} samples</p>
     </div>
   );
 }
@@ -402,7 +402,7 @@ function StorageRow({
           <div className={`w-3 h-3 rounded-sm ${color}`} />
           <span className="font-body text-sm text-foreground">{label}</span>
         </div>
-        <span className="font-label text-sm text-muted-foreground">{formatBytes(bytes)}</span>
+        <span className="font-sans text-sm text-muted-foreground">{formatBytes(bytes)}</span>
       </div>
       <div className="h-1 bg-surface-container-high rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${ratio}%` }} />
@@ -424,9 +424,9 @@ function KeyValue({
     <div className="rounded-lg bg-surface-container p-3">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon className="h-4 w-4" />
-        <span className="font-label text-xs uppercase tracking-wider">{label}</span>
+        <span className="text-xs">{label}</span>
       </div>
-      <p className="mt-2 font-headline text-lg font-bold text-foreground">{value}</p>
+      <p className="mt-2 text-base font-medium text-foreground">{value}</p>
     </div>
   );
 }

@@ -68,7 +68,7 @@ export function ResetPasswordPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Invalid Link</CardTitle>
+          <CardTitle className="text-lg">Invalid reset link</CardTitle>
           <CardDescription>
             This password reset link is invalid or has expired.
           </CardDescription>
@@ -76,7 +76,7 @@ export function ResetPasswordPage() {
         <CardContent>
           <Link to={routes.login}>
             <Button variant="outline" className="w-full">
-              Back to Login
+              Back to sign in
             </Button>
           </Link>
         </CardContent>
@@ -85,9 +85,9 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <Card>
+    <Card className="border-border bg-[#0d0d0d]">
       <CardHeader>
-        <CardTitle>Reset Password</CardTitle>
+        <CardTitle className="text-lg">Choose a new password</CardTitle>
         <CardDescription>
           {success
             ? "Your password has been reset successfully."
@@ -97,9 +97,9 @@ export function ResetPasswordPage() {
       <CardContent>
         {success ? (
           <div className="space-y-4 text-center">
-            <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-success/30 bg-success/10"><CheckCircle className="h-5 w-5 text-success" /></div>
             <Link to={routes.login}>
-              <Button className="w-full">Sign In</Button>
+              <Button className="w-full">Sign in</Button>
             </Link>
           </div>
         ) : (
@@ -143,7 +143,7 @@ export function ResetPasswordPage() {
                 {loading && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Reset Password
+                Update password
               </Button>
             </form>
           </Form>

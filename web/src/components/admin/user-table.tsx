@@ -20,7 +20,7 @@ interface UserTableProps {
 export function UserTable({ users, isLoading }: UserTableProps) {
   if (isLoading) {
     return (
-      <div className="bg-surface-container-low rounded-xl p-6 space-y-4">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-6">
         <Skeleton className="h-8 w-48 bg-surface-container" />
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -33,27 +33,27 @@ export function UserTable({ users, isLoading }: UserTableProps) {
 
   if (!users?.length) {
     return (
-      <div className="bg-surface-container-low rounded-xl p-8 text-center">
+      <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center">
         <p className="font-body text-muted-foreground">No users found</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-surface-container-low rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="p-6 border-b border-outline-variant/15">
-        <h3 className="font-headline text-lg font-bold text-foreground">Platform Users</h3>
-        <p className="font-label text-xs text-muted-foreground mt-1 uppercase tracking-wider">
+        <h3 className="text-base font-medium text-foreground">Platform users</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
           {users.length} total users
         </p>
       </div>
       <Table>
         <TableHeader>
           <TableRow className="border-outline-variant/15 hover:bg-transparent">
-            <TableHead className="font-label text-xs uppercase tracking-wider text-muted-foreground">User</TableHead>
-            <TableHead className="font-label text-xs uppercase tracking-wider text-muted-foreground">Email</TableHead>
-            <TableHead className="font-label text-xs uppercase tracking-wider text-muted-foreground">Role</TableHead>
-              <TableHead className="font-label text-xs uppercase tracking-wider text-muted-foreground">Joined</TableHead>
+            <TableHead className="text-xs text-muted-foreground">User</TableHead>
+            <TableHead className="text-xs text-muted-foreground">Email</TableHead>
+            <TableHead className="text-xs text-muted-foreground">Role</TableHead>
+              <TableHead className="text-xs text-muted-foreground">Joined</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -65,7 +65,7 @@ export function UserTable({ users, isLoading }: UserTableProps) {
               <TableCell>
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
-                    <span className="font-headline text-sm text-foreground">
+                    <span className="font-sans text-sm text-foreground">
                       {user.display_name.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -81,7 +81,7 @@ export function UserTable({ users, isLoading }: UserTableProps) {
                 {user.is_admin ? (
                   <Badge 
                     variant="default" 
-                    className="gap-1 bg-primary/10 text-primary border-primary/30 font-label text-xs uppercase tracking-wider"
+                    className="gap-1 bg-primary/10 text-primary border-primary/30 text-xs"
                   >
                     <Shield className="h-3 w-3" />
                     Admin
@@ -89,14 +89,14 @@ export function UserTable({ users, isLoading }: UserTableProps) {
                 ) : (
                   <Badge 
                     variant="secondary" 
-                    className="font-label text-xs uppercase tracking-wider bg-surface-container-high text-muted-foreground"
+                    className="text-xs bg-surface-container-high text-muted-foreground"
                   >
                     User
                   </Badge>
                 )}
               </TableCell>
               <TableCell>
-                <span className="font-label text-xs text-muted-foreground">
+                <span className="font-sans text-xs text-muted-foreground">
                   <TimeAgo date={user.created_at} />
                 </span>
               </TableCell>

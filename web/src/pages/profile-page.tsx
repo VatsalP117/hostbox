@@ -33,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   useProfile,
   useUpdateProfile,
@@ -64,7 +63,10 @@ function ProfileForm() {
           display_name: data.user.display_name,
           email: data.user.email,
         }
-      : undefined,
+      : {
+          display_name: "",
+          email: "",
+        },
   });
 
   const onSubmit = (values: ProfileValues) => {
@@ -91,7 +93,7 @@ function ProfileForm() {
           name="display_name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Display Name</FormLabel>
+              <FormLabel>Display name</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -116,7 +118,7 @@ function ProfileForm() {
           {update.isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           )}
-          Save Profile
+          Save profile
         </Button>
       </form>
     </Form>
@@ -173,7 +175,7 @@ function PasswordForm() {
           name="current_password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Current Password</FormLabel>
+              <FormLabel>Current password</FormLabel>
               <FormControl>
                 <Input type="password" {...field} />
               </FormControl>
@@ -186,7 +188,7 @@ function PasswordForm() {
           name="new_password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>New Password</FormLabel>
+              <FormLabel>New password</FormLabel>
               <FormControl>
                 <Input type="password" {...field} />
               </FormControl>
@@ -199,7 +201,7 @@ function PasswordForm() {
           name="confirm_password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
+              <FormLabel>Confirm password</FormLabel>
               <FormControl>
                 <Input type="password" {...field} />
               </FormControl>
@@ -211,7 +213,7 @@ function PasswordForm() {
           {changePassword.isPending && (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           )}
-          Change Password
+          Change password
         </Button>
       </form>
     </Form>
@@ -253,8 +255,8 @@ function SessionsSection() {
           <TableHeader>
             <TableRow>
               <TableHead>Device</TableHead>
-              <TableHead>IP Address</TableHead>
-              <TableHead>Last Active</TableHead>
+              <TableHead>IP address</TableHead>
+              <TableHead>Last active</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -317,24 +319,22 @@ function SessionsSection() {
 export function ProfilePage() {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Profile"
-        description="Manage your account settings."
-      />
+      <PageHeader title="Account" description="Personal details, authentication, and active sessions." />
 
-      <Card>
+      <div className="grid gap-6 lg:grid-cols-2">
+      <Card className="h-fit">
         <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Update your profile details.</CardDescription>
+          <CardTitle className="text-base">Personal information</CardTitle>
+          <CardDescription>How your account is identified in Hostbox.</CardDescription>
         </CardHeader>
         <CardContent>
           <ProfileForm />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="h-fit">
         <CardHeader>
-          <CardTitle>Change Password</CardTitle>
+          <CardTitle className="text-base">Password</CardTitle>
           <CardDescription>
             Update your password to keep your account secure.
           </CardDescription>
@@ -342,11 +342,11 @@ export function ProfilePage() {
         <CardContent>
           <PasswordForm />
         </CardContent>
-      </Card>
+      </Card></div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Active Sessions</CardTitle>
+          <CardTitle className="text-base">Active sessions</CardTitle>
           <CardDescription>
             Manage your active sessions across devices.
           </CardDescription>

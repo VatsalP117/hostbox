@@ -32,15 +32,15 @@ export function ProjectTabs({ project }: ProjectTabsProps) {
 
   return (
     <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-      <TabsList className="w-full justify-start bg-surface-container-low rounded-xl p-1 h-auto gap-1">
+      <TabsList className="h-auto w-full justify-start gap-6 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
         {tabs.map((tab) => (
           <TabsTrigger
             key={tab.value}
             value={tab.value}
             className={cn(
-              "rounded-lg px-4 py-2 font-label text-sm font-medium transition-all",
+              "rounded-none border-b-2 border-transparent px-0 py-3 text-sm font-medium transition-colors",
               "data-[state=inactive]:text-on-surface-variant data-[state=inactive]:hover:text-on-surface",
-              "data-[state=active]:bg-surface-container data-[state=active]:text-on-surface data-[state=active]:shadow-sm"
+              "data-[state=active]:border-white data-[state=active]:bg-transparent data-[state=active]:text-on-surface data-[state=active]:shadow-none"
             )}
           >
             {tab.label}

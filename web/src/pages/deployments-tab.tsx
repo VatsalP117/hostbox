@@ -29,8 +29,9 @@ export function DeploymentsTab({ projectId }: DeploymentsTabProps) {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="space-y-5">
+      <div className="flex flex-col justify-between gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
+        <div><h2 className="text-base font-medium">Deployment history</h2><p className="mt-1 text-xs text-muted-foreground">Builds created from connected branches and pull requests.</p></div>
         <Select
           value={statusFilter}
           onValueChange={(v) => {
@@ -38,7 +39,7 @@ export function DeploymentsTab({ projectId }: DeploymentsTabProps) {
             setPage(1);
           }}
         >
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[170px] bg-black">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
